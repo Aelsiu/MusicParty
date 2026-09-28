@@ -17,6 +17,9 @@ export class AudioVisualizer {
 
         // 状态标记
         this.isPlaying = false;
+        this.accentRgb = '249, 115, 22';
+        this.mutedRgb = '209, 213, 219';
+        this.updateColors = this.updateColors.bind(this);
 
         // 爆发控制变量
         this.speedMultiplier = 1.0;
@@ -51,10 +54,19 @@ export class AudioVisualizer {
         this.width = this.canvas.width;
         this.height = this.canvas.height;
         this.center = this.width / 2;
+        this.updateColors();
+        window.addEventListener('musicparty:themechange', this.updateColors);
         this.startLoop();
     }
 
+    updateColors() {
+        const style = getComputedStyle(document.documentElement);
+        this.accentRgb = style.getPropertyValue('--accent').trim().replace(/\s+/g, ', ');
+        this.mutedRgb = style.getPropertyValue('--medical-300').trim().replace(/\s+/g, ', ');
+    }
+
     unmount() {
+        window.removeEventListener('musicparty:themechange', this.updateColors);
         if (this.animationId) {
             cancelAnimationFrame(this.animationId);
             this.animationId = null;
@@ -145,11 +157,11 @@ export class AudioVisualizer {
         // 优化：透明度极低时不渲染复杂图形
         if (this.smoothAlpha < 0.01) return;
 
-        // --- 2. 绘制橙色流体圆环 ---
+        // --- 2. 绘制主题色流体圆环 ---
         ctx.save();
         ctx.globalCompositeOperation = 'screen';
         ctx.shadowBlur = 50;
-        ctx.shadowColor = '#F97316';
+        ctx.shadowColor = `rgb(${this.accentRgb})`;
 
         this.rings.forEach((ring) => {
             ctx.beginPath();
@@ -186,7 +198,7 @@ export class AudioVisualizer {
             }
 
             ctx.closePath();
-            ctx.fillStyle = `rgba(249, 115, 22, ${this.smoothAlpha})`;
+            ctx.fillStyle = `rgba(${this.accentRgb}, ${this.smoothAlpha})`;
             ctx.fill();
         });
         ctx.restore();
@@ -207,7 +219,7 @@ export class AudioVisualizer {
             ctx.beginPath();
             ctx.moveTo(startX, startY);
             ctx.lineTo(endX, endY);
-            ctx.strokeStyle = '#D1D5DB';
+            ctx.strokeStyle = `rgb(${this.mutedRgb})`;
             ctx.lineWidth = 2;
             ctx.lineCap = 'round';
             ctx.stroke();

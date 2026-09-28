@@ -20,7 +20,7 @@
             :class="[
                 isEnqueuerById(userStore.userToken) ? 'bg-accent text-white' :
                 isLikedUser(userStore.userToken) ? 'bg-accent text-white' :
-                'bg-medical-900 text-white'
+                'bg-strong text-white'
             ]"
         >
           <span v-if="isEnqueuerById(userStore.userToken)">DJ</span>

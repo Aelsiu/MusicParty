@@ -57,7 +57,7 @@
                 class="flex items-center overflow-hidden whitespace-nowrap md:whitespace-normal"
                 :class="[
                   // 当前行且文字溢出：黑色背景槽固定在容器上（居中，至多占屏幕 70%），文字在槽内滚动
-                  i === activeLines.length - 1 && isMobile && isOverflowing(i) ? 'bg-medical-900 text-white' : '',
+                  i === activeLines.length - 1 && isMobile && isOverflowing(i) ? 'bg-strong text-white' : '',
                   // 溢出行（当前或刚结束）：文字起始贴槽左缘，滚动/定格位置一致；其余行居中（桌面左对齐）
                   isOverflowing(i) ? 'justify-start' : 'justify-center md:justify-start'
                 ]"
@@ -68,7 +68,7 @@
                   class="inline-block whitespace-nowrap md:whitespace-normal will-change-transform"
                   :class="[
                     // 已测量且未溢出的当前行：保留紧凑黑底高亮（未测量前不渲染背景，避免闪全幅黑条）
-                    {'bg-medical-900 text-white px-1': i === activeLines.length - 1 && isMobile && isShort(i)},
+                    {'bg-strong text-white px-1': i === activeLines.length - 1 && isMobile && isShort(i)},
                     {'marquee-scroll': i === activeLines.length - 1 && isOverflowing(i) && isMobile}
                   ]"
                   :style="i === activeLines.length - 1 && isOverflowing(i) ? {
@@ -115,7 +115,7 @@
             @click="handleCoverClick"
         >
           <!-- Loading 状态 -->
-          <div v-if="player.isLoading" class="absolute inset-0 z-50 bg-medical-900/50 backdrop-blur-sm flex flex-col items-center justify-center text-white">
+          <div v-if="player.isLoading" class="absolute inset-0 z-50 bg-overlay/50 backdrop-blur-sm flex flex-col items-center justify-center text-white">
             <div class="w-12 h-12 border-4 border-white/30 border-t-white animate-spin mb-4"></div>
             <span class="font-mono text-xs animate-pulse tracking-widest">FETCHING_AUDIO...</span>
           </div>
@@ -136,7 +136,7 @@
                     // 已点赞状态下，只显示极淡的角落标记，不遮挡封面
                     hasLiked && !isBursting ? 'opacity-100' : '',
                     // 交互或爆发时，增加暗色扫描背景
-                    (isBursting || (!hasLiked && (isHovering || mobileLikePending))) ? 'bg-medical-900/40' : ''
+                    (isBursting || (!hasLiked && (isHovering || mobileLikePending))) ? 'bg-overlay/40' : ''
                 ]"
             >
               <!-- 1. 动态网格背景 (仅在交互时显示) -->
@@ -160,8 +160,8 @@
                 <div
                     class="relative transition-all duration-300 transform z-10"
                     :class="[
-                      isBursting ? 'scale-125 text-accent drop-shadow-[0_0_15px_rgba(var(--color-accent),0.9)]' :
-                      hasLiked ? 'text-accent scale-100 drop-shadow-[0_0_5px_rgba(var(--color-accent),0.5)]' :
+                      isBursting ? 'scale-125 text-accent drop-shadow-[0_0_15px_rgb(var(--accent)_/_0.9)]' :
+                      hasLiked ? 'text-accent scale-100 drop-shadow-[0_0_5px_rgb(var(--accent)_/_0.5)]' :
                       'text-white/70 scale-100 group-hover:scale-110 group-hover:text-white'
                   ]"
                 >
@@ -195,7 +195,7 @@
 
           <!-- 状态标签：悬停或点赞时隐藏 -->
           <div
-              class="absolute top-0 left-0 z-50 px-3 py-1 font-mono text-xs font-bold chamfer-br transition-colors duration-300 bg-medical-900/80 backdrop-blur-sm text-white"
+              class="absolute top-0 left-0 z-50 px-3 py-1 font-mono text-xs font-bold chamfer-br transition-colors duration-300 bg-overlay/80 backdrop-blur-sm text-white"
           >
             {{ player.isPaused ? 'PAUSED' : 'PLAYING' }}
           </div>
@@ -461,7 +461,7 @@ onMounted(() => {
       { cond: true, msg: `OS_PLATFORM: ${navigator.platform}` },
       { cond: true, msg: `DPR_RATIO: ${window.devicePixelRatio}` },
       { cond: true, msg: `UPTIME: ${Math.floor((Date.now() - mountTime) / 1000)}S` },
-      { cond: true, msg: `UI_THEME: ${window.matchMedia('(prefers-color-scheme: dark)').matches ? 'DARK' : 'LIGHT'}` },
+      { cond: true, msg: `UI_THEME: ${uiStore.theme.toUpperCase()}` },
       { cond: true, msg: `LANG_SET: ${navigator.language.toUpperCase()}` },
       { cond: true, msg: `TOUCH_NODE: ${navigator.maxTouchPoints > 0 ? 'ACTIVE' : 'NONE'}` },
       { cond: true, msg: `LOCAL_TZ: ${Intl.DateTimeFormat().resolvedOptions().timeZone}` }

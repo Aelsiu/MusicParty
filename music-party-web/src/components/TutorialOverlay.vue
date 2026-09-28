@@ -7,7 +7,7 @@
     <!-- 我们使用一个绝对定位的高亮框来框住目标元素 -->
     <div
         v-if="targetRect"
-        class="absolute border-2 border-accent shadow-[0_0_20px_rgba(var(--color-accent),0.5)] transition-all duration-300 ease-out pointer-events-none"
+        class="absolute border-2 border-accent shadow-[0_0_20px_rgb(var(--accent)_/_0.5)] transition-all duration-300 ease-out pointer-events-none"
         :style="{
           top: targetRect.top - 4 + 'px',
           left: targetRect.left - 4 + 'px',
@@ -27,7 +27,7 @@
     <div
         v-if="currentStep"
         ref="tooltipRef"
-        class="absolute bg-white border border-medical-200 p-4 shadow-xl transition-all duration-300 chamfer-br flex flex-col gap-3"
+        class="absolute bg-surface border border-medical-200 p-4 shadow-xl transition-all duration-300 chamfer-br flex flex-col gap-3"
         :style="tooltipStyle"
     >
       <div class="flex items-center justify-between border-b border-medical-100 pb-2">
@@ -42,7 +42,7 @@
       <div class="flex justify-end pt-2">
         <button
             @click="nextStep"
-            class="px-4 py-1.5 bg-medical-900 text-white text-xs font-bold hover:bg-accent transition-colors chamfer-br"
+            class="px-4 py-1.5 bg-strong text-white text-xs font-bold hover:bg-accent transition-colors chamfer-br"
         >
           {{ currentStepIndex === steps.length - 1 ? 'FINISH' : 'NEXT >' }}
         </button>
@@ -50,7 +50,7 @@
 
       <!-- 连接线 (简单的视觉装饰) -->
       <div 
-        class="absolute w-4 h-4 bg-white border-l border-b border-medical-200 transform rotate-45"
+        class="absolute w-4 h-4 bg-surface border-l border-b border-medical-200 transform rotate-45"
         :class="arrowClass"
         :style="{ left: 'var(--arrow-left)' }"
       ></div>
@@ -227,9 +227,9 @@ const updatePosition = async () => {
 
   // 箭头样式
   if (arrowPos === 'top') {
-    arrowClass.value = `-top-2 bg-white border-t border-l border-medical-200 rotate-45`;
+    arrowClass.value = `-top-2 bg-surface border-t border-l border-medical-200 rotate-45`;
   } else {
-    arrowClass.value = `-bottom-2 bg-white border-b border-r border-medical-200 rotate-45`;
+    arrowClass.value = `-bottom-2 bg-surface border-b border-r border-medical-200 rotate-45`;
   }
   
   // 计算箭头相对于 tooltip 的水平位置

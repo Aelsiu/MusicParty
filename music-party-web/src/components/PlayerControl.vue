@@ -1,10 +1,10 @@
 <template>
-  <div class="h-24 bg-white border-t border-medical-200 flex items-center px-4 md:px-8 relative z-50 shadow-lg">
+  <div class="h-24 bg-surface border-t border-medical-200 flex items-center px-4 md:px-8 relative z-50 shadow-lg">
     <!-- 封面 -->
     <div
         id="tutorial-source"
         @click="openSourcePage"
-        class="w-16 h-16 md:w-20 md:h-20 -mt-6 md:mt-0 shadow-lg border-2 border-white chamfer-br flex-shrink-0 relative z-10 bg-medical-800 cursor-pointer group overflow-hidden"
+        class="w-16 h-16 md:w-20 md:h-20 -mt-6 md:mt-0 shadow-lg border-2 border-white chamfer-br flex-shrink-0 relative z-10 bg-strong cursor-pointer group overflow-hidden"
         title="Open Source Page"
     >
       <CoverImage :src="nowPlaying?.music.coverUrl" class="w-full h-full transition-transform duration-300 group-hover:scale-110 group-hover:opacity-50" />
@@ -133,7 +133,7 @@
             id="tutorial-pause"
             @click="player.togglePause" 
             :disabled="player.isPauseLocked && !player.isPaused"
-            class="w-10 h-10 bg-medical-900 text-white flex items-center justify-center hover:bg-accent transition-colors chamfer-tl disabled:opacity-50 disabled:hover:bg-medical-900 disabled:cursor-not-allowed"
+            class="w-10 h-10 bg-strong text-white flex items-center justify-center hover:bg-accent transition-colors chamfer-tl disabled:opacity-50 disabled:hover:bg-strong disabled:cursor-not-allowed"
         >
             <Lock v-if="player.isPauseLocked && !player.isPaused" class="w-4 h-4 text-white" />
             <template v-else>
@@ -154,7 +154,7 @@
                 {{ player.currentVotes }}
             </div>
             <!-- Wait Timer Hint -->
-            <div v-if="player.isVoteSkipEnabled && canVote && waitTimeLeft > 0" class="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-medical-900 text-white text-[8px] px-1 py-0.5 rounded-sm opacity-0 group-hover/skip:opacity-100 transition-opacity whitespace-nowrap">
+            <div v-if="player.isVoteSkipEnabled && canVote && waitTimeLeft > 0" class="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-strong text-white text-[8px] px-1 py-0.5 rounded-sm opacity-0 group-hover/skip:opacity-100 transition-opacity whitespace-nowrap">
                 {{ waitTimeLeft }}s 后可投票
             </div>
         </button>
@@ -182,7 +182,7 @@
                 :style="{ width: (ui.volume * 100) + '%' }"
             >
               <!-- 装饰滑块 (只在悬停时显示) -->
-              <div class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-3 bg-medical-900 group-hover:bg-accent transition-colors scale-0 group-hover:scale-100"></div>
+              <div class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-3 bg-strong group-hover:bg-accent transition-colors scale-0 group-hover:scale-100"></div>
             </div>
           </div>
         </div>

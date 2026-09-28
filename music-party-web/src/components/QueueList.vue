@@ -1,5 +1,5 @@
 <template>
-  <div id="tutorial-queue" class="h-full flex flex-col bg-white border-l border-medical-200">
+  <div id="tutorial-queue" class="h-full flex flex-col bg-surface border-l border-medical-200">
     <div class="p-4 bg-medical-50 border-b border-medical-200 flex justify-between items-center">
       <h3 class="text-sm font-bold text-medical-900">播放队列 <span class="text-accent text-xs">[{{ queue.length }}]</span></h3>
     </div>
@@ -30,7 +30,7 @@
 
       <!-- User Groups (Drawers) -->
       <div class="space-y-2">
-        <div v-for="group in userGroups" :key="group.token" class="border border-medical-100 bg-white">
+        <div v-for="group in userGroups" :key="group.token" class="border border-medical-100 bg-surface">
           <button
               @click="toggleUser(group.token)"
               class="w-full flex items-center justify-between p-3 hover:bg-medical-50 transition-colors"

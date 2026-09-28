@@ -7,8 +7,8 @@
       leave-from-class="opacity-100 scale-100"
       leave-to-class="opacity-0 scale-95"
   >
-    <div v-if="adminStore.showAuthModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-medical-900/60 backdrop-blur-sm">
-      <div class="w-full max-w-sm bg-white shadow-2xl border border-medical-200 chamfer-br overflow-hidden">
+    <div v-if="adminStore.showAuthModal" class="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-overlay/60 backdrop-blur-sm">
+      <div class="w-full max-w-sm bg-surface shadow-2xl border border-medical-200 chamfer-br overflow-hidden">
         <div class="p-4 bg-medical-50 border-b border-medical-200 flex justify-between items-center">
           <h3 class="text-sm font-bold font-mono text-medical-900 flex items-center gap-2">
             <Lock class="w-4 h-4 text-accent" /> ADMIN LOGIN
@@ -34,7 +34,7 @@
           <button
               @click="handleVerify"
               :disabled="loading"
-              class="w-full bg-medical-900 hover:bg-accent text-white py-2 font-bold text-sm transition-all duration-300 flex items-center justify-center gap-2 group disabled:opacity-50"
+              class="w-full bg-strong hover:bg-accent text-white py-2 font-bold text-sm transition-all duration-300 flex items-center justify-center gap-2 group disabled:opacity-50"
           >
             <Loader2 v-if="loading" class="w-4 h-4 animate-spin" />
             <span v-else>ACCESS SYSTEM</span>

@@ -1,7 +1,7 @@
 <template>
   <div
       class="group relative flex items-center gap-2 p-2 border hover:border-medical-300 transition-all mb-2 h-14"
-      :class="isFmMarker ? 'bg-accent/5 border-accent/30' : 'bg-white border-medical-100'"
+      :class="isFmMarker ? 'bg-accent/5 border-accent/30' : 'bg-surface border-medical-100'"
   >
     <!-- 序号 -->
     <div v-if="index !== undefined" class="w-6 text-center font-mono text-xs text-medical-400">{{ String(index + 1).padStart(2, '0') }}</div>
@@ -33,7 +33,7 @@
     </div>
 
     <!-- 操作遮罩 -->
-    <div v-if="!userStore.isGuest && !isFmMarker" class="absolute inset-y-0 right-0 bg-white/90 px-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+    <div v-if="!userStore.isGuest && !isFmMarker" class="absolute inset-y-0 right-0 bg-surface/90 px-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
       <button @click="player.topSong(item.queueId)" title="Top" class="p-1 hover:text-accent"><ArrowUpToLine class="w-4 h-4"/></button>
       <button @click="player.removeSong(item.queueId)" title="Remove" class="p-1 hover:text-red-500"><Trash2 class="w-4 h-4"/></button>
     </div>

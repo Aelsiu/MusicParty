@@ -49,6 +49,7 @@ export const usePlayerStore = defineStore('player', () => {
         maxChatHistorySize: 1000,
         minChatIntervalMs: 1000,
         maxChatMessageLength: 200,
+        neteaseQuality: 'exhigh',
         neteaseEnabled: true,
         bilibiliEnabled: true,
         voteSkipEnabled: false,
@@ -137,9 +138,9 @@ export const usePlayerStore = defineStore('player', () => {
 
     const connect = () => {
         const authHeaders = {
-            'user-name': localStorage.getItem(STORAGE_KEYS.USERNAME) || '游客',
+            'user-name': userStore.currentUser.name || '游客',
             'user-token': userStore.userToken,
-            'room-password': localStorage.getItem(STORAGE_KEYS.ROOM_PASSWORD) || ''
+            'room-password': userStore.roomPassword
         };
 
         // 使用抽离出的订阅配置
@@ -176,9 +177,9 @@ export const usePlayerStore = defineStore('player', () => {
     const topSong = (queueId) => requireAuth() && socketService.send(WS_DEST.QUEUE_TOP, { queueId });
     const removeSong = (queueId) => requireAuth() && socketService.send(WS_DEST.QUEUE_REMOVE, { queueId });
 
-    const bindAccount = (platform, accountId) => {
+    const bindAccount = (platform, accountId, displayName = '') => {
         socketService.send(WS_DEST.USER_BIND, { platform, accountId });
-        userStore.updateBinding(platform, accountId);
+        userStore.updateBinding(platform, accountId, displayName);
     };
 
     const renameUser = (newName) => {

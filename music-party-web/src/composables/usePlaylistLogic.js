@@ -70,7 +70,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
     // 绑定用户并刷新
     const bindUser = (user) => {
-        playerStore.bindAccount(platformRef.value, user.id);
+        playerStore.bindAccount(platformRef.value, user.id, user.name);
         userSearchResults.value = [];
         searchUserKeyword.value = '';
         fetchPlaylists(); // 立即刷新

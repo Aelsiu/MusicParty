@@ -1,7 +1,7 @@
 <!-- File: music-party-web/src/components/NamePromptModal.vue -->
 <template>
-  <div v-if="userStore.showNameModal" class="fixed inset-0 z-[300] bg-medical-900/90 backdrop-blur-sm flex items-center justify-center p-4">
-    <div class="bg-white p-6 w-full max-w-sm chamfer-br shadow-2xl relative">
+  <div v-if="userStore.showNameModal" class="fixed inset-0 z-[300] bg-overlay/90 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-surface p-6 w-full max-w-sm chamfer-br shadow-2xl relative">
       <!-- 装饰条 -->
       <div class="absolute top-0 left-0 w-2 h-full bg-accent"></div>
 
@@ -25,7 +25,7 @@
         <button @click="userStore.showNameModal = false" class="flex-1 py-3 text-xs font-bold text-medical-400 hover:bg-medical-50">
           CANCEL
         </button>
-        <button @click="confirm" class="flex-1 bg-medical-900 text-white font-bold py-3 hover:bg-accent transition-colors">
+        <button @click="confirm" class="flex-1 bg-strong text-white font-bold py-3 hover:bg-accent transition-colors">
           CONFIRM
         </button>
       </div>

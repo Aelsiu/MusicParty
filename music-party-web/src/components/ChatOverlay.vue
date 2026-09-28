@@ -24,7 +24,7 @@
     >
       <div
           v-if="chatStore.isOpen"
-          class="pointer-events-auto bg-white border border-medical-200 shadow-2xl flex flex-col chamfer-br overflow-hidden"
+          class="pointer-events-auto bg-surface border border-medical-200 shadow-2xl flex flex-col chamfer-br overflow-hidden"
           :class="dynamicWindowClasses"
           @mousedown.stop
           @touchstart.stop
@@ -54,7 +54,7 @@
               :key="tab"
               @click="activeTab = tab"
               class="flex-1 py-2 text-[10px] font-bold font-mono transition-colors relative"
-              :class="activeTab === tab ? 'text-medical-900 bg-white' : 'text-medical-400 hover:text-medical-600 hover:bg-medical-100'"
+              :class="activeTab === tab ? 'text-medical-900 bg-surface' : 'text-medical-400 hover:text-medical-600 hover:bg-medical-100'"
           >
             {{ tab }}
             <!-- 激活指示条 -->
@@ -101,8 +101,8 @@
               <div
                   class="max-w-[90%] px-3 py-1.5 text-xs break-words relative shadow-sm leading-relaxed select-text cursor-text"
                   :class="isSelf(item.msg)
-                    ? 'bg-medical-900 text-white rounded-l-md rounded-tr-md'
-                    : 'bg-white border border-medical-200 text-medical-800 rounded-r-md rounded-tl-md'"
+                    ? 'bg-strong text-white rounded-l-md rounded-tr-md'
+                    : 'bg-surface border border-medical-200 text-medical-800 rounded-r-md rounded-tl-md'"
               >
                 {{ item.msg.content }}
               </div>
@@ -145,7 +145,7 @@
         </div>
 
         <!-- 4. Input Area (仅在 Chat Tab 显示) -->
-        <div v-if="activeTab === 'CHAT'" class="p-2 bg-white border-t border-medical-200 flex gap-2 flex-shrink-0">
+        <div v-if="activeTab === 'CHAT'" class="p-2 bg-surface border-t border-medical-200 flex gap-2 flex-shrink-0">
           <input
               v-model="inputContent"
               @keyup.enter="send"
@@ -180,8 +180,8 @@
         @click="handleClick"
         class="pointer-events-auto w-10 h-10 border flex items-center justify-center transition-all cursor-move select-none rounded-sm relative overflow-hidden"
         :class="chatStore.unreadCount > 0
-            ? 'bg-accent border-accent text-white shadow-[0_0_15px_rgba(249,115,22,0.6)] scale-110'
-            : 'bg-white border-medical-200 text-medical-500 shadow-lg hover:text-medical-900 hover:border-medical-300'"
+            ? 'bg-accent border-accent text-white shadow-[0_0_15px_rgb(var(--accent)_/_0.6)] scale-110'
+            : 'bg-surface border-medical-200 text-medical-500 shadow-lg hover:text-medical-900 hover:border-medical-300'"
     >
       <div v-if="chatStore.unreadCount > 0"
            class="absolute inset-0 bg-[url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAADCAYAAABS3WWCAAAAE0lEQVQYV2NkYGD4zwABjFAQAwBATgMJy2B8NAAAAABJRU5ErkJggg==')] opacity-30 pointer-events-none animate-scan z-0">

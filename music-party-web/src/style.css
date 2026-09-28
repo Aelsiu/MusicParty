@@ -2,6 +2,77 @@
 @tailwind components;
 @tailwind utilities;
 
+:root,
+:root[data-theme='classic'] {
+  --medical-50: 249 250 251;
+  --medical-100: 243 244 246;
+  --medical-200: 229 231 235;
+  --medical-300: 209 213 219;
+  --medical-400: 156 163 175;
+  --medical-500: 107 114 128;
+  --medical-600: 75 85 99;
+  --medical-700: 55 65 81;
+  --medical-800: 31 41 55;
+  --medical-900: 17 24 39;
+  --surface: 255 255 255;
+  --strong: 17 24 39;
+  --overlay: 17 24 39;
+  --accent: 249 115 22;
+  --accent-hover: 234 88 12;
+}
+
+:root[data-theme='night'] {
+  color-scheme: dark;
+  --medical-50: 15 23 42;
+  --medical-100: 23 32 51;
+  --medical-200: 51 65 85;
+  --medical-300: 71 85 105;
+  --medical-400: 148 163 184;
+  --medical-500: 164 178 195;
+  --medical-600: 192 203 216;
+  --medical-700: 208 218 228;
+  --medical-800: 226 232 240;
+  --medical-900: 248 250 252;
+  --surface: 30 41 59;
+  --strong: 51 65 85;
+  --overlay: 15 23 42;
+  --accent: 251 146 60;
+  --accent-hover: 249 115 22;
+}
+
+:root[data-theme='blue'] {
+  --medical-50: 239 246 255;
+  --medical-100: 224 238 253;
+  --medical-200: 191 219 254;
+  --medical-300: 147 197 253;
+  --medical-400: 96 148 204;
+  --medical-500: 85 113 143;
+  --medical-600: 63 91 122;
+  --medical-700: 43 76 110;
+  --medical-800: 30 58 95;
+  --medical-900: 23 50 77;
+  --surface: 255 255 255;
+  --strong: 23 50 77;
+  --overlay: 15 23 42;
+  --accent: 37 99 235;
+  --accent-hover: 29 78 216;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+}
+
+.theme-ripple {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgb(var(--theme-ripple-color));
+  clip-path: circle(0 at var(--theme-ripple-x) var(--theme-ripple-y));
+  transition: clip-path 500ms ease-out;
+}
+
 body {
   @apply bg-medical-50 text-medical-800 font-sans antialiased overflow-hidden;
 }

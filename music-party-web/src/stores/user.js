@@ -26,6 +26,7 @@ export const useUserStore = defineStore('user', () => {
     const onlineUsers = ref([]);
 
     const isAuthPassed = ref(false);
+    const roomPassword = ref('');
 
     // 启动时：严格从 LocalStorage 读取，默认值只在这里设定一次
     const storageName = localStorage.getItem('mp_username');
@@ -35,6 +36,7 @@ export const useUserStore = defineStore('user', () => {
     });
 
     const bindings = ref(JSON.parse(localStorage.getItem(STORAGE_KEYS.BINDINGS) || '{}'));
+    const neteaseUsername = ref(localStorage.getItem(STORAGE_KEYS.NETEASE_USERNAME) || '');
     // 全局状态：控制改名弹窗显示
     const showNameModal = ref(false);
 
@@ -107,9 +109,14 @@ export const useUserStore = defineStore('user', () => {
         onlineUsers.value = users;
     };
 
-    const updateBinding = (platform, accountId) => {
+    const updateBinding = (platform, accountId, displayName = '') => {
         bindings.value[platform] = accountId;
         localStorage.setItem(STORAGE_KEYS.BINDINGS, JSON.stringify(bindings.value));
+        if (platform === 'netease') {
+            neteaseUsername.value = accountId ? (displayName || neteaseUsername.value || accountId) : '';
+            if (neteaseUsername.value) localStorage.setItem(STORAGE_KEYS.NETEASE_USERNAME, neteaseUsername.value);
+            else localStorage.removeItem(STORAGE_KEYS.NETEASE_USERNAME);
+        }
     };
 
     // 废弃: 不再直接修改本地状态，改为等待 initUser 的后端回调
@@ -123,13 +130,20 @@ export const useUserStore = defineStore('user', () => {
 
     const resetAuthentication = () => {
         isAuthPassed.value = false;
-        localStorage.removeItem(STORAGE_KEYS.ROOM_PASSWORD);// 清除本地保存的旧密码
+        roomPassword.value = '';
+        localStorage.removeItem(STORAGE_KEYS.ROOM_PASSWORD); // 清理旧版本保存的房间密码
+    };
+
+    const prepareEntry = (name, password) => {
+        currentUser.value.name = name;
+        roomPassword.value = password;
     };
 
     return {
         onlineUsers,
         currentUser,
         bindings,
+        neteaseUsername,
         initUser,
         setOnlineUsers,
         updateBinding,
@@ -141,6 +155,8 @@ export const useUserStore = defineStore('user', () => {
         userToken,
         setPostNameAction,
         isAuthPassed,
+        roomPassword,
+        prepareEntry,
         resetAuthentication
     };
 });

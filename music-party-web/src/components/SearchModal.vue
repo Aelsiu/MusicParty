@@ -1,5 +1,5 @@
 <template>
-  <div v-if="isOpen" class="fixed inset-0 z-[60] bg-medical-900/80 backdrop-blur-sm flex items-center justify-center p-0 md:p-4">
+  <div v-if="isOpen" class="fixed inset-0 z-[60] bg-overlay/80 backdrop-blur-sm flex items-center justify-center p-0 md:p-4">
     <!-- 移动端全屏面板；桌面端居中弹窗。安全区 padding 兼容刘海屏/全面屏 -->
     <div class="w-full max-w-4xl bg-medical-50 h-full md:h-[80vh] flex flex-col shadow-2xl relative chamfer-br max-h-full pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)]">
 
@@ -9,7 +9,7 @@
       </button>
 
       <!-- 头部 -->
-      <div class="p-4 md:p-6 border-b border-medical-200 bg-white flex-shrink-0">
+      <div class="p-4 md:p-6 border-b border-medical-200 bg-surface flex-shrink-0">
         <h2 class="text-xl md:text-2xl font-bold font-mono mb-3 md:mb-4 text-medical-900 flex items-center gap-2">
           <Search class="w-5 h-5 text-accent"/> SEARCH
         </h2>
@@ -60,14 +60,14 @@
 
         <!-- LikeSong：本地点赞歌曲列表（仅本地缓存，不上报服务器） -->
         <div v-if="mode === 'likesong'" class="flex-1 bg-medical-50 flex-col min-h-0 flex">
-          <div class="flex items-center justify-between p-3 bg-white border-b border-medical-200 flex-shrink-0">
+          <div class="flex items-center justify-between p-3 bg-surface border-b border-medical-200 flex-shrink-0">
             <span class="font-bold text-sm text-medical-800 font-mono">LIKESONG</span>
             <span class="text-[10px] font-mono text-medical-400">{{ likedSongs.length }} LIKED</span>
           </div>
           <div class="flex-1 overflow-y-auto overscroll-contain p-2 md:p-4">
             <div v-if="filteredLikedSongs.length === 0" class="text-center py-10 text-medical-400 text-xs font-mono">{{ keyword.trim() ? 'NO MATCH' : 'NO LIKED SONGS YET' }}</div>
             <div class="space-y-1">
-              <div v-for="song in filteredLikedSongs" :key="song.platform + ':' + song.id" class="flex items-center p-3 bg-white border border-transparent transition-all group hover:border-medical-300 hover:shadow-sm">
+              <div v-for="song in filteredLikedSongs" :key="song.platform + ':' + song.id" class="flex items-center p-3 bg-surface border border-transparent transition-all group hover:border-medical-300 hover:shadow-sm">
                 <div class="flex-1 w-0 flex items-center gap-3">
                   <div class="w-8 h-8 bg-medical-200 flex-shrink-0 relative overflow-hidden"><CoverImage :src="song.coverUrl" class="w-full h-full" :scanline="false" /></div>
                   <div class="min-w-0 flex-1">
@@ -105,7 +105,7 @@
         </div>
 
         <!-- 左侧：我的歌单 / 绑定 -->
-        <div class="md:w-1/3 md:h-auto flex-shrink-0 border-b md:border-b-0 md:border-r border-medical-200 flex-col bg-white transition-all"
+        <div class="md:w-1/3 md:h-auto flex-shrink-0 border-b md:border-b-0 md:border-r border-medical-200 flex-col bg-surface transition-all"
              :class="mode === 'likesong' ? 'hidden' : (mobileView === 'playlists' ? 'flex w-full h-full' : 'hidden md:flex')"
         >
           <div class="p-2 md:p-3 bg-medical-100 text-xs font-bold text-medical-500 flex justify-between items-center font-sans">
@@ -117,7 +117,7 @@
             <div v-if="!bindings[platform]" class="p-4 border border-dashed border-medical-300 bg-medical-50">
               <div class="text-xs text-medical-500 mb-2 text-center font-sans">绑定用户以获取用户歌单</div>
               <div class="flex gap-1">
-                <input v-model="searchUserKeyword" @keyup.enter="searchUser" placeholder="搜索用户名" class="flex-1 min-w-0 bg-white border border-medical-200 p-1 text-sm outline-none focus:border-accent font-sans" />
+                <input v-model="searchUserKeyword" @keyup.enter="searchUser" placeholder="搜索用户名" class="flex-1 min-w-0 bg-surface border border-medical-200 p-1 text-sm outline-none focus:border-accent font-sans" />
                 <button @click="searchUser" class="bg-accent hover:bg-accent-hover p-1 transition-colors"><Search class="w-4 h-4 text-white"/></button>
               </div>
               <!-- 搜索结果列表 -->
@@ -133,7 +133,7 @@
             <!-- 已绑定：歌单列表 -->
             <template v-else>
               <div class="flex justify-between items-center px-2 py-1 bg-medical-50 border-b border-medical-100">
-                <span class="text-[10px] font-mono text-medical-400">ID: {{ bindings[platform] }}</span>
+                <span class="text-[10px] font-mono text-medical-400 truncate">{{ platform === 'netease' && userStore.neteaseUsername ? userStore.neteaseUsername : `ID: ${bindings[platform]}` }}</span>
                 <button @click="playerStore.bindAccount(platform, '')" class="text-[10px] text-red-400 hover:underline">UNLINK</button>
               </div>
               
@@ -156,7 +156,7 @@
         <!-- 右侧：歌曲列表 -->
         <div class="md:flex-1 bg-medical-50 flex-col min-h-0" :class="mode === 'likesong' ? 'hidden' : (mobileView === 'songs' ? 'flex w-full h-full' : 'hidden md:flex')">
           <!-- 移动端返回条 -->
-          <div class="md:hidden flex items-center gap-2 p-3 bg-white border-b border-medical-200 flex-shrink-0">
+          <div class="md:hidden flex items-center gap-2 p-3 bg-surface border-b border-medical-200 flex-shrink-0">
             <button @click="mobileView = 'playlists'" class="p-1 -ml-1 text-medical-500 hover:text-medical-900"><ArrowLeft class="w-5 h-5" /></button>
             <span class="font-bold text-sm text-medical-800">{{ listMode === 'search' ? 'SEARCH RESULTS' : 'PLAYLIST DETAILS' }}</span>
           </div>
@@ -165,13 +165,13 @@
             <div v-if="loading" class="text-center py-10 font-mono text-accent animate-pulse">> LOADING DATA STREAM...</div>
 
             <!-- 歌单操作头 -->
-            <div v-else-if="currentPlaylistId && listMode === 'playlist'" class="mb-4 p-4 bg-white border border-medical-200 flex justify-between items-center shadow-sm">
+            <div v-else-if="currentPlaylistId && listMode === 'playlist'" class="mb-4 p-4 bg-surface border border-medical-200 flex justify-between items-center shadow-sm">
               <div>
                 <div class="text-xs font-sans text-medical-400">用户歌单</div>
                 <div class="font-bold text-lg">{{ currentPlaylistId }}</div>
                 <div class="text-xs text-medical-400 font-mono">{{ songs.length }} LOADED</div>
               </div>
-              <button @click="handleImportPlaylist" class="bg-medical-900 text-white px-4 py-2 text-sm font-bold hover:bg-accent transition-colors flex items-center gap-2 font-sans">
+              <button @click="handleImportPlaylist" class="bg-strong text-white px-4 py-2 text-sm font-bold hover:bg-accent transition-colors flex items-center gap-2 font-sans">
                 <ListPlus class="w-4 h-4"/> <span class="hidden sm:inline">导入全部</span>
               </button>
             </div>
@@ -179,7 +179,7 @@
             <!-- 歌曲列表渲染 -->
             <div class="space-y-1">
               <div v-if="songs.length === 0 && !loading" class="text-center py-10 text-medical-400 text-xs font-mono">NO DATA FOUND</div>
-              <div v-for="song in songs" :key="song.id" class="flex items-center p-3 border border-transparent transition-all group" :class="isUnplayable(song) ? 'opacity-50 grayscale bg-medical-50 cursor-not-allowed' : 'bg-white hover:border-medical-300 hover:shadow-sm'">
+              <div v-for="song in songs" :key="song.id" class="flex items-center p-3 border border-transparent transition-all group" :class="isUnplayable(song) ? 'opacity-50 grayscale bg-medical-50 cursor-not-allowed' : 'bg-surface hover:border-medical-300 hover:shadow-sm'">
                 <div class="flex-1 w-0 flex items-center gap-3">
                   <div class="w-8 h-8 bg-medical-200 flex-shrink-0 relative overflow-hidden"><CoverImage :src="song.coverUrl" class="w-full h-full" :scanline="false" /></div>
                   <div class="min-w-0 flex-1">
@@ -227,6 +227,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue';
 import { usePlayerStore } from '../stores/player';
+import { useUserStore } from '../stores/user';
 import { useSearchLogic } from '../composables/useSearchLogic';
 import { usePlaylistLogic } from '../composables/usePlaylistLogic';
 import { useLikedSongs } from '../composables/useLikedSongs';
@@ -236,6 +237,7 @@ import CoverImage from './CoverImage.vue';
 const props = defineProps(['isOpen']);
 const emit = defineEmits(['close']);
 const playerStore = usePlayerStore();
+const userStore = useUserStore();
 
 const isPlatformEnabled = (p) => {
   if (p === 'netease') return playerStore.config?.neteaseEnabled !== false;

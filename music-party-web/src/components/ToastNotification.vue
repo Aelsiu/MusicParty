@@ -12,7 +12,7 @@
     <div
         v-for="toast in toastStore.toasts"
         :key="toast.id"
-        class="bg-medical-900/90 text-white px-6 py-3 shadow-xl backdrop-blur-sm flex items-center gap-3 min-w-[300px] border-l-4 pointer-events-auto cursor-pointer"
+        class="bg-overlay/90 text-white px-6 py-3 shadow-xl backdrop-blur-sm flex items-center gap-3 min-w-[300px] border-l-4 pointer-events-auto cursor-pointer"
         :class="getTypeClass(toast.type)"
         @click="toastStore.remove(toast.id)"
     >

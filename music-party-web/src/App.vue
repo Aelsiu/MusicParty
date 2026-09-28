@@ -15,14 +15,14 @@
       <div class="font-mono text-xs text-medical-400 tracking-widest">SYSTEM READY</div>
       <button
           @click="startGame"
-          class="px-12 py-4 bg-medical-900 text-white font-bold text-xl hover:bg-accent transition-colors chamfer-br"
+          class="px-12 py-4 bg-strong text-white font-bold text-xl hover:bg-accent transition-colors chamfer-br"
       >
         CONNECT
       </button>
     </div>
 
     <!-- 3. 主界面 (当 hasStarted 为 true 时显示) -->
-    <MainLayout v-if="hasStarted" @search="handleSearchClick">
+    <MainLayout v-if="hasStarted" @search="handleSearchClick" @settings="showSettings = true">
       <!-- 中间插槽: 视觉控制台 -->
       <CenterConsole />
 
@@ -38,6 +38,7 @@
 
     <!-- 4. 全局弹窗 -->
     <SearchModal :isOpen="showSearch" @close="showSearch = false" />
+    <SettingsModal :isOpen="showSettings" @close="showSettings = false" />
     <NamePromptModal />
     <ChatOverlay v-if="hasStarted && !uiStore.isLiteMode" />
     <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode" />
@@ -62,6 +63,7 @@ import PlayerControl from './components/PlayerControl.vue';
 import AudioEngine from './components/AudioEngine.vue';
 import AuthOverlay from './components/AuthOverlay.vue';
 import SearchModal from './components/SearchModal.vue';
+import SettingsModal from './components/SettingsModal.vue';
 import NamePromptModal from './components/NamePromptModal.vue';
 import ChatOverlay from './components/ChatOverlay.vue';
 import ToastNotification from './components/ToastNotification.vue';
@@ -75,6 +77,7 @@ const uiStore = useUiStore();
 const adminStore = useAdminStore();
 const hasStarted = ref(false);
 const showSearch = ref(false);
+const showSettings = ref(false);
 const toastInstance = ref(null);
 const { register, info } = useToast();
 
