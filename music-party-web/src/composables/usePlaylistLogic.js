@@ -33,15 +33,16 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
     // 获取用户歌单
     const fetchPlaylists = async () => {
-        const uid = bindings.value[platformRef.value];
+        const platform = platformRef.value;
+        const uid = bindings.value[platform];
         if (!uid) {
             playlists.value = [];
             return;
         }
         isPlaylistsLoading.value = true;
         try {
-            const data = await musicApi.getUserPlaylists(platformRef.value, uid);
-            playlists.value = data;
+            const data = await musicApi.getUserPlaylists(platform, uid);
+            if (platformRef.value === platform && bindings.value[platform] === uid) playlists.value = data;
         } catch (e) {
             console.error(e);
             playlists.value = [];
@@ -85,19 +86,21 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         userSearchResults.value = [];
         hasSearchedUser.value = false;
         searchUserKeyword.value = '';
-        fetchPlaylists(); // 立即刷新
     };
 
     // 分页获取歌单歌曲 (核心复杂逻辑)
     const fetchSongsPage = async () => {
         if (!currentPlaylistId.value) return;
+        const playlistId = currentPlaylistId.value;
+        const platform = platformRef.value;
         try {
             const rawSongs = await musicApi.getPlaylistSongs(
-                platformRef.value,
-                currentPlaylistId.value,
+                platform,
+                playlistId,
                 offset.value,
                 limit.value
             );
+            if (currentPlaylistId.value !== playlistId || platformRef.value !== platform) return;
 
             // B站特殊的分页判定
             if (platformRef.value === 'bilibili') {
@@ -157,8 +160,10 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         }
     }, 200);
 
-    // 监听平台切换 -> 刷新歌单列表
-    watch([platformRef, bindings], () => {
+    // 设置窗口中的绑定/解绑也同步刷新搜索页。
+    watch(() => [platformRef.value, bindings.value[platformRef.value]], () => {
+        currentPlaylistId.value = null;
+        if (listModeRef.value === 'playlist') songsRef.value = [];
         fetchPlaylists();
     }, { immediate: true });
 

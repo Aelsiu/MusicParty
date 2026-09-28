@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
-import { STORAGE_KEYS } from '../constants/keys';
+import { STORAGE_KEYS } from '../constants/keys.js';
 
 const generateToken = () => {
     return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -101,6 +101,7 @@ export const useUserStore = defineStore('user', () => {
 
         // 3. 如果是正式用户，确保本地存储名字与服务端一致 (处理去重后缀)
         if (!isGuest.value && serverName) {
+            localStorage.setItem(STORAGE_KEYS.TOKEN, userToken.value);
             localStorage.setItem(STORAGE_KEYS.USERNAME, serverName);
         }
 
@@ -141,6 +142,12 @@ export const useUserStore = defineStore('user', () => {
     };
 
     const prepareEntry = (name, password) => {
+        const previousName = localStorage.getItem(STORAGE_KEYS.USERNAME);
+        if (previousName && name !== previousName) {
+            // 入房时换 ID 创建新身份，等服务器确认后再保存，避免在 CONNECT 前刷新丢失旧身份。
+            userToken.value = generateToken();
+            currentUser.value.sessionId = '';
+        }
         currentUser.value.name = name;
         roomPassword.value = password;
     };

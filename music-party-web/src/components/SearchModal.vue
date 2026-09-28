@@ -135,7 +135,6 @@
             <template v-else>
               <div class="flex justify-between items-center px-2 py-1 bg-medical-50 border-b border-medical-100">
                 <span class="text-[10px] font-mono text-medical-400 truncate">{{ platform === 'netease' && userStore.neteaseUsername ? userStore.neteaseUsername : `ID: ${bindings[platform]}` }}</span>
-                <button @click="playerStore.bindAccount(platform, '')" class="text-[10px] text-red-400 hover:underline">UNLINK</button>
               </div>
               
               <div v-if="isPlaylistsLoading" class="flex justify-center py-8">

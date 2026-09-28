@@ -1,0 +1,53 @@
+import assert from 'node:assert/strict';
+import { beforeEach, test } from 'node:test';
+import { createPinia, setActivePinia } from 'pinia';
+import { STORAGE_KEYS } from '../src/constants/keys.js';
+
+const storage = new Map();
+globalThis.localStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, String(value)),
+    removeItem: (key) => storage.delete(key)
+};
+const { useUserStore } = await import('../src/stores/user.js');
+let user;
+
+beforeEach(() => {
+    storage.clear();
+    localStorage.setItem(STORAGE_KEYS.USERNAME, 'Alice');
+    localStorage.setItem(STORAGE_KEYS.TOKEN, 'alice-token');
+    setActivePinia(createPinia());
+    user = useUserStore();
+    user.userToken = 'alice-token';
+});
+
+test('entering with the remembered ID keeps the existing identity', () => {
+    user.prepareEntry('Alice', '1234');
+    assert.equal(user.userToken, 'alice-token');
+    assert.equal(user.currentUser.name, 'Alice');
+});
+
+test('a different entry ID creates a new identity and saves it only after server confirmation', () => {
+    user.prepareEntry('Bob', '1234');
+    const newToken = user.userToken;
+    assert.notEqual(newToken, 'alice-token');
+    assert.equal(user.currentUser.name, 'Bob');
+    assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), 'alice-token');
+    assert.equal(localStorage.getItem(STORAGE_KEYS.USERNAME), 'Alice');
+
+    user.initUser('bob-session', 'Bob', false);
+    assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), newToken);
+    assert.equal(localStorage.getItem(STORAGE_KEYS.USERNAME), 'Bob');
+    user.prepareEntry('Bob', '1234');
+    assert.equal(user.userToken, newToken);
+});
+
+test('renaming inside the room updates the remembered ID without replacing identity', () => {
+    user.prepareEntry('Alice', '1234');
+    user.initUser('alice-session', 'Renamed Alice', false);
+    assert.equal(user.userToken, 'alice-token');
+    assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), 'alice-token');
+    assert.equal(localStorage.getItem(STORAGE_KEYS.USERNAME), 'Renamed Alice');
+    user.prepareEntry('Renamed Alice', '1234');
+    assert.equal(user.userToken, 'alice-token');
+});

@@ -17,10 +17,10 @@
         </div>
         <div>
           <label for="entry-name" class="block text-xs font-bold text-medical-500 mb-1">你的 ID</label>
-          <input id="entry-name" v-model="inputName" :readonly="hasSavedName" maxlength="20"
+          <input id="entry-name" v-model="inputName" maxlength="20"
                  placeholder="ENTER CODENAME" @keyup.enter="handleAction"
-                 class="w-full bg-medical-50 border border-medical-200 p-3 outline-none focus:border-accent font-mono text-center text-lg text-medical-900 read-only:opacity-70" />
-          <p v-if="hasSavedName" class="text-[10px] text-medical-400 mt-1">入房后可在在线成员列表修改 ID</p>
+                 class="w-full bg-medical-50 border border-medical-200 p-3 outline-none focus:border-accent font-mono text-center text-lg text-medical-900" />
+          <p class="text-[10px] text-medical-400 mt-1">更换 ID 将以新用户进入；仅改名请用原 ID 入房后修改。</p>
         </div>
         <div>
           <label class="block text-xs font-bold text-medical-500 mb-2 text-center">{{ isSetupMode ? '设置 4 位数字密码' : '输入 4 位数字密码' }}</label>
@@ -48,7 +48,6 @@ import { useUserStore } from '../stores/user';
 const emit = defineEmits(['unlocked']);
 const userStore = useUserStore();
 const savedName = localStorage.getItem(STORAGE_KEYS.USERNAME) || '';
-const hasSavedName = !!savedName;
 const inputName = ref(savedName);
 const inputRoomName = ref('');
 const inputPassword = ref('');

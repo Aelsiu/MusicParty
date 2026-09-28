@@ -10,7 +10,7 @@
 
       <div class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
         <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
-          <h3 class="font-bold text-medical-900">我的设置</h3>
+          <h3 class="font-bold text-medical-900">主题</h3>
           <div>
             <p class="text-xs font-bold text-medical-500 mb-2">皮肤风格</p>
             <div class="flex flex-wrap gap-2">
@@ -22,16 +22,19 @@
               </button>
             </div>
           </div>
+        </section>
 
-          <div class="border-t border-medical-200 pt-4">
-            <p class="text-xs font-bold text-medical-500 mb-2">绑定网易云用户</p>
+        <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
+          <h3 class="font-bold text-medical-900">绑定网易云</h3>
+          <div>
             <div v-if="userStore.bindings.netease" class="flex items-center gap-3 mb-3 p-3 border border-medical-200 bg-medical-50">
               <img v-if="userStore.neteaseAvatar" :src="userStore.neteaseAvatar" alt="网易云头像" class="w-11 h-11 rounded-full object-cover" />
               <div v-else class="w-11 h-11 rounded-full bg-accent/15 text-accent flex items-center justify-center font-bold">云</div>
-              <div class="min-w-0">
+              <div class="min-w-0 flex-1">
                 <div class="text-[10px] text-medical-500">当前绑定 · 网易云音乐</div>
                 <div class="font-bold text-medical-900 truncate">{{ userStore.neteaseUsername || userStore.bindings.netease }}</div>
               </div>
+              <button @click="unbindUser" class="flex-shrink-0 px-3 py-1.5 border border-medical-300 text-sm text-medical-600 hover:border-accent hover:text-accent">解绑</button>
             </div>
             <div class="flex gap-2">
               <input v-model="userKeyword" @keyup.enter="searchUsers" placeholder="搜索网易云用户名"
@@ -48,61 +51,6 @@
             <div v-else-if="hasSearched && !searching" class="mt-2 border border-medical-200 p-3 text-center text-xs text-medical-400">未查到用户</div>
           </div>
         </section>
-
-        <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
-          <div class="flex items-center gap-2">
-            <h3 class="font-bold text-medical-900">房间管理设置</h3>
-            <button @click="unlocked ? lock() : showUnlock = true" :title="unlocked ? '锁定设置' : '管理员解锁'"
-                    :aria-label="unlocked ? '锁定房间设置' : '解锁房间设置'"
-                    class="p-1.5 border border-medical-200 text-accent hover:bg-accent/10">
-              <Unlock v-if="unlocked" class="w-4 h-4" /><Lock v-else class="w-4 h-4" />
-            </button>
-            <span class="text-xs text-medical-400">{{ unlocked ? '已解锁' : '仅管理员可修改' }}</span>
-          </div>
-
-          <fieldset :disabled="!unlocked" class="space-y-4 disabled:opacity-45">
-            <div>
-              <label class="block text-xs font-bold text-medical-500 mb-1">解析音质上限</label>
-              <select v-model="draft.neteaseQuality" class="w-full bg-medical-50 border border-medical-200 p-2 text-medical-900">
-                <option v-for="option in qualities" :key="option.value" :value="option.value">{{ option.label }}</option>
-              </select>
-            </div>
-            <div v-for="group in fieldGroups" :key="group.title">
-              <h4 class="text-xs font-bold text-medical-700 mb-2">{{ group.title }}</h4>
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <label v-for="field in group.fields" :key="field.key" class="text-xs text-medical-500">
-                  {{ field.label }}
-                  <input v-model.number="draft[field.key]" type="number" :min="field.min" :max="field.max" step="1"
-                         class="block w-full mt-1 bg-medical-50 border border-medical-200 p-2 outline-none focus:border-accent text-medical-900" />
-                </label>
-              </div>
-            </div>
-            <div class="border-t border-medical-200 pt-4 space-y-2">
-              <h4 class="text-xs font-bold text-medical-700">空闲房间</h4>
-              <label class="flex items-center gap-2 text-sm text-medical-700">
-                <input v-model="draft.idleKickEnabled" type="checkbox" style="accent-color: rgb(var(--accent))" />
-                无音乐播放时踢出在线成员（含暂停）
-              </label>
-              <label class="block text-xs text-medical-500">
-                等待时间（分钟，1–60）
-                <input v-model.number="draft.idleKickMinutes" type="number" min="1" max="60" step="1"
-                       class="block w-full mt-1 bg-medical-50 border border-medical-200 p-2 outline-none focus:border-accent text-medical-900" />
-              </label>
-            </div>
-            <button @click.prevent="saveSettings" :disabled="saving" class="w-full bg-strong text-white py-2 font-bold hover:bg-accent disabled:opacity-50">
-              {{ saving ? '正在保存...' : '保存房间设置' }}
-            </button>
-          </fieldset>
-        </section>
-      </div>
-    </div>
-
-    <div v-if="showUnlock" class="fixed inset-0 z-[80] bg-overlay/70 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-label="管理员验证">
-      <div class="w-full max-w-sm bg-surface border border-medical-200 p-5 shadow-2xl space-y-4">
-        <div class="flex justify-between items-center"><h3 class="font-bold text-medical-900">管理员验证</h3><button @click="showUnlock = false" aria-label="关闭"><X class="w-5 h-5 text-medical-500" /></button></div>
-        <input v-model="passwordInput" type="password" @keyup.enter="unlock" placeholder="管理员密码"
-               class="w-full bg-medical-50 border border-medical-200 p-2 outline-none focus:border-accent text-medical-900" />
-        <button @click="unlock" :disabled="verifying" class="w-full bg-strong text-white py-2 font-bold hover:bg-accent disabled:opacity-50">验证并解锁</button>
       </div>
     </div>
   </div>
@@ -110,13 +58,12 @@
 
 <script setup>
 import { ref, watch } from 'vue';
-import { Settings, X, Lock, Unlock } from 'lucide-vue-next';
+import { Settings, X } from 'lucide-vue-next';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
 import { usePlayerStore } from '../stores/player';
 import { useToast } from '../composables/useToast';
 import { musicApi } from '../api/music';
-import { adminApi } from '../api/admin';
 
 const props = defineProps({ isOpen: Boolean });
 const emit = defineEmits(['close']);
@@ -130,33 +77,6 @@ const themes = [
   { id: 'night', label: '夜间橙', color: '#FB923C' },
   { id: 'blue', label: '浅蓝调', color: '#2563EB' }
 ];
-const qualities = [
-  { value: 'standard', label: '标准' },
-  { value: 'higher', label: '较高' },
-  { value: 'exhigh', label: '极高' },
-  { value: 'lossless', label: '无损' },
-  { value: 'hires', label: '高解析度' }
-];
-const fieldGroups = [
-  { title: '播放队列控制', fields: [
-    { key: 'maxQueueSize', label: '队列最大歌曲上限', min: 1, max: 10000 },
-    { key: 'maxHistorySize', label: '历史记录歌曲上限', min: 0, max: 10000 },
-    { key: 'maxUserSongs', label: '单人歌曲上限', min: 1, max: 10000 },
-    { key: 'maxPlaylistImportSize', label: '歌单导入上限', min: 1, max: 10000 }
-  ] },
-  { title: '聊天室限制', fields: [
-    { key: 'maxChatHistorySize', label: '消息历史条数', min: 0, max: 100000 },
-    { key: 'minChatIntervalMs', label: '发言间隔（毫秒）', min: 0, max: 600000 },
-    { key: 'maxChatMessageLength', label: '消息最大长度', min: 1, max: 10000 }
-  ] }
-];
-const draft = ref({});
-const unlocked = ref(false);
-const showUnlock = ref(false);
-const adminPassword = ref('');
-const passwordInput = ref('');
-const verifying = ref(false);
-const saving = ref(false);
 const userKeyword = ref('');
 const searchResults = ref([]);
 const searching = ref(false);
@@ -166,13 +86,11 @@ watch(userKeyword, () => {
   searchResults.value = [];
 });
 
-const lock = () => { unlocked.value = false; adminPassword.value = ''; };
-const close = () => { lock(); showUnlock.value = false; emit('close'); };
+const close = () => emit('close');
 watch(() => props.isOpen, (open) => {
   if (open) {
-    draft.value = { ...playerStore.config, neteaseQuality: playerStore.config.neteaseQuality || 'exhigh' };
     hydrateBoundProfile();
-  } else { lock(); showUnlock.value = false; searchResults.value = []; hasSearched.value = false; }
+  } else { searchResults.value = []; hasSearched.value = false; }
 });
 
 const hydrateBoundProfile = async () => {
@@ -214,42 +132,11 @@ const bindUser = (user) => {
   success(`已绑定 ${user.name}`);
 };
 
-const unlock = async () => {
-  if (!passwordInput.value || verifying.value) return;
-  verifying.value = true;
-  try {
-    await adminApi.verify(passwordInput.value);
-    adminPassword.value = passwordInput.value;
-    unlocked.value = true;
-    showUnlock.value = false;
-    passwordInput.value = '';
-  } catch (e) { error('管理员密码错误'); }
-  finally { verifying.value = false; }
-};
-
-const saveSettings = async () => {
-  if (!unlocked.value || saving.value) return;
-  const update = { neteaseQuality: draft.value.neteaseQuality,
-    idleKickEnabled: draft.value.idleKickEnabled, idleKickMinutes: draft.value.idleKickMinutes };
-  if (!Number.isInteger(update.idleKickMinutes) || update.idleKickMinutes < 1 || update.idleKickMinutes > 60) {
-    error('空闲踢出时间应在 1 到 60 分钟之间');
-    return;
-  }
-  for (const group of fieldGroups) {
-    for (const field of group.fields) {
-      const value = draft.value[field.key];
-      if (!Number.isInteger(value) || value < field.min || value > field.max) {
-        error(`${field.label}应在 ${field.min} 到 ${field.max} 之间`);
-        return;
-      }
-      update[field.key] = value;
-    }
-  }
-  saving.value = true;
-  try {
-    await adminApi.updateConfig(adminPassword.value, update);
-    success('房间设置已生效并保存');
-  } catch (e) { error(e.response?.data?.message || '房间设置保存失败'); }
-  finally { saving.value = false; }
+const unbindUser = () => {
+  playerStore.bindAccount('netease', '');
+  searchResults.value = [];
+  hasSearched.value = false;
+  userKeyword.value = '';
+  success('已解绑网易云');
 };
 </script>
