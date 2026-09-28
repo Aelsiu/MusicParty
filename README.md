@@ -35,50 +35,36 @@
 
 ## Docker 部署（推荐）
 
-本项目支持全自动化的 Docker 部署，建议直接拉取构建好的镜像。
+本 fork 的 Compose 会从当前源码构建镜像，并从项目根目录的 `config/application.properties` 读取启动配置。配置文件包含管理员密码和 Cookie，已被 Git 忽略；可跟踪的样例是 `config/application.properties.example`。
 
 ### 1. 使用 Docker Compose 一键启动 (最简方案)
 
-下载项目自带的 `docker-compose.yml` 并根据需要修改其中的环境变量，compose中带有NeteaseCloudMusicApi。
+在本项目目录执行（Compose 会同时启动 NeteaseCloudMusicApi）：
 
 ```bash
-# 下载配置
-curl -sSL https://raw.githubusercontent.com/pluviiter/MusicParty/main/docker-compose.yml > docker-compose.yml
-
-# 修改配置（填写密码、Cookie 等）
-vi docker-compose.yml
-
-# 启动服务
-docker-compose up -d
+cp config/application.properties.example config/application.properties
+# 编辑 config/application.properties：至少设置管理员密码，并按需填写 Cookie、外部访问地址
+docker compose up -d --build
 ```
+
+以后在网页设置窗口保存房间参数会立即生效，并写回 `config/application.properties`，无需重启容器。手动编辑此文件后，重启应用容器才会重新读取。修改源码后需要重新构建镜像。`docker-compose.yml` 只保留端口、构建、网络和卷等 Docker 配置。
 
 ### 2. 使用 Docker Run 启动
 
-如果你已有现成的网易云 API 服务，可以使用以下命令部署主应用：
+如果你已有现成的网易云 API 服务，先将配置文件中的 `app.music-api.netease.base-url` 指向该服务，并构建本地镜像，再运行：
 
 ```bash
-docker run -d \
-  --name music-party \
-  -p 8848:8080 \
-  -e ADMIN_PASSWORD=admin123 \
-  -e NETEASE_API_URL=http://your-api-ip:3000 \
-  -e BASE_URL=http://localhost:8848 \
-  -e APP_AUTHOR_NAME="ThorNex" \
-  -e APP_BACK_WORDS="MUSIC PARTY" \
-  -e NETEASE_COOKIE="" \
-  -e BILIBILI_COOKIE="" \
-  -e QUEUE_MAX_SIZE=1000 \
-  -e QUEUE_HISTORY_SIZE=50 \
-  -e PLAYLIST_IMPORT_LIMIT=100 \
-  -e CHAT_HISTORY_LIMIT=1000 \
-  -e CACHE_MAX_SIZE=1GB \
-  -v ./music_party/cached_media:/app/cached_media \
-  -v ./music_party/data:/app/data \
-  --restart unless-stopped \
-  thornex/music-party:latest
+docker build -t music-party-custom:local .
+docker run -d --name music-party -p 8848:8080 \
+  -v "$(pwd)/config:/app/config" \
+  -v "$(pwd)/music_party/cached_media:/app/cached_media" \
+  -v "$(pwd)/music_party/data:/app/data" \
+  --restart unless-stopped music-party-custom:local
 ```
 
-### 环境变量说明
+### 旧版环境变量说明
+
+下面的环境变量仍可由包内默认配置读取。本 fork 的 Compose 使用 `config/application.properties`；完整键名和默认值请查看示例文件。
 
 | 变量名                       | 必填 | 说明                                                                          |
 |:--------------------------|:---|:----------------------------------------------------------------------------|

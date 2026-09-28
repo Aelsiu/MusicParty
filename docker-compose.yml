@@ -12,51 +12,19 @@ services:
 
   # 2. Music Party 主应用
   music-party:
-    image: thornex/music-party:latest
+    build: .
+    image: music-party-custom:local
     container_name: music-party-app
     restart: always
     ports:
       - "8848:8080" 
-    environment:
-      # 管理员密码，用于在搜索框输入指令控制系统
-      - ADMIN_PASSWORD=admin123
-      
-      # 网易云 API 地址，指向上面的容器名
-      - NETEASE_API_URL=http://netease-api:3000
-      
-      # [基础配置]
-      - BASE_URL=http://localhost:8848    #你的基础url，用于直播流链接的拼接
-      - APP_AUTHOR_NAME=ThorNex      # 页面左上角显示的作者名
-      - APP_BACK_WORDS=MUSIC PARTY    # 中间背景装饰文字
-      
-      # [平台凭证]
-      - NETEASE_ENABLED=true         # 是否开启网易云音乐源
-      - BILIBILI_ENABLED=true        # 是否开启 Bilibili 源
-      - NETEASE_COOKIE=""            # 网易云 Cookie
-      - NETEASE_QUALITY=exhigh       # 网易云音质 (standard, higher, exhigh, lossless, hires)
-      - BILIBILI_COOKIE=""           # B站完整Cookie(可选，仅B站源需要)
-
-      # [性能/策略配置]
-      - QUEUE_MAX_SIZE=1000          # 播放队列最大长度
-      - QUEUE_HISTORY_SIZE=50        # 历史记录保留数量
-      - PLAYLIST_IMPORT_LIMIT=100    # 导入歌单时的最大歌曲数限制
-      - CHAT_HISTORY_LIMIT=1000      # 聊天历史记录保留数量
-      - CACHE_MAX_SIZE=1GB           # 本地音乐缓存上限 (例如 512MB, 1GB, 2GB)
-
-      # [防滥用配置]
-      - QUEUE_MAX_USER_SONGS=100     # 单用户最大点歌数
-      - CHAT_MIN_INTERVAL=1000       # 聊天间隔 (毫秒)
-      - CHAT_MAX_LENGTH=200          # 聊天最大长度
-      - AUTH_RATE_LIMIT_ENABLED=true # 是否开启密码限流
-      - AUTH_MAX_ATTEMPTS=5          # 密码最大尝试次数
-      - AUTH_WINDOW_SECONDS=60       # 密码尝试窗口 (秒)
-      - AUTH_BLOCK_DURATION=300      # 密码封锁时间 (秒)
-
     depends_on:
       - netease-api
     networks:
       - music-net
     volumes:
+      # 外部启动配置；管理者在网页保存房间设置时写回此目录
+      - ./config:/app/config
       # 挂载音频缓存目录，防止重启后 B 站歌曲重新下载
       - ./music_party/cached_media:/app/cached_media
       # 挂载数据目录，用于持久化播放列表和历史记录

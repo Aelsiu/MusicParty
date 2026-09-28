@@ -1,0 +1,9 @@
+.git
+music-party-web/node_modules
+music-party-web/dist
+music-party-web/.npm-cache
+target
+music_party
+cached_media
+data
+config/application.properties
