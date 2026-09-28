@@ -16,6 +16,11 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
     const searchUserKeyword = ref('');
     const userSearchResults = ref([]);
     const isSearchingUser = ref(false);
+    const hasSearchedUser = ref(false);
+    watch([searchUserKeyword, platformRef], () => {
+        hasSearchedUser.value = false;
+        userSearchResults.value = [];
+    });
     const isPlaylistsLoading = ref(false);
 
     // Pagination
@@ -51,11 +56,17 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
     // 搜索用户 (用于绑定)
     const searchUser = async () => {
         if (!searchUserKeyword.value) return;
+        const keyword = searchUserKeyword.value;
+        const platform = platformRef.value;
         isSearchingUser.value = true;
+        hasSearchedUser.value = false;
         userSearchResults.value = [];
         try {
-            const data = await musicApi.searchUser(platformRef.value, searchUserKeyword.value);
-            userSearchResults.value = data;
+            const data = await musicApi.searchUser(platform, keyword);
+            if (searchUserKeyword.value === keyword && platformRef.value === platform) {
+                userSearchResults.value = data;
+                hasSearchedUser.value = true;
+            }
         } catch (e) {
             console.error(e);
             if (e.response?.data?.message) {
@@ -70,8 +81,9 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
     // 绑定用户并刷新
     const bindUser = (user) => {
-        playerStore.bindAccount(platformRef.value, user.id, user.name);
+        playerStore.bindAccount(platformRef.value, user.id, user.name, user.avatarUrl);
         userSearchResults.value = [];
+        hasSearchedUser.value = false;
         searchUserKeyword.value = '';
         fetchPlaylists(); // 立即刷新
     };
@@ -156,6 +168,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         searchUserKeyword,
         userSearchResults,
         isSearchingUser,
+        hasSearchedUser,
         isPlaylistsLoading,
         hasMore,
         isLoadingMore,

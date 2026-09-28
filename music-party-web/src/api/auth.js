@@ -6,7 +6,7 @@ export const authApi = {
     // 验证密码
     verify: (password) => client.post('/api/auth/verify', { password }),
     // 初始化/设置密码
-    setup: (password) => client.post('/api/auth/setup', { password }),
+    setup: (roomName, password) => client.post('/api/auth/setup', { roomName, password }),
 
     // 管理员指令
     // 统一管理员指令接口

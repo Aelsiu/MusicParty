@@ -33,5 +33,6 @@ public enum PlayerAction {
     RESET,
     ERROR_LOAD,
     SYSTEM_MESSAGE,
-    ADMIN_TRIGGER
+    ADMIN_TRIGGER,
+    IDLE_KICK
 }

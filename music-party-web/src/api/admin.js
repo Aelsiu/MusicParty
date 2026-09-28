@@ -17,7 +17,7 @@ export const adminApi = {
         headers: { 'X-Admin-Password': adminPwd }
     }),
 
-    // 修改房间密码 (password为空即为开启房间)
+    // 修改四位数字房间密码
     setRoomPassword: (adminPwd, password) => client.post('/api/admin/room/password', { password }, {
         headers: { 'X-Admin-Password': adminPwd }
     }),

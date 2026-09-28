@@ -16,12 +16,9 @@ import java.util.concurrent.atomic.AtomicReference;
 @RequestMapping("/api/auth")
 public class AuthController {
 
-    // 使用 AtomicReference 保证线程安全
-    // null 表示未初始化（需要 Setup）
-    // "" (空字符串) 表示已初始化，但不需要密码
-    // "xxx" 表示已初始化，且有密码
+    // null 表示未创建；已创建的房间使用四位数字密码。
     private final AtomicReference<String> roomPassword = new AtomicReference<>(null);
-    private final String adminPassword;
+    private final AtomicReference<String> roomName = new AtomicReference<>(null);
     private final AppProperties.AuthConfig authConfig;
 
     // IP限流记录
@@ -39,55 +36,63 @@ public class AuthController {
     }
 
     public AuthController(AppProperties appProperties) {
-        // 从配置中获取管理员密码
-        this.adminPassword = appProperties.getAdminPassword();
         this.authConfig = appProperties.getAuth();
     }
 
     public void resetRoomPassword() {
         roomPassword.set(null); // 恢复到未初始化状态
+        roomName.set(null);
     }
 
-    // 🟢 新增：管理员强制设置密码
+    // 管理员修改密码；入口会先验证格式。
     public void forceSetPassword(String newPassword) {
-        // 无论当前状态如何，强制覆写
-        // 如果传入 null，视为 "" (无密码)
-        roomPassword.set(newPassword == null ? "" : newPassword);
+        roomPassword.set(newPassword);
+    }
+
+    public void restoreRoom(String name, String password) {
+        roomName.set(name);
+        roomPassword.set(password);
+    }
+
+    public String getRoomName() {
+        return roomName.get();
     }
 
     /**
      * 检查房间状态
      * isSetup: 是否已经完成了初始化设置
-     * hasProtection: 是否开启了密码保护
+     * roomName: 创建时设置的房间名
      */
     @GetMapping("/status")
-    public ResponseEntity<Map<String, Boolean>> getStatus() {
+    public ResponseEntity<Map<String, Object>> getStatus() {
         String current = roomPassword.get();
-        boolean isSetup = current != null;
-        // 只有当已设置且密码不为空时，才算有保护
-        boolean hasProtection = isSetup && !current.isEmpty();
+        boolean isSetup = isValidPin(current) && roomName.get() != null;
 
         return ResponseEntity.ok(Map.of(
                 "isSetup", isSetup,
-                "hasProtection", hasProtection
+                "hasProtection", isSetup,
+                "roomName", isSetup ? roomName.get() : ""
         ));
     }
 
     /**
-     * 设置密码 (只有当前未设置密码时才允许)
-     * 允许设置为空字符串，代表不需要密码
+     * 创建房间 (只有当前未初始化时才允许)
      */
     @PostMapping("/setup")
     public synchronized ResponseEntity<?> setupPassword(@RequestBody Map<String, String> body) {
         // 如果已经设置过密码，禁止再次设置（防止并发重置）
-        if (roomPassword.get() != null) {
+        if (isValidPin(roomPassword.get()) && roomName.get() != null) {
             return ResponseEntity.status(403).body("Password already set");
         }
 
-        // 获取密码，如果是 null 则视为空字符串
-        String newPassword = body.getOrDefault("password", "");
+        String newPassword = body.get("password");
+        String requestedName = body.get("roomName");
+        String newRoomName = requestedName == null ? "" : requestedName.trim();
+        if (!isValidPin(newPassword) || newRoomName.isEmpty() || newRoomName.length() > 40) {
+            return ResponseEntity.badRequest().body(Map.of("message", "房间名须为1–40字，密码须为4位数字"));
+        }
 
-        // 保存（可能是空字符串）
+        roomName.set(newRoomName);
         roomPassword.set(newPassword);
         return ResponseEntity.ok(Map.of("message", "Password set successfully"));
     }
@@ -107,24 +112,12 @@ public class AuthController {
         String inputPassword = body.getOrDefault("password", "");
         String currentPassword = roomPassword.get();
 
-        // 1. 如果还没初始化，理论上应该去 setup，但暂时允许通过
-        if (currentPassword == null) {
-            return ResponseEntity.ok(Map.of("valid", true));
+        if (!isValidPin(currentPassword) || roomName.get() == null) {
+            return ResponseEntity.status(409).body(Map.of("valid", false, "message", "房间尚未创建"));
         }
 
-        // 2. 如果是无密码模式（空字符串），直接通过
-        if (currentPassword.isEmpty()) {
-            return ResponseEntity.ok(Map.of("valid", true));
-        }
-
-        // 3. 如果输入的是管理员密码，直接通过 (万能钥匙)
-        if (adminPassword != null && adminPassword.equals(inputPassword)) {
-            clearAttempts(clientIp);
-            return ResponseEntity.ok(Map.of("valid", true));
-        }
-
-        // 3. 比对密码
-        if (currentPassword.equals(inputPassword)) {
+        // 仅允许四位数字房间密码进入。
+        if (isValidPin(inputPassword) && currentPassword.equals(inputPassword)) {
             clearAttempts(clientIp);
             return ResponseEntity.ok(Map.of("valid", true));
         } else {
@@ -188,5 +181,9 @@ public class AuthController {
 
     public String getRawPassword() {
         return roomPassword.get();
+    }
+
+    public static boolean isValidPin(String password) {
+        return password != null && password.matches("[0-9]{4}");
     }
 }

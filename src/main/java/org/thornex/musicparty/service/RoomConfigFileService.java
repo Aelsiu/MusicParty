@@ -51,6 +51,8 @@ public class RoomConfigFileService {
         put(changes, "app.music-api.player.vote-skip-enabled", request.voteSkipEnabled());
         put(changes, "app.music-api.player.vote-skip-threshold", request.voteSkipThreshold());
         put(changes, "app.music-api.player.vote-skip-wait-time", request.voteSkipWaitTime());
+        put(changes, "app.music-api.player.idle-kick-enabled", request.idleKickEnabled());
+        put(changes, "app.music-api.player.idle-kick-minutes", request.idleKickMinutes());
         if (changes.isEmpty()) return;
 
         List<String> lines = new ArrayList<>(Files.readAllLines(configFile, StandardCharsets.UTF_8));

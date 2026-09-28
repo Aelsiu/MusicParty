@@ -27,6 +27,7 @@ export const useUserStore = defineStore('user', () => {
 
     const isAuthPassed = ref(false);
     const roomPassword = ref('');
+    const roomName = ref('');
 
     // 启动时：严格从 LocalStorage 读取，默认值只在这里设定一次
     const storageName = localStorage.getItem('mp_username');
@@ -37,6 +38,7 @@ export const useUserStore = defineStore('user', () => {
 
     const bindings = ref(JSON.parse(localStorage.getItem(STORAGE_KEYS.BINDINGS) || '{}'));
     const neteaseUsername = ref(localStorage.getItem(STORAGE_KEYS.NETEASE_USERNAME) || '');
+    const neteaseAvatar = ref(localStorage.getItem(STORAGE_KEYS.NETEASE_AVATAR) || '');
     // 全局状态：控制改名弹窗显示
     const showNameModal = ref(false);
 
@@ -109,13 +111,17 @@ export const useUserStore = defineStore('user', () => {
         onlineUsers.value = users;
     };
 
-    const updateBinding = (platform, accountId, displayName = '') => {
+    const updateBinding = (platform, accountId, displayName = '', avatarUrl = '') => {
+        const sameAccount = bindings.value[platform] === accountId;
         bindings.value[platform] = accountId;
         localStorage.setItem(STORAGE_KEYS.BINDINGS, JSON.stringify(bindings.value));
         if (platform === 'netease') {
-            neteaseUsername.value = accountId ? (displayName || neteaseUsername.value || accountId) : '';
+            neteaseUsername.value = accountId ? (displayName || (sameAccount && neteaseUsername.value) || accountId) : '';
             if (neteaseUsername.value) localStorage.setItem(STORAGE_KEYS.NETEASE_USERNAME, neteaseUsername.value);
             else localStorage.removeItem(STORAGE_KEYS.NETEASE_USERNAME);
+            neteaseAvatar.value = accountId ? (avatarUrl || (sameAccount && neteaseAvatar.value) || '') : '';
+            if (neteaseAvatar.value) localStorage.setItem(STORAGE_KEYS.NETEASE_AVATAR, neteaseAvatar.value);
+            else localStorage.removeItem(STORAGE_KEYS.NETEASE_AVATAR);
         }
     };
 
@@ -144,6 +150,7 @@ export const useUserStore = defineStore('user', () => {
         currentUser,
         bindings,
         neteaseUsername,
+        neteaseAvatar,
         initUser,
         setOnlineUsers,
         updateBinding,
@@ -156,6 +163,7 @@ export const useUserStore = defineStore('user', () => {
         setPostNameAction,
         isAuthPassed,
         roomPassword,
+        roomName,
         prepareEntry,
         resetAuthentication
     };

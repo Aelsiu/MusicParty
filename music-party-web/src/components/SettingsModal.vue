@@ -25,9 +25,14 @@
 
           <div class="border-t border-medical-200 pt-4">
             <p class="text-xs font-bold text-medical-500 mb-2">绑定网易云用户</p>
-            <p v-if="userStore.bindings.netease" class="text-sm text-medical-800 mb-2">
-              当前绑定：{{ userStore.neteaseUsername || userStore.bindings.netease }}
-            </p>
+            <div v-if="userStore.bindings.netease" class="flex items-center gap-3 mb-3 p-3 border border-medical-200 bg-medical-50">
+              <img v-if="userStore.neteaseAvatar" :src="userStore.neteaseAvatar" alt="网易云头像" class="w-11 h-11 rounded-full object-cover" />
+              <div v-else class="w-11 h-11 rounded-full bg-accent/15 text-accent flex items-center justify-center font-bold">云</div>
+              <div class="min-w-0">
+                <div class="text-[10px] text-medical-500">当前绑定 · 网易云音乐</div>
+                <div class="font-bold text-medical-900 truncate">{{ userStore.neteaseUsername || userStore.bindings.netease }}</div>
+              </div>
+            </div>
             <div class="flex gap-2">
               <input v-model="userKeyword" @keyup.enter="searchUsers" placeholder="搜索网易云用户名"
                      class="flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 outline-none focus:border-accent text-medical-900" />
@@ -40,6 +45,7 @@
                 <span class="truncate">{{ result.name }}</span>
               </button>
             </div>
+            <div v-else-if="hasSearched && !searching" class="mt-2 border border-medical-200 p-3 text-center text-xs text-medical-400">未查到用户</div>
           </div>
         </section>
 
@@ -70,6 +76,18 @@
                          class="block w-full mt-1 bg-medical-50 border border-medical-200 p-2 outline-none focus:border-accent text-medical-900" />
                 </label>
               </div>
+            </div>
+            <div class="border-t border-medical-200 pt-4 space-y-2">
+              <h4 class="text-xs font-bold text-medical-700">空闲房间</h4>
+              <label class="flex items-center gap-2 text-sm text-medical-700">
+                <input v-model="draft.idleKickEnabled" type="checkbox" style="accent-color: rgb(var(--accent))" />
+                无音乐播放时踢出在线成员（含暂停）
+              </label>
+              <label class="block text-xs text-medical-500">
+                等待时间（分钟，1–60）
+                <input v-model.number="draft.idleKickMinutes" type="number" min="1" max="60" step="1"
+                       class="block w-full mt-1 bg-medical-50 border border-medical-200 p-2 outline-none focus:border-accent text-medical-900" />
+              </label>
             </div>
             <button @click.prevent="saveSettings" :disabled="saving" class="w-full bg-strong text-white py-2 font-bold hover:bg-accent disabled:opacity-50">
               {{ saving ? '正在保存...' : '保存房间设置' }}
@@ -142,13 +160,29 @@ const saving = ref(false);
 const userKeyword = ref('');
 const searchResults = ref([]);
 const searching = ref(false);
+const hasSearched = ref(false);
+watch(userKeyword, () => {
+  hasSearched.value = false;
+  searchResults.value = [];
+});
 
 const lock = () => { unlocked.value = false; adminPassword.value = ''; };
 const close = () => { lock(); showUnlock.value = false; emit('close'); };
 watch(() => props.isOpen, (open) => {
-  if (open) draft.value = { ...playerStore.config, neteaseQuality: playerStore.config.neteaseQuality || 'exhigh' };
-  else { lock(); showUnlock.value = false; searchResults.value = []; }
+  if (open) {
+    draft.value = { ...playerStore.config, neteaseQuality: playerStore.config.neteaseQuality || 'exhigh' };
+    hydrateBoundProfile();
+  } else { lock(); showUnlock.value = false; searchResults.value = []; hasSearched.value = false; }
 });
+
+const hydrateBoundProfile = async () => {
+  if (!userStore.bindings.netease || userStore.neteaseAvatar || !userStore.neteaseUsername) return;
+  try {
+    const users = await musicApi.searchUser('netease', userStore.neteaseUsername);
+    const match = users.find(user => String(user.id) === String(userStore.bindings.netease));
+    if (match) userStore.updateBinding('netease', match.id, match.name, match.avatarUrl);
+  } catch (e) { /* 旧绑定保留，头像不可用时显示占位图 */ }
+};
 
 const changeTheme = (name, event) => {
   const rect = event.currentTarget.getBoundingClientRect();
@@ -157,16 +191,25 @@ const changeTheme = (name, event) => {
 
 const searchUsers = async () => {
   if (!userKeyword.value.trim() || searching.value) return;
+  const keyword = userKeyword.value.trim();
   searching.value = true;
   searchResults.value = [];
-  try { searchResults.value = await musicApi.searchUser('netease', userKeyword.value.trim()); }
+  hasSearched.value = false;
+  try {
+    const results = await musicApi.searchUser('netease', keyword);
+    if (userKeyword.value.trim() === keyword) {
+      searchResults.value = results;
+      hasSearched.value = true;
+    }
+  }
   catch (e) { error('用户名搜索失败'); }
   finally { searching.value = false; }
 };
 
 const bindUser = (user) => {
-  playerStore.bindAccount('netease', user.id, user.name);
+  playerStore.bindAccount('netease', user.id, user.name, user.avatarUrl);
   searchResults.value = [];
+  hasSearched.value = false;
   userKeyword.value = '';
   success(`已绑定 ${user.name}`);
 };
@@ -186,7 +229,12 @@ const unlock = async () => {
 
 const saveSettings = async () => {
   if (!unlocked.value || saving.value) return;
-  const update = { neteaseQuality: draft.value.neteaseQuality };
+  const update = { neteaseQuality: draft.value.neteaseQuality,
+    idleKickEnabled: draft.value.idleKickEnabled, idleKickMinutes: draft.value.idleKickMinutes };
+  if (!Number.isInteger(update.idleKickMinutes) || update.idleKickMinutes < 1 || update.idleKickMinutes > 60) {
+    error('空闲踢出时间应在 1 到 60 分钟之间');
+    return;
+  }
   for (const group of fieldGroups) {
     for (const field of group.fields) {
       const value = draft.value[field.key];

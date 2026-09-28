@@ -128,6 +128,7 @@
                 </div>
               </div>
               <div v-if="isSearchingUser" class="text-center py-2"><Loader2 class="w-4 h-4 animate-spin mx-auto text-accent"/></div>
+              <div v-else-if="hasSearchedUser && !userSearchResults.length" class="text-center py-2 text-xs text-medical-400">未查到用户</div>
             </div>
 
             <!-- 已绑定：歌单列表 -->
@@ -288,7 +289,7 @@ const selectPlatform = async (p) => {
 // 2. 引入歌单逻辑 (注入依赖)
 const {
   playlists, currentPlaylistId, searchUserKeyword, userSearchResults,
-  isSearchingUser, isPlaylistsLoading, hasMore, isLoadingMore, bindings,
+  isSearchingUser, hasSearchedUser, isPlaylistsLoading, hasMore, isLoadingMore, bindings,
   searchUser, bindUser, loadPlaylist, handleScroll
 } = usePlaylistLogic(platform, songs, listMode, loading);
 

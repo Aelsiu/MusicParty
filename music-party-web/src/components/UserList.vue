@@ -1,5 +1,9 @@
 <template>
   <div class="p-4">
+    <div class="mb-3 pb-3 border-b border-medical-200">
+      <div class="text-[10px] text-medical-400">当前房间</div>
+      <div class="font-bold text-medical-900 truncate" :title="userStore.roomName">{{ userStore.roomName }}</div>
+    </div>
     <div class="mb-4 flex items-center justify-between">
       <h3 class="text-sm font-bold text-medical-400">在线成员</h3>
       <div class="text-xs font-mono bg-accent/10 text-accent px-1">{{ users.length }}</div>

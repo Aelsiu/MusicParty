@@ -54,6 +54,13 @@ function handleGameEvent(event) {
         return;
     }
 
+    if (event.action === 'IDLE_KICK') {
+        socketService.disconnect();
+        userStore.resetAuthentication();
+        window.location.reload();
+        return;
+    }
+
     if (event.action === 'RENAME_FAILED' || (event.type === 'ERROR' && event.message && (event.message.includes('taken') || event.message.includes('占用')))) {
         // 在改名弹窗内展示失败原因（弹窗背板会模糊背景 toast，故不走 toast）
         userStore.renameError = event.message || '该名称已被占用，请更换。';

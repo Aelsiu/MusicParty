@@ -3,6 +3,7 @@ export const STORAGE_KEYS = {
     USERNAME: 'mp_username',
     BINDINGS: 'mp_bindings',
     NETEASE_USERNAME: 'mp_netease_username',
+    NETEASE_AVATAR: 'mp_netease_avatar',
     ROOM_PASSWORD: 'mp_room_password',
     VOLUME: 'mp_volume',
     ADMIN_PASSWORD: 'mp_admin_password',

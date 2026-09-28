@@ -115,10 +115,13 @@ public class AdminController {
     public ResponseEntity<?> setRoomPassword(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminRoomPasswordRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
-        String newPwd = request.password() == null ? "" : request.password();
+        String newPwd = request.password();
+        if (!AuthController.isValidPin(newPwd)) {
+            return ResponseEntity.badRequest().body(Map.of("message", "房间密码须为4位数字"));
+        }
         authController.forceSetPassword(newPwd);
         musicPlayerService.broadcastPasswordChanged();
-        return ResponseEntity.ok(Map.of("message", newPwd.isEmpty() ? "房间已设为公开访问" : "房间访问密码已更新"));
+        return ResponseEntity.ok(Map.of("message", "房间访问密码已更新"));
     }
 
     @PostMapping("/room/clear")
@@ -196,6 +199,7 @@ public class AdminController {
         if (!inRange(r.maxChatMessageLength(), 1, 10000)) return "消息最大长度超出范围";
         if (!inRange(r.bilibiliMaxDurationMinutes(), 1, 1440)) return "B站时长上限超出范围";
         if (!inRange(r.voteSkipWaitTime(), 0, 3600)) return "投票等待时间超出范围";
+        if (!inRange(r.idleKickMinutes(), 1, 60)) return "空闲踢出时间须为1–60分钟";
         if (r.voteSkipThreshold() != null && (!Double.isFinite(r.voteSkipThreshold()) || r.voteSkipThreshold() < 0.1 || r.voteSkipThreshold() > 1)) return "投票阈值超出范围";
         if (r.neteaseQuality() != null && !Set.of("standard", "higher", "exhigh", "lossless", "hires").contains(r.neteaseQuality())) return "不支持该解析音质";
         return null;

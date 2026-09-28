@@ -205,8 +205,8 @@
                   <!-- Password -->
                   <div class="space-y-2">
                     <label class="block text-[10px] font-bold text-medical-400 uppercase font-mono">房间进入密码</label>
-                    <div class="flex gap-2">
-                      <input v-model="roomPassword" placeholder="留空则设为公开" class="flex-1 bg-medical-50 border border-medical-200 px-3 py-1.5 text-xs outline-none focus:border-accent" />
+                    <div class="flex items-center gap-2">
+                      <PinInput v-model="roomPassword" label="新房间密码" />
                       <button @click="updateRoomPassword" class="bg-strong text-white px-3 py-1.5 text-[10px] font-bold hover:bg-accent">设置</button>
                     </div>
                   </div>
@@ -291,6 +291,7 @@ import { useAdminStore } from '../stores/admin';
 import { usePlayerStore } from '../stores/player';
 import { adminApi } from '../api/admin';
 import { useToast } from '../composables/useToast';
+import PinInput from './PinInput.vue';
 import {
   Settings, X, Pause, Play, SkipForward, ListOrdered, Repeat1, Shuffle,
   Lock, Unlock, ShieldAlert, Save, AlertTriangle,
@@ -404,8 +405,10 @@ const toggleLock = async (type, locked) => {
 };
 
 const updateRoomPassword = async () => {
+  if (!/^[0-9]{4}$/.test(roomPassword.value)) { error('请输入 4 位数字房间密码'); return; }
   try {
     const data = await adminApi.setRoomPassword(adminStore.adminPassword, roomPassword.value);
+    roomPassword.value = '';
     success(data.message);
   } catch (e) {
     error('密码更新失败');

@@ -207,6 +207,18 @@ public class UserService {
                 .toList();
     }
 
+    /** 使空闲房间的现有会话失效；前端收到广播后主动断开并返回入口。 */
+    public void kickOnlineUsersForIdle() {
+        usersByToken.values().forEach(user -> {
+            String sessionId = user.getSessionId();
+            if (sessionId != null && sessionToToken.remove(sessionId, user.getToken())) {
+                user.setSessionId(null);
+                user.setLastActiveTime(System.currentTimeMillis());
+            }
+        });
+        eventPublisher.publishEvent(new UserCountChangeEvent(this, getOnlineUserSummaries().size()));
+    }
+
     /**
      * 获取最近活跃的用户 Token (包括当前在线和正在等待断连确认的用户)
      */

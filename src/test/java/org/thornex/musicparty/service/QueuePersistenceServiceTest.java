@@ -49,7 +49,8 @@ class QueuePersistenceServiceTest {
         when(player.getPlayerSettings()).thenReturn(new SettingsSnapshot.PlayerSettings(
                 "SHUFFLE", true, true, true, 0.75, 20, true, true, true));
         AuthController auth = mock(AuthController.class);
-        when(auth.getRawPassword()).thenReturn("room123");
+        when(auth.getRawPassword()).thenReturn("1234");
+        when(auth.getRoomName()).thenReturn("音乐房间");
         LiveStreamService stream = mock(LiveStreamService.class);
         when(stream.isEnabled()).thenReturn(true);
 
@@ -62,7 +63,8 @@ class QueuePersistenceServiceTest {
 
         assertEquals("SHUFFLE", snap.player().playMode());
         assertTrue(snap.player().voteSkipEnabled());
-        assertEquals("room123", snap.roomPassword());
+        assertEquals("1234", snap.roomPassword());
+        assertEquals("音乐房间", snap.roomName());
         assertTrue(snap.streamEnabled());
         assertEquals("DJ", snap.privateDj().mode());
         assertTrue(snap.privateDj().fillBlankEnabled());
@@ -109,7 +111,7 @@ class QueuePersistenceServiceTest {
                 + "\"player\":{\"playMode\":\"SHUFFLE\",\"fairShuffle\":true,\"allowOfflineShuffle\":true,"
                 + "\"voteSkipEnabled\":true,\"voteSkipThreshold\":0.75,\"voteSkipWaitTime\":20,"
                 + "\"pauseLocked\":true,\"skipLocked\":true,\"playModeLocked\":true},"
-                + "\"roomPassword\":\"room123\",\"streamEnabled\":true,"
+                + "\"roomPassword\":\"1234\",\"roomName\":\"音乐房间\",\"streamEnabled\":true,"
                 + "\"privateDj\":{\"mode\":\"DJ\",\"fillBlankEnabled\":true,\"joinQueueEnabled\":true,\"custodyEnabled\":true},"
                 + "\"systemConfig\":{\"maxQueueSize\":500,\"maxHistorySize\":100,\"maxUserSongs\":50,"
                 + "\"maxPlaylistImportSize\":200,\"maxChatHistorySize\":5000,\"minChatIntervalMs\":500,"
@@ -135,7 +137,7 @@ class QueuePersistenceServiceTest {
                         && p.pauseLocked() && p.playModeLocked()));
 
         // 房间密码 / 直播开关
-        verify(auth).forceSetPassword("room123");
+        verify(auth).restoreRoom("音乐房间", "1234");
         verify(stream).setEnabled(true);
 
         // AppProperties 各 Config 回填
@@ -167,7 +169,7 @@ class QueuePersistenceServiceTest {
         build(mock(MusicQueueManager.class), mock(ChatService.class), props, player, auth, stream).loadData();
 
         verify(player, never()).applyPlayerSettings(any());
-        verify(auth, never()).forceSetPassword(anyString());
+        verify(auth, never()).restoreRoom(anyString(), anyString());
         verify(stream, never()).setEnabled(anyBoolean());
     }
 
@@ -190,7 +192,7 @@ class QueuePersistenceServiceTest {
         verify(player).applyPlayerSettings(argThat(p ->
                 "REPEAT_ONE".equals(p.playMode()) && p.fairShuffle() == null));
         verify(stream).setEnabled(true);
-        verify(auth, never()).forceSetPassword(anyString());
+        verify(auth, never()).restoreRoom(anyString(), anyString());
         // 缺省 systemConfig → AppProperties 保持默认
         assertEquals(1000, props.getQueue().getMaxSize());
     }
@@ -215,5 +217,25 @@ class QueuePersistenceServiceTest {
         assertEquals(250, props.getQueue().getMaxSize());
         verify(player).applyPlayerSettings(argThat(p ->
                 "SHUFFLE".equals(p.playMode()) && p.voteSkipEnabled() == null));
+    }
+
+    @Test
+    void legacyPasswordRequiresNewRoomButKeepsQueueAndChat() throws Exception {
+        File tmp = File.createTempFile("queue", ".json");
+        tmp.deleteOnExit();
+        Files.writeString(tmp.toPath(), "{\"queue\":[],\"history\":[],\"chatHistory\":[],"
+                + "\"settings\":{\"roomPassword\":\"old-password\"}}");
+        AppProperties props = new AppProperties();
+        props.getQueue().setPersistenceFile(tmp.getAbsolutePath());
+        MusicQueueManager queue = mock(MusicQueueManager.class);
+        ChatService chat = mock(ChatService.class);
+        AuthController auth = mock(AuthController.class);
+
+        build(queue, chat, props, mock(MusicPlayerService.class), auth,
+                mock(LiveStreamService.class)).loadData();
+
+        verify(queue).restore(anyList(), anyList());
+        verify(chat).restore(anyList());
+        verify(auth, never()).restoreRoom(anyString(), anyString());
     }
 }

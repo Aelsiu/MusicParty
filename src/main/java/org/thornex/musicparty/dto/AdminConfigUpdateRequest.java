@@ -14,5 +14,7 @@ public record AdminConfigUpdateRequest(
     Integer bilibiliMaxDurationMinutes,
     Boolean voteSkipEnabled,
     Double voteSkipThreshold,
-    Integer voteSkipWaitTime
+    Integer voteSkipWaitTime,
+    Boolean idleKickEnabled,
+    Integer idleKickMinutes
 ) {}

@@ -134,9 +134,15 @@ public class QueuePersistenceService {
             if (cfg.bilibiliMaxDurationMinutes() != null) appProperties.getBilibili().setMaxDurationMinutes(cfg.bilibiliMaxDurationMinutes());
             if (cfg.maxChatMessageLength() != null) appProperties.getChat().setMaxMessageLength(cfg.maxChatMessageLength());
             if (cfg.neteaseQuality() != null) appProperties.getNetease().setQuality(cfg.neteaseQuality());
+            if (cfg.idleKickEnabled() != null) appProperties.getPlayer().setIdleKickEnabled(cfg.idleKickEnabled());
+            if (cfg.idleKickMinutes() != null) appProperties.getPlayer().setIdleKickMinutes(cfg.idleKickMinutes());
         }
 
-        if (s.roomPassword() != null) authController.forceSetPassword(s.roomPassword());
+        if (AuthController.isValidPin(s.roomPassword()) && s.roomName() != null && !s.roomName().isBlank()) {
+            authController.restoreRoom(s.roomName(), s.roomPassword());
+        } else if (s.roomPassword() != null) {
+            log.info("Legacy room password/name requires room creation; queue and chat were retained.");
+        }
         if (s.streamEnabled() != null) liveStreamService.setEnabled(s.streamEnabled());
 
         log.info("Restored persisted runtime settings from {}", appProperties.getQueue().getPersistenceFile());
@@ -146,6 +152,7 @@ public class QueuePersistenceService {
         return new SettingsSnapshot(
                 musicPlayerService.getPlayerSettings(),
                 authController.getRawPassword(),
+                authController.getRoomName(),
                 liveStreamService.isEnabled(),
                 new SettingsSnapshot.PrivateDjSettings(
                         appProperties.getPrivateDj().getMode(),
@@ -163,7 +170,9 @@ public class QueuePersistenceService {
                         appProperties.getBilibili().isEnabled(),
                         appProperties.getBilibili().getMaxDurationMinutes(),
                         appProperties.getChat().getMaxMessageLength(),
-                        appProperties.getNetease().getQuality()));
+                        appProperties.getNetease().getQuality(),
+                        appProperties.getPlayer().isIdleKickEnabled(),
+                        appProperties.getPlayer().getIdleKickMinutes()));
     }
 
     private File getPersistenceFile() {

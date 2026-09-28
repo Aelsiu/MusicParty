@@ -55,6 +55,8 @@ export const usePlayerStore = defineStore('player', () => {
         voteSkipEnabled: false,
         voteSkipThreshold: 0.5,
         voteSkipWaitTime: 15,
+        idleKickEnabled: false,
+        idleKickMinutes: 15,
         neteaseCookieConfigured: false,
         privateDj: {
             mode: 'OFF',
@@ -177,9 +179,9 @@ export const usePlayerStore = defineStore('player', () => {
     const topSong = (queueId) => requireAuth() && socketService.send(WS_DEST.QUEUE_TOP, { queueId });
     const removeSong = (queueId) => requireAuth() && socketService.send(WS_DEST.QUEUE_REMOVE, { queueId });
 
-    const bindAccount = (platform, accountId, displayName = '') => {
+    const bindAccount = (platform, accountId, displayName = '', avatarUrl = '') => {
         socketService.send(WS_DEST.USER_BIND, { platform, accountId });
-        userStore.updateBinding(platform, accountId, displayName);
+        userStore.updateBinding(platform, accountId, displayName, avatarUrl);
     };
 
     const renameUser = (newName) => {
