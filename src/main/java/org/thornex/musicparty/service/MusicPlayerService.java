@@ -483,6 +483,7 @@ public class MusicPlayerService {
                         appProperties.getChat().getMaxHistorySize(),
                         appProperties.getChat().getMinIntervalMs(),
                         appProperties.getChat().getMaxMessageLength(),
+                        appProperties.getNetease().getQuality(),
                         appProperties.getNetease().isEnabled(),
                         appProperties.getBilibili().isEnabled(),
                         appProperties.getBilibili().getMaxDurationMinutes(),
@@ -896,6 +897,10 @@ public class MusicPlayerService {
         if (request.maxChatMessageLength() != null) {
             appProperties.getChat().setMaxMessageLength(request.maxChatMessageLength());
             logMsg.append("MaxChatMessageLength=").append(request.maxChatMessageLength()).append(" ");
+        }
+        if (request.neteaseQuality() != null) {
+            appProperties.getNetease().setQuality(request.neteaseQuality());
+            logMsg.append("NeteaseQuality=").append(request.neteaseQuality()).append(" ");
         }
         if (request.neteaseEnabled() != null) {
             appProperties.getNetease().setEnabled(request.neteaseEnabled());

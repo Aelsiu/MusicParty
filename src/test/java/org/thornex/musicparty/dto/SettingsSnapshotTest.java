@@ -20,7 +20,7 @@ class SettingsSnapshotTest {
                 "room123", true,
                 new SettingsSnapshot.PrivateDjSettings("DJ", true, true, true),
                 new SettingsSnapshot.SystemConfigSettings(
-                        500, 100, 50, 200, 5000, 500L, true, false, 15));
+                        500, 100, 50, 200, 5000, 500L, true, false, 15, 300, "lossless"));
 
         String json = mapper.writeValueAsString(original);
         SettingsSnapshot restored = mapper.readValue(json, SettingsSnapshot.class);
@@ -49,6 +49,8 @@ class SettingsSnapshotTest {
         assertTrue(restored.systemConfig().neteaseEnabled());
         assertFalse(restored.systemConfig().bilibiliEnabled());
         assertEquals(15, restored.systemConfig().bilibiliMaxDurationMinutes());
+        assertEquals(300, restored.systemConfig().maxChatMessageLength());
+        assertEquals("lossless", restored.systemConfig().neteaseQuality());
     }
 
     @Test

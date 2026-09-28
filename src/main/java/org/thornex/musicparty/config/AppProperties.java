@@ -112,7 +112,7 @@ public class AppProperties {
     @Data
     public static class NeteaseApiConfig extends ApiConfig {
         private String cookie;
-        private String quality = "exhigh"; // 默认音质：极高 (exhigh)
+        private volatile String quality = "exhigh"; // 运行时修改后供下一首解析读取
         private boolean enabled = true;
     }
 }

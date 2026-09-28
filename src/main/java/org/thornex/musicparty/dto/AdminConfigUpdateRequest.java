@@ -8,6 +8,7 @@ public record AdminConfigUpdateRequest(
     Integer maxChatHistorySize,
     Long minChatIntervalMs,
     Integer maxChatMessageLength,
+    String neteaseQuality,
     Boolean neteaseEnabled,
     Boolean bilibiliEnabled,
     Integer bilibiliMaxDurationMinutes,

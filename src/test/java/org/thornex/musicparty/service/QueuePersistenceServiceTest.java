@@ -24,7 +24,8 @@ class QueuePersistenceServiceTest {
 
     private QueuePersistenceService build(MusicQueueManager qm, ChatService chat,
             AppProperties props, MusicPlayerService player, AuthController auth, LiveStreamService stream) {
-        return new QueuePersistenceService(qm, chat, props, mapper, player, auth, stream);
+        return new QueuePersistenceService(qm, chat, props, mapper, player, auth, stream,
+                mock(RoomConfigFileService.class));
     }
 
     @Test
@@ -192,5 +193,27 @@ class QueuePersistenceServiceTest {
         verify(auth, never()).forceSetPassword(anyString());
         // 缺省 systemConfig → AppProperties 保持默认
         assertEquals(1000, props.getQueue().getMaxSize());
+    }
+
+    @Test
+    void externalConfigIsNotOverriddenByOldSnapshot() throws Exception {
+        File tmp = File.createTempFile("queue", ".json");
+        tmp.deleteOnExit();
+        Files.writeString(tmp.toPath(), "{\"settings\":{\"player\":{\"playMode\":\"SHUFFLE\","
+                + "\"voteSkipEnabled\":true},\"systemConfig\":{\"maxQueueSize\":500}}}");
+
+        AppProperties props = new AppProperties();
+        props.getQueue().setPersistenceFile(tmp.getAbsolutePath());
+        props.getQueue().setMaxSize(250);
+        MusicPlayerService player = mock(MusicPlayerService.class);
+        RoomConfigFileService configFile = mock(RoomConfigFileService.class);
+        when(configFile.isConfigured()).thenReturn(true);
+
+        new QueuePersistenceService(mock(MusicQueueManager.class), mock(ChatService.class), props,
+                mapper, player, mock(AuthController.class), mock(LiveStreamService.class), configFile).loadData();
+
+        assertEquals(250, props.getQueue().getMaxSize());
+        verify(player).applyPlayerSettings(argThat(p ->
+                "SHUFFLE".equals(p.playMode()) && p.voteSkipEnabled() == null));
     }
 }

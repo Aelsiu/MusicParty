@@ -32,6 +32,7 @@ public record PlayerState(
             int maxChatHistorySize,
             long minChatIntervalMs,
             int maxChatMessageLength,
+            String neteaseQuality,
             boolean neteaseEnabled,
             boolean bilibiliEnabled,
             int bilibiliMaxDurationMinutes,

@@ -33,6 +33,7 @@ public class QueuePersistenceService {
     private final MusicPlayerService musicPlayerService;
     private final AuthController authController;
     private final LiveStreamService liveStreamService;
+    private final RoomConfigFileService roomConfigFileService;
 
     @PostConstruct
     public void init() {
@@ -100,8 +101,15 @@ public class QueuePersistenceService {
             return;
         }
 
+        boolean hasExternalConfig = roomConfigFileService.isConfigured();
         if (s.player() != null) {
-            musicPlayerService.applyPlayerSettings(s.player());
+            SettingsSnapshot.PlayerSettings player = s.player();
+            if (hasExternalConfig) {
+                player = new SettingsSnapshot.PlayerSettings(
+                        player.playMode(), player.fairShuffle(), player.allowOfflineShuffle(),
+                        null, null, null, player.pauseLocked(), player.skipLocked(), player.playModeLocked());
+            }
+            musicPlayerService.applyPlayerSettings(player);
         }
 
         if (s.privateDj() != null) {
@@ -112,7 +120,8 @@ public class QueuePersistenceService {
             if (s.privateDj().custodyEnabled() != null) c.setCustodyEnabled(s.privateDj().custodyEnabled());
         }
 
-        if (s.systemConfig() != null) {
+        // Docker 的外部配置文件为房间参数的唯一来源，避免旧快照在重启后覆盖它。
+        if (s.systemConfig() != null && !hasExternalConfig) {
             SettingsSnapshot.SystemConfigSettings cfg = s.systemConfig();
             if (cfg.maxQueueSize() != null) appProperties.getQueue().setMaxSize(cfg.maxQueueSize());
             if (cfg.maxHistorySize() != null) appProperties.getQueue().setHistorySize(cfg.maxHistorySize());
@@ -123,6 +132,8 @@ public class QueuePersistenceService {
             if (cfg.neteaseEnabled() != null) appProperties.getNetease().setEnabled(cfg.neteaseEnabled());
             if (cfg.bilibiliEnabled() != null) appProperties.getBilibili().setEnabled(cfg.bilibiliEnabled());
             if (cfg.bilibiliMaxDurationMinutes() != null) appProperties.getBilibili().setMaxDurationMinutes(cfg.bilibiliMaxDurationMinutes());
+            if (cfg.maxChatMessageLength() != null) appProperties.getChat().setMaxMessageLength(cfg.maxChatMessageLength());
+            if (cfg.neteaseQuality() != null) appProperties.getNetease().setQuality(cfg.neteaseQuality());
         }
 
         if (s.roomPassword() != null) authController.forceSetPassword(s.roomPassword());
@@ -150,7 +161,9 @@ public class QueuePersistenceService {
                         appProperties.getChat().getMinIntervalMs(),
                         appProperties.getNetease().isEnabled(),
                         appProperties.getBilibili().isEnabled(),
-                        appProperties.getBilibili().getMaxDurationMinutes()));
+                        appProperties.getBilibili().getMaxDurationMinutes(),
+                        appProperties.getChat().getMaxMessageLength(),
+                        appProperties.getNetease().getQuality()));
     }
 
     private File getPersistenceFile() {

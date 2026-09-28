@@ -27,7 +27,6 @@ public class NeteaseMusicApiService implements IMusicApiService {
     private final String baseUrl;
     private final AppProperties.NeteaseApiConfig neteaseConfig;
     private final String initialCookieFromConfig;
-    private final String quality;
     private volatile String currentCookie;
     private static final String PLATFORM = "netease";
 
@@ -36,14 +35,13 @@ public class NeteaseMusicApiService implements IMusicApiService {
         this.baseUrl = appProperties.getNetease().getBaseUrl();
         this.neteaseConfig = appProperties.getNetease();
         this.initialCookieFromConfig = appProperties.getNetease().getCookie();
-        this.quality = appProperties.getNetease().getQuality();
         // 初始化时先使用配置文件的内容
         this.currentCookie = initialCookieFromConfig;
     }
 
     @PostConstruct
     public void initialize() {
-        log.info("Initializing NeteaseCloudMusic API client with quality: {}...", quality);
+        log.info("Initializing NeteaseCloudMusic API client with quality: {}...", neteaseConfig.getQuality());
         if (!StringUtils.hasText(currentCookie) || "YOUR_NETEASE_COOKIE_STRING_HERE".equals(currentCookie)) {
             log.info("Netease Cookie is empty. Service running in passive mode (waiting for config).");
         } else {
@@ -213,7 +211,7 @@ public class NeteaseMusicApiService implements IMusicApiService {
     private Mono<String> xeapiSongUrl(String musicId) {
         ensureConfigured();
         return webClient.get()
-                .uri(baseUrl + "/song/url/v1?id={musicId}&level={quality}&cookie={cookie}", musicId, quality, getCookie())
+                .uri(baseUrl + "/song/url/v1?id={musicId}&level={quality}&cookie={cookie}", musicId, neteaseConfig.getQuality(), getCookie())
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response -> handleApiError("get song URL", response))
                 .bodyToMono(JsonNode.class)
@@ -223,7 +221,7 @@ public class NeteaseMusicApiService implements IMusicApiService {
     private Mono<String> eapiSongUrl(String musicId) {
         ensureConfigured();
         return webClient.get()
-                .uri(baseUrl + "/song/url?id={musicId}&br={br}&cookie={cookie}", musicId, resolveBr(quality), getCookie())
+                .uri(baseUrl + "/song/url?id={musicId}&br={br}&cookie={cookie}", musicId, resolveBr(neteaseConfig.getQuality()), getCookie())
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response -> handleApiError("get song URL (eapi fallback)", response))
                 .bodyToMono(JsonNode.class)

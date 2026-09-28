@@ -10,6 +10,7 @@ import org.thornex.musicparty.dto.AdminPrivateDjUpdateRequest;
 import org.thornex.musicparty.service.ChatService;
 import org.thornex.musicparty.service.MusicPlayerService;
 import org.thornex.musicparty.service.PrivateDjService;
+import org.thornex.musicparty.service.RoomConfigFileService;
 import org.thornex.musicparty.service.api.BilibiliMusicApiService;
 import org.thornex.musicparty.service.api.NeteaseMusicApiService;
 import org.thornex.musicparty.service.stream.LiveStreamService;
@@ -34,7 +35,8 @@ class AdminControllerPrivateDjTest {
         djService = mock(PrivateDjService.class);
         controller = new AdminController(player,
                 mock(ChatService.class), props, mock(AuthController.class),
-                api, mock(BilibiliMusicApiService.class), mock(LiveStreamService.class), djService);
+                api, mock(BilibiliMusicApiService.class), mock(LiveStreamService.class), djService,
+                mock(RoomConfigFileService.class));
     }
 
     @Test
