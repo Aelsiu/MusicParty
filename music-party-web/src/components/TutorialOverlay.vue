@@ -59,10 +59,9 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, nextTick, watch } from 'vue';
 import { useWindowSize } from '@vueuse/core';
 
-const props = defineProps({ ready: { type: Boolean, default: true } });
 const isActive = ref(false);
 const currentStepIndex = ref(0);
 const targetRect = ref(null);
@@ -262,8 +261,12 @@ const finishTutorial = () => {
 const startTutorial = () => {
   // 检查是否已完成
   if (localStorage.getItem(STORAGE_KEY)) return;
-  isActive.value = true;
-  updatePosition();
+  
+  // 延迟一点启动，等待 UI 渲染完成
+  setTimeout(() => {
+    isActive.value = true;
+    updatePosition();
+  }, 1000);
 };
 
 // 监听窗口大小变化重新定位
@@ -276,7 +279,9 @@ const restart = () => {
   updatePosition();
 };
 
-watch(() => props.ready, ready => { if (ready) nextTick(startTutorial); }, { immediate: true });
+onMounted(() => {
+  startTutorial();
+});
 
 defineExpose({ restart });
 </script>
