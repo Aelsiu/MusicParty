@@ -161,28 +161,28 @@
             <span class="font-bold text-sm text-medical-800">{{ listMode === 'search' ? 'SEARCH RESULTS' : 'PLAYLIST DETAILS' }}</span>
           </div>
 
-          <div @scroll="handleScroll" class="flex-1 overflow-y-auto overscroll-contain p-2 md:p-4">
-            <div v-if="loading" class="text-center py-10 font-mono text-accent animate-pulse">> LOADING DATA STREAM...</div>
-
-            <!-- 歌单操作头 -->
-            <div v-else-if="currentPlaylistId && listMode === 'playlist'" class="mb-4 p-4 bg-surface border border-medical-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm">
-              <div class="min-w-0">
-                <div class="text-xs font-sans text-medical-400">用户歌单</div>
-                <div class="font-bold text-lg truncate">{{ currentPlaylistId }}</div>
-                <div class="text-xs text-medical-400 font-mono">{{ songs.length }} LOADED<span v-if="playlistFilterKeyword"> · {{ displayedSongs.length }} MATCHED</span></div>
-              </div>
-              <div class="flex gap-2 w-full sm:w-auto flex-shrink-0">
-                <button @click="handleImportPlaylist" aria-label="导入全部" class="group flex-none w-9 hover:w-20 focus-visible:w-20 h-9 px-2.5 overflow-hidden bg-strong text-white text-xs font-bold hover:bg-accent transition-[width,background-color] duration-200 flex items-center gap-1.5 font-sans">
-                  <PlaylistImportIcon variant="all" class="w-4 h-4 shrink-0" />
-                  <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">ALL</span>
-                </button>
-                <button @click="handleImportSelected" :disabled="!importableSelectedSongs.length" :aria-label="`导入已选（${importableSelectedSongs.length} 首）`" class="group flex-none w-9 hover:w-28 focus-visible:w-28 h-9 px-2.5 overflow-hidden bg-strong text-white text-xs font-bold hover:bg-accent transition-[width,background-color] duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 font-sans">
-                  <PlaylistImportIcon variant="selected" class="w-4 h-4 shrink-0" />
-                  <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">SELECTED</span>
-                </button>
-                <input v-model="playlistFilterInput" type="search" aria-label="筛选歌单歌曲" placeholder="筛选歌曲" class="flex-1 min-w-0 sm:flex-none sm:w-28 border border-medical-200 bg-medical-50 px-2 py-2 text-xs outline-none focus:border-accent" />
-              </div>
+          <!-- 歌单导航栏固定在右侧内容区顶部，歌曲列表单独滚动。 -->
+          <div v-if="currentPlaylistId && listMode === 'playlist' && !loading" class="flex-shrink-0 bg-surface border-b border-medical-200 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <div class="min-w-0">
+              <div class="text-[10px] font-sans text-medical-400">用户歌单</div>
+              <div class="font-bold text-base truncate">{{ currentPlaylistId }}</div>
+              <div class="text-[10px] text-medical-400 font-mono">{{ songs.length }} LOADED<span v-if="playlistFilterKeyword"> · {{ displayedSongs.length }} MATCHED</span></div>
             </div>
+            <div class="flex gap-2 w-full sm:w-auto flex-shrink-0 justify-end">
+              <button @click="handleImportPlaylist" aria-label="导入全部" class="group flex-none w-6 hover:w-[60px] focus-visible:w-[60px] h-6 px-[3px] overflow-hidden bg-strong text-white text-[10px] font-bold hover:bg-accent transition-[width,background-color] duration-200 flex items-center gap-1 font-sans">
+                <PlaylistImportIcon variant="all" class="w-[18px] h-[18px] shrink-0" />
+                <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">ALL</span>
+              </button>
+              <button @click="handleImportSelected" :disabled="!importableSelectedSongs.length" :aria-label="`导入已选（${importableSelectedSongs.length} 首）`" class="group flex-none w-6 hover:w-[84px] focus-visible:w-[84px] h-6 px-[3px] overflow-hidden bg-strong text-white text-[10px] font-bold hover:bg-accent transition-[width,background-color] duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 font-sans">
+                <PlaylistImportIcon variant="selected" class="w-[18px] h-[18px] shrink-0" />
+                <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">SELECTED</span>
+              </button>
+              <input v-model="playlistFilterInput" type="search" aria-label="筛选歌单歌曲" placeholder="筛选歌曲" class="w-[102px] h-6 flex-none border border-medical-200 bg-medical-50 px-2 text-[10px] outline-none focus:border-accent" />
+            </div>
+          </div>
+
+          <div @scroll="handleScroll" class="flex-1 min-h-0 overflow-y-auto overscroll-contain p-2 md:p-4">
+            <div v-if="loading" class="text-center py-10 font-mono text-accent animate-pulse">> LOADING DATA STREAM...</div>
 
             <!-- 歌曲列表渲染 -->
             <div class="space-y-1">
