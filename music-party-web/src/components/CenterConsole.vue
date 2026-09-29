@@ -50,31 +50,31 @@
               v-for="(line, i) in activeLines"
               :key="`${line.time}-${i}`"
               class="w-full transition-all duration-300"
-              :class="i === activeLines.length - 1 ? 'opacity-100 scale-105 md:scale-100 text-medical-900' : 'opacity-40 blur-[0.5px]'"
+              :class="i === currentVisibleIndex ? 'opacity-100 scale-105 md:scale-100 text-medical-900' : i > currentVisibleIndex ? 'opacity-70 text-medical-700' : 'opacity-40 blur-[0.5px]'"
           >
             <div
                 :ref="el => setLineRef(el, i)"
                 class="flex items-center overflow-hidden whitespace-nowrap md:whitespace-normal"
                 :class="[
                   // 当前行且文字溢出：黑色背景槽固定在容器上（居中，至多占屏幕 70%），文字在槽内滚动
-                  i === activeLines.length - 1 && isMobile && isOverflowing(i) ? 'bg-strong text-white' : '',
+                  i === currentVisibleIndex && isMobile && isOverflowing(i) ? 'bg-strong text-white' : '',
                   // 溢出行（当前或刚结束）：文字起始贴槽左缘，滚动/定格位置一致；其余行居中（桌面左对齐）
                   isOverflowing(i) ? 'justify-start' : 'justify-center md:justify-start'
                 ]"
                 :style="isOverflowing(i) ? { maxWidth: `${Math.round(width * 0.7)}px`, width: 'fit-content', marginLeft: 'auto', marginRight: 'auto' } : {}"
             >
-              <span class="hidden md:inline text-accent mr-2 text-[10px] flex-shrink-0" :class="{'animate-pulse': i === activeLines.length - 1}">></span>
+              <span class="hidden md:inline text-accent mr-2 text-[10px] flex-shrink-0" :class="{'animate-pulse': i === currentVisibleIndex}">></span>
               <span
                   class="inline-block whitespace-nowrap md:whitespace-normal will-change-transform"
                   :class="[
                     // 已测量且未溢出的当前行：保留紧凑黑底高亮（未测量前不渲染背景，避免闪全幅黑条）
-                    {'bg-strong text-white px-1': i === activeLines.length - 1 && isMobile && isShort(i)},
-                    {'marquee-scroll': i === activeLines.length - 1 && isOverflowing(i) && isMobile}
+                    {'bg-strong text-white px-1': i === currentVisibleIndex && isMobile && isShort(i)},
+                    {'marquee-scroll': i === currentVisibleIndex && isOverflowing(i) && isMobile}
                   ]"
-                  :style="i === activeLines.length - 1 && isOverflowing(i) ? {
+                  :style="i === currentVisibleIndex && isOverflowing(i) ? {
                     animationDuration: marqueeDuration(line.text, line.time),
                     '--mp-scroll-dist': `-${scrollDist(i)}px`   // 首字贴左缘 → 末字右缘贴右缘
-                  } : (isOverflowing(i) ? {
+                  } : (i < currentVisibleIndex && isOverflowing(i) ? {
                     transform: `translateX(-${scrollDist(i)}px)` // 刚结束的溢出行：无黑底，定格在滚动末尾位置
                   } : {})"
               >{{ line.text }}</span>
@@ -284,6 +284,7 @@ const triggerBurst = () => {
 // === 歌词逻辑 ===
 const parsedLyrics = ref([]);
 const currentLineIndex = ref(-1);
+const currentVisibleIndex = computed(() => Math.min(currentLineIndex.value, isMobile.value ? 8 : 10));
 
 const activeLines = computed(() => {
   const idx = currentLineIndex.value;
@@ -291,8 +292,8 @@ const activeLines = computed(() => {
   // 封面上调后底部空间更充裕：移动端显示更多历史行（9行含当前行）
   const historyCount = isMobile.value ? 8 : 10;
   const start = Math.max(0, idx - historyCount);
-  const end = Math.min(parsedLyrics.value.length, idx + 1);
-  if (idx === -1) return parsedLyrics.value.slice(0, 3);
+  const end = Math.min(parsedLyrics.value.length, idx + 1 + uiStore.lyricPreviewLines);
+  if (idx === -1) return parsedLyrics.value.slice(0, uiStore.lyricPreviewLines);
   return parsedLyrics.value.slice(start, end);
 });
 

@@ -54,6 +54,21 @@
             </div>
           </div>
         </section>
+
+        <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
+          <h3 class="font-bold text-medical-900">其他设置</h3>
+          <div>
+            <p class="text-xs font-bold text-medical-500 mb-2">歌词提前显示</p>
+            <div class="inline-flex border border-medical-200" role="group" aria-label="歌词提前显示行数">
+              <button v-for="count in [0, 1, 2]" :key="count" @click="uiStore.setLyricPreviewLines(count)"
+                      :aria-pressed="uiStore.lyricPreviewLines === count"
+                      class="px-4 py-2 text-sm font-mono font-bold transition-colors border-r last:border-r-0 border-medical-200"
+                      :class="uiStore.lyricPreviewLines === count ? 'bg-accent text-white' : 'bg-medical-50 text-medical-600 hover:text-accent'">
+                {{ count }}L
+              </button>
+            </div>
+          </div>
+        </section>
       </div>
     </div>
   </div>
