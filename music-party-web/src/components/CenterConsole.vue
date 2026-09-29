@@ -95,6 +95,10 @@
     <!-- 移动端上移，给底部歌词腾出空间，观感更平衡 -->
     <div class="relative z-30 flex items-center justify-center pointer-events-auto -translate-y-12 md:translate-y-0">
       <div class="relative">
+        <div v-if="actualQualityLabel" class="absolute -top-4 left-0 text-[10px] font-mono text-accent flex items-center gap-2 z-20 select-none">
+          <span class="font-bold text-medical-500 border-b border-medical-300 leading-tight">P_QUAL</span>
+          <span>{{ actualQualityLabel }}</span>
+        </div>
         <div v-if="player.nowPlaying?.enqueuedById" class="absolute -top-4 right-0 text-[10px] font-mono text-accent flex items-center gap-2 z-20 select-none">
           <span>REQ_BY</span>
           <span class="font-bold text-medical-500 border-b border-medical-300 leading-tight">
@@ -222,6 +226,11 @@ const uiStore = useUiStore();
 const { addLikedSong } = useLikedSongs();
 const canvasRef = ref(null);
 const currentCover = computed(() => player.nowPlaying?.music.coverUrl);
+const qualityLabels = {
+  standard: 'STQ', higher: 'HQ', exhigh: 'EQ',
+  lossless: 'SQ', hires: 'HI-RES', jyeffect: 'SPATIAL-A'
+};
+const actualQualityLabel = computed(() => qualityLabels[player.nowPlaying?.music?.actualQuality?.toLowerCase()] || '');
 const { width } = useWindowSize();
 const isMobile = computed(() => width.value < 768);
 

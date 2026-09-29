@@ -57,8 +57,10 @@ class MusicPlayerServiceStateTest {
 
         // 模拟一首正在播放的歌曲
         service.applyFmDjSegmentForTest(
-                new PlayableMusic("1", "Song", List.of("Artist"), 180_000L, "netease", "http://x/1.mp3", "http://x/1.jpg", false),
+                new PlayableMusic("1", "Song", List.of("Artist"), 180_000L, "netease", "http://x/1.mp3", "http://x/1.jpg", false, "jyeffect"),
                 new PrivateDjSegment.Song("1", "Song", List.of("Artist"), 180_000L, "http://x/1.jpg"));
+
+        assertEquals("jyeffect", service.getCurrentPlayerState().nowPlaying().music().actualQuality());
 
         clearInvocations(publisher);
 

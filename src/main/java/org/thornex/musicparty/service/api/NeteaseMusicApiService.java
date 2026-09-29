@@ -169,7 +169,7 @@ public class NeteaseMusicApiService implements IMusicApiService {
         ensureConfigured();
         Mono<Music> musicDetailsMono = getMusicDetails(musicId);
         // 优先 xeapi /song/url/v1（支持更高音质），失败（404 或空 url）自动回退 eapi /song/url
-        Mono<String> musicUrlMono = resolveSongUrl(musicId);
+        Mono<SongUrl> musicUrlMono = resolveSongUrl(musicId);
 
         return Mono.zip(musicDetailsMono, musicUrlMono)
                 .map(tuple -> new PlayableMusic(
@@ -178,9 +178,10 @@ public class NeteaseMusicApiService implements IMusicApiService {
                         tuple.getT1().artists(),
                         tuple.getT1().duration(),
                         tuple.getT1().platform(),
-                        upgradeToHttps(tuple.getT2()),
+                        upgradeToHttps(tuple.getT2().url()),
                         upgradeToHttps(tuple.getT1().coverUrl()),
-                        false
+                        false,
+                        tuple.getT2().actualQuality()
                 ));
     }
 
@@ -188,19 +189,21 @@ public class NeteaseMusicApiService implements IMusicApiService {
      * 私人FM/DJ 推荐歌曲的播放直链（与普通点播一致的回退策略：xeapi 优先、eapi 兜底）。
      * 从段信息直接构造，省一次 /song/detail。
      */
-    public Mono<String> getFmDjSongUrl(String musicId) {
-        return resolveSongUrl(musicId).map(this::upgradeToHttps);
+    public Mono<SongUrl> getFmDjSongUrl(String musicId) {
+        return resolveSongUrl(musicId).map(songUrl -> new SongUrl(upgradeToHttps(songUrl.url()), songUrl.actualQuality()));
     }
+
+    public record SongUrl(String url, String actualQuality) {}
 
     /**
      * 歌曲直链：先尝试 xeapi /song/url/v1（高音质档位），
      * 出错或返回空 url 时回退到 eapi /song/url（br 码率，稳定）。
      * 部署环境的 api-enhanced 若 xeapi 公钥未就绪，/song/url/v1 会一律 404，这里自动降级不影响播放。
      */
-    private Mono<String> resolveSongUrl(String musicId) {
+    private Mono<SongUrl> resolveSongUrl(String musicId) {
         return xeapiSongUrl(musicId)
-                .flatMap(url -> StringUtils.hasText(url)
-                        ? Mono.just(url)
+                .flatMap(songUrl -> StringUtils.hasText(songUrl.url())
+                        ? Mono.just(songUrl)
                         : Mono.error(new ApiRequestException("xeapi song url empty, falling back to eapi")))
                 .onErrorResume(e -> {
                     log.debug("xeapi /song/url/v1 failed ({}), falling back to eapi /song/url", e.getMessage());
@@ -208,24 +211,31 @@ public class NeteaseMusicApiService implements IMusicApiService {
                 });
     }
 
-    private Mono<String> xeapiSongUrl(String musicId) {
+    private Mono<SongUrl> xeapiSongUrl(String musicId) {
         ensureConfigured();
         return webClient.get()
                 .uri(baseUrl + "/song/url/v1?id={musicId}&level={quality}&cookie={cookie}", musicId, neteaseConfig.getQuality(), getCookie())
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response -> handleApiError("get song URL", response))
                 .bodyToMono(JsonNode.class)
-                .map(jsonNode -> jsonNode.path("data").get(0).path("url").asText());
+                .map(NeteaseMusicApiService::parseSongUrl);
     }
 
-    private Mono<String> eapiSongUrl(String musicId) {
+    private Mono<SongUrl> eapiSongUrl(String musicId) {
         ensureConfigured();
         return webClient.get()
                 .uri(baseUrl + "/song/url?id={musicId}&br={br}&cookie={cookie}", musicId, resolveBr(neteaseConfig.getQuality()), getCookie())
                 .retrieve()
                 .onStatus(HttpStatusCode::isError, response -> handleApiError("get song URL (eapi fallback)", response))
                 .bodyToMono(JsonNode.class)
-                .map(jsonNode -> jsonNode.path("data").get(0).path("url").asText());
+                .map(NeteaseMusicApiService::parseSongUrl);
+    }
+
+    static SongUrl parseSongUrl(JsonNode response) {
+        JsonNode song = response.path("data").path(0);
+        String level = song.path("level").asText(null);
+        JsonNode url = song.path("url");
+        return new SongUrl(url.isTextual() ? url.asText() : "", StringUtils.hasText(level) ? level : null);
     }
 
     /** 将 level 音质档位映射为 eapi /song/url 的 br 码率（exhigh≈320k 高音质） */

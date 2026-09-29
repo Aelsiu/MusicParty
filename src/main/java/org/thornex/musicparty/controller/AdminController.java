@@ -201,7 +201,7 @@ public class AdminController {
         if (!inRange(r.voteSkipWaitTime(), 0, 3600)) return "投票等待时间超出范围";
         if (!inRange(r.idleKickMinutes(), 1, 60)) return "空闲踢出时间须为1–60分钟";
         if (r.voteSkipThreshold() != null && (!Double.isFinite(r.voteSkipThreshold()) || r.voteSkipThreshold() < 0.1 || r.voteSkipThreshold() > 1)) return "投票阈值超出范围";
-        if (r.neteaseQuality() != null && !Set.of("standard", "higher", "exhigh", "lossless", "hires").contains(r.neteaseQuality())) return "不支持该解析音质";
+        if (r.neteaseQuality() != null && !Set.of("standard", "higher", "exhigh", "lossless", "hires", "jyeffect").contains(r.neteaseQuality())) return "不支持该解析音质";
         return null;
     }
 

@@ -1,5 +1,6 @@
 package org.thornex.musicparty.service.api;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -36,7 +37,25 @@ class NeteaseMusicApiServiceTest {
         assertEquals(192_000, service.resolveBr("higher"));
         assertEquals(999_000, service.resolveBr("lossless"));
         assertEquals(999_000, service.resolveBr("hires"));
+        assertEquals(999_000, service.resolveBr("jyeffect"));
         assertEquals(320_000, service.resolveBr("unknown"));
         assertEquals(320_000, service.resolveBr(null));
+    }
+
+    @Test
+    void songUrlUsesReturnedQualityAndLeavesMissingQualityUnknown() throws Exception {
+        ObjectMapper mapper = new ObjectMapper();
+        var downgraded = NeteaseMusicApiService.parseSongUrl(mapper.readTree(
+                "{\"data\":[{\"url\":\"https://example.com/song.mp3\",\"level\":\"exhigh\"}]}"));
+        assertEquals("https://example.com/song.mp3", downgraded.url());
+        assertEquals("exhigh", downgraded.actualQuality());
+
+        var missing = NeteaseMusicApiService.parseSongUrl(mapper.readTree(
+                "{\"data\":[{\"url\":\"https://example.com/song.mp3\",\"br\":999000}]}"));
+        assertNull(missing.actualQuality());
+
+        var unavailable = NeteaseMusicApiService.parseSongUrl(mapper.readTree(
+                "{\"data\":[{\"url\":null,\"level\":\"jyeffect\"}]}"));
+        assertEquals("", unavailable.url());
     }
 }

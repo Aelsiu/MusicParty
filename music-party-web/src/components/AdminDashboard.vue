@@ -322,7 +322,8 @@ const qualities = [
   { value: 'higher', label: '较高' },
   { value: 'exhigh', label: '极高' },
   { value: 'lossless', label: '无损' },
-  { value: 'hires', label: '高解析度' }
+  { value: 'hires', label: '高解析度' },
+  { value: 'jyeffect', label: '高清臻音' }
 ];
 
 const systemFields = {

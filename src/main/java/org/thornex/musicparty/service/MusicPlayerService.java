@@ -342,9 +342,9 @@ public class MusicPlayerService {
             // FM/DJ 推荐歌曲用 eapi /song/url 取直链（普通点播的 getPlayableMusic 用 /song/url/v1，
             // 对 fee=1/8 推荐歌曲会 404），并从段信息直接构造，省一次 /song/detail。
             playableMono = neteaseMusicApiService.getFmDjSongUrl(s.songId())
-                    .map(url -> new PlayableMusic(
+                    .map(songUrl -> new PlayableMusic(
                             s.songId(), s.name(), s.artists(), s.durationMs(),
-                            "netease", url, s.coverUrl(), false));
+                            "netease", songUrl.url(), s.coverUrl(), false, songUrl.actualQuality()));
         } else if (segment instanceof PrivateDjSegment.Voice v) {
             playableMono = Mono.just(new PlayableMusic(
                     v.voiceId(), "AI DJ", List.of("私人DJ"), v.durationMs(),
