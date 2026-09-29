@@ -261,12 +261,8 @@ const finishTutorial = () => {
 const startTutorial = () => {
   // 检查是否已完成
   if (localStorage.getItem(STORAGE_KEY)) return;
-  
-  // 延迟一点启动，等待 UI 渲染完成
-  setTimeout(() => {
-    isActive.value = true;
-    updatePosition();
-  }, 1000);
+  isActive.value = true;
+  updatePosition();
 };
 
 // 监听窗口大小变化重新定位

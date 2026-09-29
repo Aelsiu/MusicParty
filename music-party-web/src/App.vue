@@ -9,8 +9,8 @@
     <AuthOverlay @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed" />
 
     <!-- 2. 启动页 (Start Screen) -->
-    <!-- 注意：点击 Connect 后，我们先不销毁它，直到 socket 连接成功，或者直接切换布局 -->
-    <div v-if="userStore.isAuthPassed && !hasStarted" class="absolute inset-0 z-[100] bg-medical-50 flex flex-col items-center justify-center space-y-8">
+    <!-- 点击 CONNECT 后保留启动页，供转场采样并在字符化前保持原画面。 -->
+    <div v-if="userStore.isAuthPassed && (!hasStarted || transitioning)" data-connect-screen class="absolute inset-0 z-[100] bg-medical-50 flex flex-col items-center justify-center space-y-8" :style="{ visibility: dissolving ? 'hidden' : 'visible' }">
       <div class="text-4xl font-black tracking-tighter text-medical-900">MUSIC PARTY</div>
       <div class="text-lg font-bold text-accent -mt-6">{{ userStore.roomName }}</div>
       <div class="font-mono text-xs text-medical-400 tracking-widest">SYSTEM READY</div>
@@ -23,7 +23,9 @@
     </div>
 
     <!-- 3. 主界面 (当 hasStarted 为 true 时显示) -->
-    <MainLayout v-if="hasStarted" @search="handleSearchClick" @settings="showSettings = true">
+    <MainLayout v-if="hasStarted" :inert="transitioning"
+                :style="transitioning ? { opacity: dissolving ? 1 : 0, transform: dissolving ? 'scale(1)' : 'scale(0.965)', transformOrigin: 'center', transition: dissolving ? 'opacity 870ms ease-out, transform 870ms ease-out' : 'none' } : undefined"
+                @search="handleSearchClick" @settings="showSettings = true">
       <!-- 中间插槽: 视觉控制台 -->
       <CenterConsole />
 
@@ -36,13 +38,14 @@
         <PlayerControl />
       </template>
     </MainLayout>
+    <ConnectDissolve v-if="transitioning" :x="clickPoint.x" :y="clickPoint.y" @dissolve="dissolving = true" @finished="finishTransition" />
 
     <!-- 4. 全局弹窗 -->
     <SearchModal :isOpen="showSearch" @close="showSearch = false" />
     <SettingsModal :isOpen="showSettings" @close="showSettings = false" />
     <NamePromptModal />
-    <ChatOverlay v-if="hasStarted && !uiStore.isLiteMode" />
-    <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode" />
+    <ChatOverlay v-if="hasStarted && !transitioning && !uiStore.isLiteMode" />
+    <TutorialOverlay v-if="hasStarted && !transitioning && !uiStore.isLiteMode" />
     <AdminAuthModal />
     <AdminDashboard />
   </div>
@@ -69,6 +72,7 @@ import NamePromptModal from './components/NamePromptModal.vue';
 import ChatOverlay from './components/ChatOverlay.vue';
 import ToastNotification from './components/ToastNotification.vue';
 import TutorialOverlay from './components/TutorialOverlay.vue';
+import ConnectDissolve from './components/ConnectDissolve.vue';
 import AdminAuthModal from './components/AdminAuthModal.vue';
 import AdminDashboard from './components/AdminDashboard.vue';
 
@@ -77,14 +81,27 @@ const userStore = useUserStore();
 const uiStore = useUiStore();
 const adminStore = useAdminStore();
 const hasStarted = ref(false);
+const transitioning = ref(false);
+const dissolving = ref(false);
+const clickPoint = ref({ x: 0, y: 0 });
 const showSearch = ref(false);
 const showSettings = ref(false);
 const toastInstance = ref(null);
 const { register, info } = useToast();
 
-const startGame = () => {
+const startGame = (event) => {
+  if (hasStarted.value) return;
+  const button = event.currentTarget.getBoundingClientRect();
+  clickPoint.value = event.detail ? { x: event.clientX, y: event.clientY } : { x: button.left + button.width / 2, y: button.top + button.height / 2 };
+  transitioning.value = !window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   hasStarted.value = true;
   player.connect();
+  if (!transitioning.value) maybeShowPwaHint();
+};
+
+const finishTransition = () => {
+  transitioning.value = false;
+  dissolving.value = false;
   maybeShowPwaHint();
 };
 
