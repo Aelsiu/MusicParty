@@ -63,7 +63,7 @@
                 ]"
                 :style="isOverflowing(i) ? { maxWidth: `${Math.round(width * 0.7)}px`, width: 'fit-content', marginLeft: 'auto', marginRight: 'auto' } : {}"
             >
-              <span class="hidden md:inline text-accent mr-2 text-[10px] flex-shrink-0" :class="{'animate-pulse': i === currentVisibleIndex}">></span>
+              <span class="hidden md:inline text-accent mr-2 text-[10px] flex-shrink-0" :class="{'animate-pulse': i === currentVisibleIndex}">{{ i < currentVisibleIndex ? '-' : '>' }}</span>
               <span
                   class="inline-block whitespace-nowrap md:whitespace-normal will-change-transform"
                   :class="[
