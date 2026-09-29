@@ -37,7 +37,7 @@ const handleSearchClick = () => {
 </script>
 
 <template>
-  <div class="h-[100dvh] w-screen flex flex-col relative overflow-hidden bg-medical-50">
+  <div data-ascii-room class="h-[100dvh] w-screen flex flex-col relative overflow-hidden bg-medical-50">
     <!-- 1. 顶部栏 Header -->
     <header v-if="!uiStore.isLiteMode" class="h-14 bg-surface border-b border-medical-200 flex justify-between items-center px-4 md:px-6 flex-shrink-0 relative z-50">
       <div class="flex items-center gap-2 flex-shrink-0">
