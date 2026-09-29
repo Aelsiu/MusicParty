@@ -15,3 +15,13 @@ test('playlist filter ignores case for latin titles', () => {
     assert.equal(matchesPlaylistSong({ name: 'Fade', artists: ['Alan Walker'] }, 'fad'), true);
     assert.equal(matchesPlaylistSong({ name: 'Fade', artists: ['Alan Walker'] }, 'WALKER'), true);
 });
+
+test('playlist filter matches partial romaji in hiragana, katakana and artist names', () => {
+    assert.equal(matchesPlaylistSong({ name: 'マイライフ', artists: ['CY8ER'] }, 'raifu'), true);
+    assert.equal(matchesPlaylistSong({ name: 'アディオス', artists: ['DAZBEE'] }, 'ADIOSU'), true);
+    assert.equal(matchesPlaylistSong({ name: '夜に駆ける', artists: ['ヨルシカ'] }, 'yorushi'), true);
+    assert.equal(matchesPlaylistSong({ name: 'がっこう', artists: [] }, 'gakkou'), true);
+    assert.equal(matchesPlaylistSong({ name: 'さくら', artists: [] }, 'kur'), true);
+    assert.equal(matchesPlaylistSong({ name: 'きゃりー', artists: [] }, 'kyarii'), true);
+    assert.equal(matchesPlaylistSong({ name: 'マイライフ', artists: ['CY8ER'] }, 'sakura'), false);
+});
