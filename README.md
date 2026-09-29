@@ -15,9 +15,9 @@
 
 （本项目并非“破解版”，对于VIP歌曲/高音质等会员内容，需要具有相应资格账号的cookie来获取，下方有获取cookie的教程）
 
-上游界面截图（本 fork 的界面以实际部署版本为准）：
+本 fork 版本截图：
 
-<img width="1778" height="1080" alt="image" src="https://github.com/user-attachments/assets/64d7f5d1-9837-43ab-8c1b-dad78361b348" />
+![Music Party 定制版界面](docs/images/music-party-custom.png)
 
 ## 本 fork 相对上游的主要改动
 
@@ -45,11 +45,13 @@
 
 ## Docker 部署（推荐）
 
-本 fork 的 Compose 会从当前源码构建镜像，并从项目根目录的 `config/application.properties` 读取启动配置。配置文件包含管理员密码和 Cookie，已被 Git 忽略；可跟踪的样例是 `config/application.properties.example`。
+本 fork 提供 Ubuntu 服务器部署包，包含已构建的网页与服务端 JAR、运行时 Dockerfile 和 Compose 配置；从源码部署时则由仓库根目录的 Dockerfile 编译前后端。两种方式均从部署目录的 `config/application.properties` 读取启动配置。配置文件包含管理员密码和 Cookie，已被 Git 忽略；可跟踪的样例是 `config/application.properties.example`。
 
-### 1. 使用 Docker Compose 一键启动 (最简方案)
+### 使用 Docker Compose 一键启动
 
-在本项目目录执行（Compose 会同时启动 NeteaseCloudMusicApi）：
+在 [本 fork 的 Releases](https://github.com/Aelsiu/MusicParty/releases) 下载 `ubuntu-docker.tar.gz` 部署包并在 Ubuntu 服务器解压。服务器需要安装 Docker Engine 和 Docker Compose 插件。
+
+进入包含 `compose.yaml` 和 `Dockerfile` 的解压目录执行（Compose 会同时拉取并启动 NeteaseCloudMusicApi；首次构建还需联网拉取 Java 基础镜像并安装 FFmpeg）：
 
 ```bash
 cp config/application.properties.example config/application.properties
@@ -57,20 +59,9 @@ cp config/application.properties.example config/application.properties
 docker compose up -d --build
 ```
 
-以后在聊天窗口输入 `//admin`，验证管理员密码后保存房间参数会立即生效，并写回 `config/application.properties`，无需重启容器。手动编辑此文件后，重启应用容器才会重新读取。修改源码后需要重新构建镜像。`docker-compose.yml` 只保留端口、构建、网络和卷等 Docker 配置。
+启动后访问 `http://服务器IP:8848`。请将 `app.music-api.base-url` 设置为实际访问地址，并为管理员设置独立密码。部署包内的 `README-ubuntu.md` 包含更新、备份和诊断说明。
 
-### 2. 使用 Docker Run 启动
-
-如果你已有现成的网易云 API 服务，先将配置文件中的 `app.music-api.netease.base-url` 指向该服务，并构建本地镜像，再运行：
-
-```bash
-docker build -t music-party-custom:local .
-docker run -d --name music-party -p 8848:8080 \
-  -v "$(pwd)/config:/app/config" \
-  -v "$(pwd)/music_party/cached_media:/app/cached_media" \
-  -v "$(pwd)/music_party/data:/app/data" \
-  --restart unless-stopped music-party-custom:local
-```
+以后在聊天窗口输入 `//admin`，验证管理员密码后保存房间参数会立即生效，并写回 `config/application.properties`，无需重启容器。如果手动编辑此文件，则需要重启应用容器才会重新读取。修改源码后需要重新构建镜像。部署包使用 `compose.yaml`，源码仓库使用 `docker-compose.yml`，均只保留端口、构建、网络和卷等 Docker 配置。
 
 ### 旧版环境变量说明
 
@@ -103,33 +94,17 @@ docker run -d --name music-party -p 8848:8080 \
 
 ---
 
-## 上游 Windows 启动器
+##  Windows 启动器（仅旧版）
 
-以下启动器来自上游 Releases，**不包含本 fork 的改动**。要运行本 fork，请使用上面的 Docker 部署方式。
-<img width="1010" height="713" alt="Snipaste_2026-05-21_10-45-11" src="https://github.com/user-attachments/assets/2402f66e-4a52-423f-a32c-c0478c84a283" />
-
-### 获取与使用
-1.  前往 [GitHub Releases](https://github.com/pluviiter/MusicParty/releases) 下载最新的 `MusicParty.exe`。
-2.  将 `MusicParty.exe` 放置在你喜欢的文件夹中。
-3.  **直接双击运行**：
-    *   启动器会自动释放内置的 JRE 环境、网易云 API 服务以及 Java 核心程序。
-    *   所有的配置、运行环境、缓存都保存在 EXE 同级目录下。
-4.  在 UI 界面上修改端口、密码、网易云 Cookie 等配置，点击“启动系统”即可。
-5.  系统就绪后，点击界面上的“打开网页”即可。
-6. 如果你需要公网部署，请保持监听地址为0.0.0.0，并使用你的公网IP:端口的形式访问网页。（推荐使用Cloudflare Tunnel来进行内网穿透）
-7. 更新时，删除bin文件夹，覆盖exe文件后再启动。
-
----
-
-### 移动端
-在移动端环境中，由于对浏览器的限制，在后台播放或锁屏播放时，经常会出现断联，失去同步等情况
-安卓端可使用上游 Release 中的 APK（本质上是套壳浏览器；APK 不包含本 fork 的改动），苹果端可以尝试在浏览器中将网页添加到桌面。
+启动器来自上游 Releases，**不包含本 fork 的改动**。要运行本 fork，目前只能使用上面的 Docker 部署方式。
 
 ---
 
 ## 房间密码
 
-部署后首次启动需要填写房间名并设置 4 位数字密码，其他成员输入自己的 ID 和密码即可加入，无需填写房间名。密码可以在管理员面板中更改，仍须为 4 位数字。
+部署后首次启动需要填写房间名并设置 4 位数字密码，其他成员输入自己的 ID 和密码即可加入，无需填写房间名。
+
+房间创建后，密码也可以在管理员面板中更改，仍须为 4 位数字。
 
 本地记忆的 ID 仅作预填，入房时换填其他 ID 会作为新用户加入。若只需改名，请使用原 ID 入房后在在线成员列表修改，服务器确认后会更新本地记忆。
 
