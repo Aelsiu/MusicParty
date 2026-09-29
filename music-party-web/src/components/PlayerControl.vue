@@ -187,8 +187,15 @@
           </div>
         </div>
 
-        <div class="w-8 text-[10px] font-mono text-medical-400 text-right">
-          {{ Math.round(ui.volume * 100) }}%
+        <div class="w-10 flex-shrink-0 text-[10px] font-mono text-medical-400 text-right">
+          <span v-if="isEditingVolume" class="flex items-center justify-end">
+            <input ref="volumeInputRef" v-model="volumeInput" type="text" inputmode="numeric" maxlength="3" aria-label="音量百分比"
+                   @keydown.enter="commitVolumeEdit" @keydown.esc="cancelVolumeEdit" @blur="cancelVolumeEdit"
+                   class="w-7 min-w-0 border-b border-accent bg-transparent text-right text-medical-900 outline-none" />%
+          </span>
+          <button v-else @click="startVolumeEdit" aria-label="输入音量百分比" title="点击输入音量" class="hover:text-accent">
+            {{ Math.round(ui.volume * 100) }}%
+          </button>
         </div>
       </div>
     </div>
@@ -196,7 +203,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue';
+import { ref, computed, nextTick, onUnmounted } from 'vue';
 import { usePlayerStore } from '../stores/player';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
@@ -265,6 +272,23 @@ const progressPercent = computed(() => {
 // --- 音量逻辑 ---
 const lastVolume = ref(0.5);
 const isDraggingVolume = ref(false);
+const isEditingVolume = ref(false);
+const volumeInput = ref('');
+const volumeInputRef = ref(null);
+
+const startVolumeEdit = async () => {
+  volumeInput.value = String(Math.round(ui.volume * 100));
+  isEditingVolume.value = true;
+  await nextTick();
+  volumeInputRef.value?.select();
+};
+
+const cancelVolumeEdit = () => { isEditingVolume.value = false; };
+const commitVolumeEdit = () => {
+  const value = volumeInput.value.trim();
+  if (/^\d{1,3}$/.test(value)) ui.setVolume(Math.min(100, Number(value)) / 100);
+  isEditingVolume.value = false;
+};
 
 const toggleMute = () => {
   if (ui.volume > 0) {

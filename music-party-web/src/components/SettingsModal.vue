@@ -25,30 +25,33 @@
         </section>
 
         <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
-          <h3 class="font-bold text-medical-900">绑定网易云</h3>
-          <div>
-            <div v-if="userStore.bindings.netease" class="flex items-center gap-3 mb-3 p-3 border border-medical-200 bg-medical-50">
-              <img v-if="userStore.neteaseAvatar" :src="userStore.neteaseAvatar" alt="网易云头像" class="w-11 h-11 rounded-full object-cover" />
-              <div v-else class="w-11 h-11 rounded-full bg-accent/15 text-accent flex items-center justify-center font-bold">云</div>
-              <div class="min-w-0 flex-1">
-                <div class="text-[10px] text-medical-500">当前绑定 · 网易云音乐</div>
-                <div class="font-bold text-medical-900 truncate">{{ userStore.neteaseUsername || userStore.bindings.netease }}</div>
+          <h3 class="font-bold text-medical-900">绑定用户</h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div v-for="accountPlatform in accountPlatforms" :key="accountPlatform.id" class="min-w-0 space-y-2">
+              <div class="text-xs font-bold text-medical-500">{{ accountPlatform.label }}</div>
+              <div v-if="userStore.bindings[accountPlatform.id]" class="flex items-center gap-3 p-3 border border-medical-200 bg-medical-50">
+                <img v-if="userStore[accountPlatform.avatarField]" :src="userStore[accountPlatform.avatarField]" :alt="`${accountPlatform.label}头像`" class="w-11 h-11 flex-shrink-0 rounded-full object-cover" />
+                <div v-else class="w-11 h-11 flex-shrink-0 rounded-full bg-accent/15 text-accent flex items-center justify-center font-bold">{{ accountPlatform.initial }}</div>
+                <div class="min-w-0 flex-1">
+                  <div class="text-[10px] text-medical-500">当前绑定 · {{ accountPlatform.label }}</div>
+                  <div class="font-bold text-medical-900 truncate">{{ userStore[accountPlatform.nameField] || userStore.bindings[accountPlatform.id] }}</div>
+                </div>
+                <button @click="unbindUser(accountPlatform.id)" class="flex-shrink-0 px-3 py-1.5 border border-medical-300 text-sm text-medical-600 hover:border-accent hover:text-accent">解绑</button>
               </div>
-              <button @click="unbindUser" class="flex-shrink-0 px-3 py-1.5 border border-medical-300 text-sm text-medical-600 hover:border-accent hover:text-accent">解绑</button>
+              <div class="flex gap-2">
+                <input v-model="userKeyword[accountPlatform.id]" @keyup.enter="searchUsers(accountPlatform.id)" :placeholder="accountPlatform.placeholder" :aria-label="accountPlatform.placeholder"
+                       class="flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 outline-none focus:border-accent text-medical-900" />
+                <button @click="searchUsers(accountPlatform.id)" :disabled="searching[accountPlatform.id]" class="flex-shrink-0 px-3 py-2 bg-accent hover:bg-accent-hover text-white disabled:opacity-50">搜索</button>
+              </div>
+              <div v-if="searchResults[accountPlatform.id].length" class="border border-medical-200 max-h-48 overflow-y-auto">
+                <button v-for="result in searchResults[accountPlatform.id]" :key="result.id" @click="bindUser(accountPlatform.id, result)"
+                        class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-medical-100 text-medical-800">
+                  <img :src="result.avatarUrl" alt="" class="w-7 h-7 rounded-full" />
+                  <span class="truncate">{{ result.name }}</span>
+                </button>
+              </div>
+              <div v-else-if="hasSearched[accountPlatform.id] && !searching[accountPlatform.id]" class="border border-medical-200 p-3 text-center text-xs text-medical-400">未查到用户</div>
             </div>
-            <div class="flex gap-2">
-              <input v-model="userKeyword" @keyup.enter="searchUsers" placeholder="搜索网易云用户名"
-                     class="flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 outline-none focus:border-accent text-medical-900" />
-              <button @click="searchUsers" :disabled="searching" class="px-4 py-2 bg-accent hover:bg-accent-hover text-white disabled:opacity-50">搜索</button>
-            </div>
-            <div v-if="searchResults.length" class="mt-2 border border-medical-200 max-h-48 overflow-y-auto">
-              <button v-for="result in searchResults" :key="result.id" @click="bindUser(result)"
-                      class="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-medical-100 text-medical-800">
-                <img :src="result.avatarUrl" alt="" class="w-7 h-7 rounded-full" />
-                <span class="truncate">{{ result.name }}</span>
-              </button>
-            </div>
-            <div v-else-if="hasSearched && !searching" class="mt-2 border border-medical-200 p-3 text-center text-xs text-medical-400">未查到用户</div>
           </div>
         </section>
       </div>
@@ -57,7 +60,7 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue';
+import { reactive, watch } from 'vue';
 import { Settings, X } from 'lucide-vue-next';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
@@ -77,29 +80,42 @@ const themes = [
   { id: 'night', label: '夜间橙', color: '#FB923C' },
   { id: 'blue', label: '浅蓝调', color: '#2563EB' }
 ];
-const userKeyword = ref('');
-const searchResults = ref([]);
-const searching = ref(false);
-const hasSearched = ref(false);
-watch(userKeyword, () => {
-  hasSearched.value = false;
-  searchResults.value = [];
-});
+const accountPlatforms = [
+  { id: 'netease', label: '网易云音乐', placeholder: '搜索网易云用户名', initial: '云', nameField: 'neteaseUsername', avatarField: 'neteaseAvatar' },
+  { id: 'bilibili', label: 'Bilibili', placeholder: '搜索Bilibili用户名', initial: 'B', nameField: 'bilibiliUsername', avatarField: 'bilibiliAvatar' }
+];
+const userKeyword = reactive({ netease: '', bilibili: '' });
+const searchResults = reactive({ netease: [], bilibili: [] });
+const searching = reactive({ netease: false, bilibili: false });
+const hasSearched = reactive({ netease: false, bilibili: false });
+for (const { id } of accountPlatforms) {
+  watch(() => userKeyword[id], () => {
+    hasSearched[id] = false;
+    searchResults[id] = [];
+  });
+}
 
 const close = () => emit('close');
 watch(() => props.isOpen, (open) => {
   if (open) {
     hydrateBoundProfile();
-  } else { searchResults.value = []; hasSearched.value = false; }
+  } else {
+    for (const { id } of accountPlatforms) {
+      searchResults[id] = [];
+      hasSearched[id] = false;
+    }
+  }
 });
 
 const hydrateBoundProfile = async () => {
-  if (!userStore.bindings.netease || userStore.neteaseAvatar || !userStore.neteaseUsername) return;
-  try {
-    const users = await musicApi.searchUser('netease', userStore.neteaseUsername);
-    const match = users.find(user => String(user.id) === String(userStore.bindings.netease));
-    if (match) userStore.updateBinding('netease', match.id, match.name, match.avatarUrl);
-  } catch (e) { /* 旧绑定保留，头像不可用时显示占位图 */ }
+  for (const { id, nameField, avatarField } of accountPlatforms) {
+    if (!userStore.bindings[id] || userStore[avatarField] || !userStore[nameField]) continue;
+    try {
+      const users = await musicApi.searchUser(id, userStore[nameField]);
+      const match = users.find(user => String(user.id) === String(userStore.bindings[id]));
+      if (match) userStore.updateBinding(id, match.id, match.name, match.avatarUrl);
+    } catch (e) { /* 旧绑定保留，头像不可用时显示占位图 */ }
+  }
 };
 
 const changeTheme = (name, event) => {
@@ -107,36 +123,36 @@ const changeTheme = (name, event) => {
   uiStore.setTheme(name, rect.left + rect.width / 2, rect.top + rect.height / 2);
 };
 
-const searchUsers = async () => {
-  if (!userKeyword.value.trim() || searching.value) return;
-  const keyword = userKeyword.value.trim();
-  searching.value = true;
-  searchResults.value = [];
-  hasSearched.value = false;
+const searchUsers = async (platform) => {
+  if (!userKeyword[platform].trim() || searching[platform]) return;
+  const keyword = userKeyword[platform].trim();
+  searching[platform] = true;
+  searchResults[platform] = [];
+  hasSearched[platform] = false;
   try {
-    const results = await musicApi.searchUser('netease', keyword);
-    if (userKeyword.value.trim() === keyword) {
-      searchResults.value = results;
-      hasSearched.value = true;
+    const results = await musicApi.searchUser(platform, keyword);
+    if (userKeyword[platform].trim() === keyword) {
+      searchResults[platform] = results;
+      hasSearched[platform] = true;
     }
   }
   catch (e) { error('用户名搜索失败'); }
-  finally { searching.value = false; }
+  finally { searching[platform] = false; }
 };
 
-const bindUser = (user) => {
-  playerStore.bindAccount('netease', user.id, user.name, user.avatarUrl);
-  searchResults.value = [];
-  hasSearched.value = false;
-  userKeyword.value = '';
+const bindUser = (platform, user) => {
+  playerStore.bindAccount(platform, user.id, user.name, user.avatarUrl);
+  searchResults[platform] = [];
+  hasSearched[platform] = false;
+  userKeyword[platform] = '';
   success(`已绑定 ${user.name}`);
 };
 
-const unbindUser = () => {
-  playerStore.bindAccount('netease', '');
-  searchResults.value = [];
-  hasSearched.value = false;
-  userKeyword.value = '';
-  success('已解绑网易云');
+const unbindUser = (platform) => {
+  playerStore.bindAccount(platform, '');
+  searchResults[platform] = [];
+  hasSearched[platform] = false;
+  userKeyword[platform] = '';
+  success(`已解绑${platform === 'netease' ? '网易云' : 'Bilibili'}`);
 };
 </script>

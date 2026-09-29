@@ -134,7 +134,7 @@
             <!-- 已绑定：歌单列表 -->
             <template v-else>
               <div class="flex justify-between items-center px-2 py-1 bg-medical-50 border-b border-medical-100">
-                <span class="text-[10px] font-mono text-medical-400 truncate">{{ platform === 'netease' && userStore.neteaseUsername ? userStore.neteaseUsername : `ID: ${bindings[platform]}` }}</span>
+                <span class="text-[10px] font-mono text-medical-400 truncate">{{ (platform === 'netease' ? userStore.neteaseUsername : userStore.bilibiliUsername) || `ID: ${bindings[platform]}` }}</span>
               </div>
               
               <div v-if="isPlaylistsLoading" class="flex justify-center py-8">
@@ -188,7 +188,7 @@
             <div class="space-y-1">
               <div v-if="displayedSongs.length === 0 && !loading && !isLoadingMore" class="text-center py-10 text-medical-400 text-xs font-mono">{{ playlistFilterKeyword ? '未找到匹配歌曲' : 'NO DATA FOUND' }}</div>
               <div v-for="song in displayedSongs" :key="song.id" class="flex items-center p-3 border border-transparent transition-all group" :class="isUnplayable(song) ? 'opacity-50 grayscale bg-medical-50 cursor-not-allowed' : 'bg-surface hover:border-medical-300 hover:shadow-sm'">
-                <input v-if="listMode === 'playlist'" type="checkbox" :aria-label="`选中歌曲 ${song.name}`" :checked="selectedSongIds.has(song.id)" :disabled="isUnplayable(song) || isInQueue(song.id) || pendingIds.has(song.id)" @change="toggleSelectedSong(song.id, $event.target.checked)" class="mr-3 h-4 w-4 flex-shrink-0 cursor-pointer disabled:cursor-not-allowed" style="accent-color: rgb(var(--accent))" />
+                <input v-if="listMode === 'playlist'" type="checkbox" :aria-label="`选中歌曲 ${song.name}`" :checked="selectedSongIds.has(song.id)" :disabled="isUnplayable(song) || isInQueue(song.id) || pendingIds.has(song.id)" @change="toggleSelectedSong(song.id, $event.target.checked)" class="playlist-song-checkbox mr-3 h-4 w-4 flex-shrink-0 cursor-pointer disabled:cursor-not-allowed" />
                 <div class="flex-1 w-0 flex items-center gap-3">
                   <div class="w-8 h-8 bg-medical-200 flex-shrink-0 relative overflow-hidden"><CoverImage :src="song.coverUrl" class="w-full h-full" :scanline="false" /></div>
                   <div class="min-w-0 flex-1">

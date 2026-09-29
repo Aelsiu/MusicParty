@@ -39,6 +39,8 @@ export const useUserStore = defineStore('user', () => {
     const bindings = ref(JSON.parse(localStorage.getItem(STORAGE_KEYS.BINDINGS) || '{}'));
     const neteaseUsername = ref(localStorage.getItem(STORAGE_KEYS.NETEASE_USERNAME) || '');
     const neteaseAvatar = ref(localStorage.getItem(STORAGE_KEYS.NETEASE_AVATAR) || '');
+    const bilibiliUsername = ref(localStorage.getItem(STORAGE_KEYS.BILIBILI_USERNAME) || '');
+    const bilibiliAvatar = ref(localStorage.getItem(STORAGE_KEYS.BILIBILI_AVATAR) || '');
     // 全局状态：控制改名弹窗显示
     const showNameModal = ref(false);
 
@@ -116,14 +118,18 @@ export const useUserStore = defineStore('user', () => {
         const sameAccount = bindings.value[platform] === accountId;
         bindings.value[platform] = accountId;
         localStorage.setItem(STORAGE_KEYS.BINDINGS, JSON.stringify(bindings.value));
-        if (platform === 'netease') {
-            neteaseUsername.value = accountId ? (displayName || (sameAccount && neteaseUsername.value) || accountId) : '';
-            if (neteaseUsername.value) localStorage.setItem(STORAGE_KEYS.NETEASE_USERNAME, neteaseUsername.value);
-            else localStorage.removeItem(STORAGE_KEYS.NETEASE_USERNAME);
-            neteaseAvatar.value = accountId ? (avatarUrl || (sameAccount && neteaseAvatar.value) || '') : '';
-            if (neteaseAvatar.value) localStorage.setItem(STORAGE_KEYS.NETEASE_AVATAR, neteaseAvatar.value);
-            else localStorage.removeItem(STORAGE_KEYS.NETEASE_AVATAR);
-        }
+        const profile = platform === 'netease'
+            ? { name: neteaseUsername, avatar: neteaseAvatar, nameKey: STORAGE_KEYS.NETEASE_USERNAME, avatarKey: STORAGE_KEYS.NETEASE_AVATAR }
+            : platform === 'bilibili'
+                ? { name: bilibiliUsername, avatar: bilibiliAvatar, nameKey: STORAGE_KEYS.BILIBILI_USERNAME, avatarKey: STORAGE_KEYS.BILIBILI_AVATAR }
+                : null;
+        if (!profile) return;
+        profile.name.value = accountId ? (displayName || (sameAccount && profile.name.value) || accountId) : '';
+        profile.avatar.value = accountId ? (avatarUrl || (sameAccount && profile.avatar.value) || '') : '';
+        if (profile.name.value) localStorage.setItem(profile.nameKey, profile.name.value);
+        else localStorage.removeItem(profile.nameKey);
+        if (profile.avatar.value) localStorage.setItem(profile.avatarKey, profile.avatar.value);
+        else localStorage.removeItem(profile.avatarKey);
     };
 
     // 废弃: 不再直接修改本地状态，改为等待 initUser 的后端回调
@@ -158,6 +164,8 @@ export const useUserStore = defineStore('user', () => {
         bindings,
         neteaseUsername,
         neteaseAvatar,
+        bilibiliUsername,
+        bilibiliAvatar,
         initUser,
         setOnlineUsers,
         updateBinding,

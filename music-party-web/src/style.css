@@ -77,6 +77,22 @@ body {
   @apply bg-medical-50 text-medical-800 font-sans antialiased overflow-hidden;
 }
 
+.playlist-song-checkbox {
+  appearance: none;
+  border: 1px solid rgb(var(--medical-400));
+  background-color: rgb(var(--surface));
+}
+
+.playlist-song-checkbox:checked {
+  border-color: rgb(var(--accent));
+  background: rgb(var(--accent)) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='m3 8 3 3 7-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 13px no-repeat;
+}
+
+.playlist-song-checkbox:focus-visible {
+  outline: 2px solid rgb(var(--accent));
+  outline-offset: 2px;
+}
+
 /* 自定义滚动条 */
 ::-webkit-scrollbar {
   width: 6px;
