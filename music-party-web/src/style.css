@@ -103,6 +103,10 @@
   transition: clip-path 500ms ease-out;
 }
 
+:root[data-theme='custom'][data-custom-base='dark'] .bg-accent.text-white {
+  color: rgb(var(--medical-50));
+}
+
 body {
   @apply bg-medical-50 text-medical-800 font-sans antialiased overflow-hidden;
 }

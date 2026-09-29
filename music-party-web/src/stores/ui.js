@@ -3,11 +3,25 @@ import { defineStore } from 'pinia';
 import { ref, watch } from 'vue';
 import { STORAGE_KEYS } from '../constants/keys';
 import client from '../api/client';
+import { DEFAULT_CUSTOM_THEME, deriveCustomPalette, normalizeCustomTheme } from '../utils/customTheme';
 
-const themeNames = ['classic', 'night', 'blue', 'night-blue', 'green', 'night-green'];
+const themeNames = ['classic', 'night', 'blue', 'night-blue', 'green', 'night-green', 'custom'];
+const customThemeKey = 'mp_custom_theme';
+let savedCustomTheme = DEFAULT_CUSTOM_THEME;
+try {
+    savedCustomTheme = normalizeCustomTheme(JSON.parse(localStorage.getItem(customThemeKey)));
+} catch { /* 忽略旧浏览器中无效的主题数据 */ }
 const savedTheme = localStorage.getItem('mp_theme');
 const initialTheme = themeNames.includes(savedTheme) ? savedTheme : 'classic';
 const savedLyricPreviewLines = Number(localStorage.getItem(STORAGE_KEYS.LYRIC_PREVIEW_LINES));
+const customVariables = Object.keys(deriveCustomPalette(savedCustomTheme));
+const writeCustomVariables = (config) => {
+    const root = document.documentElement;
+    for (const [name, value] of Object.entries(deriveCustomPalette(config))) root.style.setProperty(name, value);
+    root.style.colorScheme = config.base;
+    root.dataset.customBase = config.base;
+};
+if (initialTheme === 'custom') writeCustomVariables(savedCustomTheme);
 document.documentElement.dataset.theme = initialTheme;
 
 export const useUiStore = defineStore('ui', () => {
@@ -18,24 +32,37 @@ export const useUiStore = defineStore('ui', () => {
     const authorName = ref('ThorNex X Aelsiu');
     const backWords = ref('THORNEX');
     const theme = ref(initialTheme);
+    const customThemeConfig = ref(savedCustomTheme);
 
-    const applyTheme = (name) => {
+    const applyTheme = (name, customConfig) => {
+        if (name === 'custom') {
+            writeCustomVariables(customConfig);
+            customThemeConfig.value = customConfig;
+            localStorage.setItem(customThemeKey, JSON.stringify(customConfig));
+        } else {
+            for (const variable of customVariables) document.documentElement.style.removeProperty(variable);
+            document.documentElement.style.colorScheme = '';
+            delete document.documentElement.dataset.customBase;
+        }
         theme.value = name;
         document.documentElement.dataset.theme = name;
         localStorage.setItem('mp_theme', name);
         window.dispatchEvent(new Event('musicparty:themechange'));
     };
 
-    const setTheme = async (name, x = window.innerWidth / 2, y = window.innerHeight / 2) => {
-        if (!themeNames.includes(name) || name === theme.value) return;
+    const setTheme = async (name, x = window.innerWidth / 2, y = window.innerHeight / 2, customConfig) => {
+        if (!themeNames.includes(name)) return;
+        const nextCustom = name === 'custom' ? normalizeCustomTheme(customConfig || customThemeConfig.value) : null;
+        if (name === theme.value && (name !== 'custom' || JSON.stringify(nextCustom) === JSON.stringify(customThemeConfig.value))) return;
+        const switchTheme = () => applyTheme(name, nextCustom);
         if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
-            applyTheme(name);
+            switchTheme();
             return;
         }
 
         const radius = Math.hypot(Math.max(x, window.innerWidth - x), Math.max(y, window.innerHeight - y));
         if (document.startViewTransition) {
-            const transition = document.startViewTransition(() => applyTheme(name));
+            const transition = document.startViewTransition(switchTheme);
             await transition.ready;
             document.documentElement.animate(
                 { clipPath: [`circle(0px at ${x}px ${y}px)`, `circle(${radius}px at ${x}px ${y}px)`] },
@@ -47,12 +74,12 @@ export const useUiStore = defineStore('ui', () => {
         const overlay = document.createElement('div');
         const palette = { classic: '249 250 251', night: '15 23 42', blue: '239 246 255', 'night-blue': '15 23 42', green: '242 250 245', 'night-green': '15 23 42' };
         overlay.className = 'theme-ripple';
-        overlay.style.setProperty('--theme-ripple-color', palette[name]);
+        overlay.style.setProperty('--theme-ripple-color', name === 'custom' ? deriveCustomPalette(nextCustom)['--medical-50'] : palette[name]);
         overlay.style.setProperty('--theme-ripple-x', `${x}px`);
         overlay.style.setProperty('--theme-ripple-y', `${y}px`);
         document.body.appendChild(overlay);
         requestAnimationFrame(() => { overlay.style.clipPath = `circle(${radius}px at ${x}px ${y}px)`; });
-        setTimeout(() => { applyTheme(name); overlay.remove(); }, 500);
+        setTimeout(() => { switchTheme(); overlay.remove(); }, 500);
     };
 
     const toggleLiteMode = () => {
@@ -102,6 +129,7 @@ export const useUiStore = defineStore('ui', () => {
         backWords,
         theme,
         setTheme,
+        customThemeConfig,
         fetchConfig
     };
 });

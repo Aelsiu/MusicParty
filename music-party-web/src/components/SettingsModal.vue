@@ -22,6 +22,41 @@
               </button>
             </div>
           </div>
+          <div class="border-t border-medical-200 pt-4 space-y-3">
+            <div class="flex items-center gap-2">
+              <p class="text-xs font-bold text-medical-500">自定义配色</p>
+              <span v-if="uiStore.theme === 'custom'" class="text-[10px] font-mono text-accent">使用中</span>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <p class="text-xs text-medical-500 mb-2">白 / 暗基调</p>
+                <div class="inline-flex border border-medical-200" role="group" aria-label="自定义主题基调">
+                  <button v-for="base in [{ id: 'light', label: '白' }, { id: 'dark', label: '暗' }]" :key="base.id"
+                          @click="customDraft.base = base.id" :aria-pressed="customDraft.base === base.id"
+                          class="px-5 py-2 text-sm font-bold transition-colors"
+                          :class="customDraft.base === base.id ? 'bg-accent text-white' : 'bg-medical-50 text-medical-600 hover:text-accent'">
+                    {{ base.label }}
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label for="custom-theme-color" class="block text-xs text-medical-500 mb-2">主题色</label>
+                <div class="flex items-center gap-3">
+                  <input id="custom-theme-color" v-model="customDraft.color" type="color" aria-label="选择自定义主题色"
+                         class="w-12 h-9 p-0.5 border border-medical-200 bg-surface cursor-pointer" />
+                  <span class="text-xs font-mono text-medical-600">{{ customDraft.color.toUpperCase() }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex items-center gap-2 border px-3 py-2 text-xs" :style="{ backgroundColor: previewColor('--medical-50'), borderColor: previewColor('--medical-200'), color: previewColor('--medical-900') }">
+                <span class="w-4 h-4 border" :style="{ backgroundColor: previewColor('--surface'), borderColor: previewColor('--medical-200') }"></span>
+                <span>配色预览</span>
+                <span class="px-2 py-1 font-bold" :style="{ backgroundColor: previewColor('--accent'), color: customDraft.base === 'dark' ? previewColor('--medical-50') : '#fff' }">主题色</span>
+              </div>
+              <button @click="applyCustomTheme" class="px-4 py-2 bg-strong text-white text-sm font-bold hover:bg-accent transition-colors">应用自定义主题</button>
+            </div>
+          </div>
         </section>
 
         <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
@@ -75,13 +110,14 @@
 </template>
 
 <script setup>
-import { reactive, watch } from 'vue';
+import { computed, reactive, watch } from 'vue';
 import { Settings, X } from 'lucide-vue-next';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
 import { usePlayerStore } from '../stores/player';
 import { useToast } from '../composables/useToast';
 import { musicApi } from '../api/music';
+import { deriveCustomPalette } from '../utils/customTheme';
 
 const props = defineProps({ isOpen: Boolean });
 const emit = defineEmits(['close']);
@@ -98,6 +134,9 @@ const themes = [
   { id: 'green', label: '白绿', color: '#15803D' },
   { id: 'night-green', label: '暗绿', color: '#15803D' }
 ];
+const customDraft = reactive({ ...uiStore.customThemeConfig });
+const customPreview = computed(() => deriveCustomPalette(customDraft));
+const previewColor = name => `rgb(${customPreview.value[name]})`;
 const accountPlatforms = [
   { id: 'netease', label: '网易云音乐', placeholder: '搜索网易云用户名', initial: '云', nameField: 'neteaseUsername', avatarField: 'neteaseAvatar' },
   { id: 'bilibili', label: 'Bilibili', placeholder: '搜索Bilibili用户名', initial: 'B', nameField: 'bilibiliUsername', avatarField: 'bilibiliAvatar' }
@@ -116,6 +155,7 @@ for (const { id } of accountPlatforms) {
 const close = () => emit('close');
 watch(() => props.isOpen, (open) => {
   if (open) {
+    Object.assign(customDraft, uiStore.customThemeConfig);
     hydrateBoundProfile();
   } else {
     for (const { id } of accountPlatforms) {
@@ -139,6 +179,11 @@ const hydrateBoundProfile = async () => {
 const changeTheme = (name, event) => {
   const rect = event.currentTarget.getBoundingClientRect();
   uiStore.setTheme(name, rect.left + rect.width / 2, rect.top + rect.height / 2);
+};
+
+const applyCustomTheme = (event) => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  uiStore.setTheme('custom', rect.left + rect.width / 2, rect.top + rect.height / 2, customDraft);
 };
 
 const searchUsers = async (platform) => {
