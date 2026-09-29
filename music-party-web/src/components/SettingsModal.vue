@@ -94,7 +94,9 @@ const themes = [
   { id: 'classic', label: '白橙', color: '#F97316' },
   { id: 'night', label: '暗橙', color: '#FB923C' },
   { id: 'blue', label: '白蓝', color: '#2563EB' },
-  { id: 'night-blue', label: '暗蓝', color: '#2563EB' }
+  { id: 'night-blue', label: '暗蓝', color: '#2563EB' },
+  { id: 'green', label: '白绿', color: '#15803D' },
+  { id: 'night-green', label: '暗绿', color: '#15803D' }
 ];
 const accountPlatforms = [
   { id: 'netease', label: '网易云音乐', placeholder: '搜索网易云用户名', initial: '云', nameField: 'neteaseUsername', avatarField: 'neteaseAvatar' },

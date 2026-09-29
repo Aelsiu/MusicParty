@@ -22,7 +22,8 @@
 }
 
 :root[data-theme='night'],
-:root[data-theme='night-blue'] {
+:root[data-theme='night-blue'],
+:root[data-theme='night-green'] {
   color-scheme: dark;
   --medical-50: 15 23 42;
   --medical-100: 23 32 51;
@@ -46,6 +47,11 @@
   --accent-hover: 29 78 216;
 }
 
+:root[data-theme='night-green'] {
+  --accent: 21 128 61;
+  --accent-hover: 22 101 52;
+}
+
 :root[data-theme='blue'] {
   --medical-50: 239 246 255;
   --medical-100: 224 238 253;
@@ -62,6 +68,24 @@
   --overlay: 15 23 42;
   --accent: 37 99 235;
   --accent-hover: 29 78 216;
+}
+
+:root[data-theme='green'] {
+  --medical-50: 242 250 245;
+  --medical-100: 232 245 236;
+  --medical-200: 204 232 211;
+  --medical-300: 169 217 183;
+  --medical-400: 124 181 140;
+  --medical-500: 92 121 103;
+  --medical-600: 69 106 81;
+  --medical-700: 51 90 66;
+  --medical-800: 35 72 50;
+  --medical-900: 23 59 44;
+  --surface: 255 255 255;
+  --strong: 23 59 44;
+  --overlay: 16 39 26;
+  --accent: 21 128 61;
+  --accent-hover: 22 101 52;
 }
 
 ::view-transition-old(root),
