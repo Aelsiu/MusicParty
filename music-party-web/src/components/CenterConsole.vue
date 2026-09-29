@@ -50,7 +50,7 @@
               v-for="(line, i) in activeLines"
               :key="`${line.time}-${i}`"
               class="w-full transition-all duration-300"
-              :class="i === currentVisibleIndex ? 'opacity-100 scale-105 md:scale-100 text-medical-900' : i > currentVisibleIndex ? 'opacity-70 text-medical-700' : 'opacity-40 blur-[0.5px]'"
+              :class="i === currentVisibleIndex ? 'opacity-100 text-[1.2em] font-bold text-medical-900' : i > currentVisibleIndex ? 'opacity-70 text-medical-700' : 'opacity-40 blur-[0.5px]'"
           >
             <div
                 :ref="el => setLineRef(el, i)"

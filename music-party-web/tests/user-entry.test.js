@@ -22,24 +22,40 @@ beforeEach(() => {
 });
 
 test('entering with the remembered ID keeps the existing identity', () => {
+    user.updateBinding('netease', 'netease-alice', 'Alice Music', 'alice.png');
     user.prepareEntry('Alice', '1234');
     assert.equal(user.userToken, 'alice-token');
     assert.equal(user.currentUser.name, 'Alice');
+    assert.equal(user.bindings.netease, 'netease-alice');
 });
 
 test('a different entry ID creates a new identity and saves it only after server confirmation', () => {
+    user.updateBinding('netease', 'netease-alice', 'Alice Music', 'alice.png');
+    user.updateBinding('bilibili', 'bilibili-alice', 'Alice Video', 'alice-video.png');
     user.prepareEntry('Bob', '1234');
     const newToken = user.userToken;
     assert.notEqual(newToken, 'alice-token');
     assert.equal(user.currentUser.name, 'Bob');
     assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), 'alice-token');
     assert.equal(localStorage.getItem(STORAGE_KEYS.USERNAME), 'Alice');
+    assert.deepEqual(user.bindings, {});
+    for (const key of [STORAGE_KEYS.BINDINGS, STORAGE_KEYS.NETEASE_USERNAME, STORAGE_KEYS.NETEASE_AVATAR, STORAGE_KEYS.BILIBILI_USERNAME, STORAGE_KEYS.BILIBILI_AVATAR]) {
+        assert.equal(localStorage.getItem(key), null, key);
+    }
 
     user.initUser('bob-session', 'Bob', false);
     assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), newToken);
     assert.equal(localStorage.getItem(STORAGE_KEYS.USERNAME), 'Bob');
     user.prepareEntry('Bob', '1234');
     assert.equal(user.userToken, newToken);
+});
+
+test('first entry without a remembered ID starts without a stale binding', () => {
+    user.updateBinding('netease', 'stale-user', 'Stale User', 'stale.png');
+    localStorage.removeItem(STORAGE_KEYS.USERNAME);
+    user.prepareEntry('Carol', '1234');
+    assert.deepEqual(user.bindings, {});
+    assert.equal(localStorage.getItem(STORAGE_KEYS.BINDINGS), null);
 });
 
 test('renaming inside the room updates the remembered ID without replacing identity', () => {

@@ -132,6 +132,17 @@ export const useUserStore = defineStore('user', () => {
         else localStorage.removeItem(profile.avatarKey);
     };
 
+    const clearBindings = () => {
+        bindings.value = {};
+        neteaseUsername.value = '';
+        neteaseAvatar.value = '';
+        bilibiliUsername.value = '';
+        bilibiliAvatar.value = '';
+        for (const key of [STORAGE_KEYS.BINDINGS, STORAGE_KEYS.NETEASE_USERNAME, STORAGE_KEYS.NETEASE_AVATAR, STORAGE_KEYS.BILIBILI_USERNAME, STORAGE_KEYS.BILIBILI_AVATAR]) {
+            localStorage.removeItem(key);
+        }
+    };
+
     // 废弃: 不再直接修改本地状态，改为等待 initUser 的后端回调
     const saveName = (newName) => {
         // Logic moved to initUser response handling
@@ -149,6 +160,7 @@ export const useUserStore = defineStore('user', () => {
 
     const prepareEntry = (name, password) => {
         const previousName = localStorage.getItem(STORAGE_KEYS.USERNAME);
+        if (!previousName || name !== previousName) clearBindings();
         if (previousName && name !== previousName) {
             // 入房时换 ID 创建新身份，等服务器确认后再保存，避免在 CONNECT 前刷新丢失旧身份。
             userToken.value = generateToken();
