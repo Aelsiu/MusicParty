@@ -165,21 +165,28 @@
             <div v-if="loading" class="text-center py-10 font-mono text-accent animate-pulse">> LOADING DATA STREAM...</div>
 
             <!-- 歌单操作头 -->
-            <div v-else-if="currentPlaylistId && listMode === 'playlist'" class="mb-4 p-4 bg-surface border border-medical-200 flex justify-between items-center shadow-sm">
-              <div>
+            <div v-else-if="currentPlaylistId && listMode === 'playlist'" class="mb-4 p-4 bg-surface border border-medical-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-sm">
+              <div class="min-w-0">
                 <div class="text-xs font-sans text-medical-400">用户歌单</div>
-                <div class="font-bold text-lg">{{ currentPlaylistId }}</div>
-                <div class="text-xs text-medical-400 font-mono">{{ songs.length }} LOADED</div>
+                <div class="font-bold text-lg truncate">{{ currentPlaylistId }}</div>
+                <div class="text-xs text-medical-400 font-mono">{{ songs.length }} LOADED<span v-if="playlistFilterKeyword"> · {{ displayedSongs.length }} MATCHED</span></div>
               </div>
-              <button @click="handleImportPlaylist" class="bg-strong text-white px-4 py-2 text-sm font-bold hover:bg-accent transition-colors flex items-center gap-2 font-sans">
-                <ListPlus class="w-4 h-4"/> <span class="hidden sm:inline">导入全部</span>
-              </button>
+              <div class="flex gap-2 w-full sm:w-auto flex-shrink-0">
+                <button @click="handleImportPlaylist" class="flex-1 min-w-0 sm:flex-none sm:w-28 bg-strong text-white py-2 text-xs font-bold hover:bg-accent transition-colors flex items-center justify-center gap-1 font-sans whitespace-nowrap">
+                  <ListPlus class="w-4 h-4"/> 导入全部
+                </button>
+                <button @click="handleImportSelected" :disabled="!importableSelectedSongs.length" class="flex-1 min-w-0 sm:flex-none sm:w-28 bg-strong text-white py-2 text-xs font-bold hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-sans whitespace-nowrap">
+                  导入已选<span v-if="importableSelectedSongs.length"> ({{ importableSelectedSongs.length }})</span>
+                </button>
+                <input v-model="playlistFilterInput" type="search" aria-label="筛选歌单歌曲" placeholder="筛选歌曲" class="flex-1 min-w-0 sm:flex-none sm:w-28 border border-medical-200 bg-medical-50 px-2 py-2 text-xs outline-none focus:border-accent" />
+              </div>
             </div>
 
             <!-- 歌曲列表渲染 -->
             <div class="space-y-1">
-              <div v-if="songs.length === 0 && !loading" class="text-center py-10 text-medical-400 text-xs font-mono">NO DATA FOUND</div>
-              <div v-for="song in songs" :key="song.id" class="flex items-center p-3 border border-transparent transition-all group" :class="isUnplayable(song) ? 'opacity-50 grayscale bg-medical-50 cursor-not-allowed' : 'bg-surface hover:border-medical-300 hover:shadow-sm'">
+              <div v-if="displayedSongs.length === 0 && !loading && !isLoadingMore" class="text-center py-10 text-medical-400 text-xs font-mono">{{ playlistFilterKeyword ? '未找到匹配歌曲' : 'NO DATA FOUND' }}</div>
+              <div v-for="song in displayedSongs" :key="song.id" class="flex items-center p-3 border border-transparent transition-all group" :class="isUnplayable(song) ? 'opacity-50 grayscale bg-medical-50 cursor-not-allowed' : 'bg-surface hover:border-medical-300 hover:shadow-sm'">
+                <input v-if="listMode === 'playlist'" type="checkbox" :aria-label="`选中歌曲 ${song.name}`" :checked="selectedSongIds.has(song.id)" :disabled="isUnplayable(song) || isInQueue(song.id) || pendingIds.has(song.id)" @change="toggleSelectedSong(song.id, $event.target.checked)" class="mr-3 h-4 w-4 flex-shrink-0 cursor-pointer disabled:cursor-not-allowed" style="accent-color: rgb(var(--accent))" />
                 <div class="flex-1 w-0 flex items-center gap-3">
                   <div class="w-8 h-8 bg-medical-200 flex-shrink-0 relative overflow-hidden"><CoverImage :src="song.coverUrl" class="w-full h-full" :scanline="false" /></div>
                   <div class="min-w-0 flex-1">
@@ -231,6 +238,7 @@ import { useUserStore } from '../stores/user';
 import { useSearchLogic } from '../composables/useSearchLogic';
 import { usePlaylistLogic } from '../composables/usePlaylistLogic';
 import { useLikedSongs } from '../composables/useLikedSongs';
+import { matchesPlaylistSong } from '../utils/playlistFilter';
 import { X, Search, PlusCircle, ListPlus, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink } from 'lucide-vue-next';
 import CoverImage from './CoverImage.vue';
 
@@ -289,11 +297,31 @@ const selectPlatform = async (p) => {
 const {
   playlists, currentPlaylistId, searchUserKeyword, userSearchResults,
   isSearchingUser, hasSearchedUser, isPlaylistsLoading, hasMore, isLoadingMore, bindings,
-  searchUser, bindUser, loadPlaylist, handleScroll
+  searchUser, bindUser, loadPlaylist, loadRemainingSongs, handleScroll
 } = usePlaylistLogic(platform, songs, listMode, loading);
 
 // 3. UI 状态
 const mobileView = ref('playlists');
+const playlistFilterInput = ref('');
+const playlistFilterKeyword = ref('');
+const selectedSongIds = ref(new Set());
+const displayedSongs = computed(() => listMode.value === 'playlist' && playlistFilterKeyword.value
+  ? songs.value.filter(song => matchesPlaylistSong(song, playlistFilterKeyword.value))
+  : songs.value);
+
+watch(playlistFilterInput, (value, _, onCleanup) => {
+  const timer = setTimeout(() => { playlistFilterKeyword.value = value.trim(); }, 250);
+  onCleanup(() => clearTimeout(timer));
+});
+watch([platform, currentPlaylistId], () => {
+  selectedSongIds.value = new Set();
+  playlistFilterInput.value = '';
+  playlistFilterKeyword.value = '';
+});
+watch([playlistFilterKeyword, loading, isLoadingMore], () => {
+  if (listMode.value === 'playlist' && playlistFilterKeyword.value && !loading.value && !isLoadingMore.value) loadRemainingSongs();
+});
+
 // 4. 交互胶水代码
 const isUnplayable = (song) => {
   // B站视频时长上限（分钟）由管理面板配置，默认 10
@@ -302,12 +330,31 @@ const isUnplayable = (song) => {
 };
 
 const handleSelectPlaylist = (pid) => {
+  selectedSongIds.value = new Set();
+  playlistFilterInput.value = '';
+  playlistFilterKeyword.value = '';
   loadPlaylist(pid);
   mobileView.value = 'songs';
 };
 
 const handleImportPlaylist = () => {
   playerStore.enqueuePlaylist(platform.value, currentPlaylistId.value);
+  emit('close');
+};
+
+const importableSelectedSongs = computed(() => songs.value.filter(song =>
+  selectedSongIds.value.has(song.id) && !isUnplayable(song) && !isInQueue(song.id) && !pendingIds.value.has(song.id)
+));
+const toggleSelectedSong = (id, checked) => {
+  const next = new Set(selectedSongIds.value);
+  if (checked) next.add(id);
+  else next.delete(id);
+  selectedSongIds.value = next;
+};
+const handleImportSelected = () => {
+  if (!importableSelectedSongs.value.length) return;
+  for (const song of importableSelectedSongs.value) playerStore.enqueue(platform.value, song.id);
+  selectedSongIds.value = new Set();
   emit('close');
 };
 

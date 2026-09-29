@@ -13,7 +13,7 @@ export const useUiStore = defineStore('ui', () => {
     const isLiteMode = ref(false);
     const volume = ref(parseFloat(localStorage.getItem(STORAGE_KEYS.VOLUME) || '0.5'));
     const autoLiteMode = ref(localStorage.getItem('mp_auto_lite_mode') !== 'false'); // 默认 true
-    const authorName = ref('ThorNex');
+    const authorName = ref('ThorNex X Aelsiu');
     const backWords = ref('THORNEX');
     const theme = ref(initialTheme);
 

@@ -115,7 +115,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
             // 贪婪加载：如果有效数据太少，自动加载下一页
             if (hasMore.value && rawSongs.length > 0 && validSongs.length < 10) {
                 offset.value += limit.value;
-                setTimeout(fetchSongsPage, 50);
+                await fetchSongsPage();
             }
 
             // 兜底
@@ -123,7 +123,23 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
         } catch (e) {
             console.error("Fetch songs failed", e);
-            hasMore.value = false;
+            if (currentPlaylistId.value === playlistId && platformRef.value === platform) hasMore.value = false;
+        }
+    };
+
+    // 本地筛选需要扫描整张歌单；沿用现有分页接口逐页补齐。
+    const loadRemainingSongs = async () => {
+        if (!currentPlaylistId.value || !hasMore.value || isLoadingMore.value || loadingRef.value) return;
+        const playlistId = currentPlaylistId.value;
+        const platform = platformRef.value;
+        isLoadingMore.value = true;
+        try {
+            while (hasMore.value && currentPlaylistId.value === playlistId && platformRef.value === platform) {
+                offset.value += limit.value;
+                await fetchSongsPage();
+            }
+        } finally {
+            isLoadingMore.value = false;
         }
     };
 
@@ -181,6 +197,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         searchUser,
         bindUser,
         loadPlaylist,
+        loadRemainingSongs,
         handleScroll
     };
 }
