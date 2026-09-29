@@ -71,21 +71,21 @@
 }
 
 :root[data-theme='green'] {
-  --medical-50: 242 250 245;
-  --medical-100: 232 245 236;
-  --medical-200: 204 232 211;
-  --medical-300: 169 217 183;
-  --medical-400: 124 181 140;
-  --medical-500: 92 121 103;
-  --medical-600: 69 106 81;
-  --medical-700: 51 90 66;
-  --medical-800: 35 72 50;
-  --medical-900: 23 59 44;
+  --medical-50: 247 249 247;
+  --medical-100: 240 244 240;
+  --medical-200: 218 228 220;
+  --medical-300: 192 210 195;
+  --medical-400: 145 173 151;
+  --medical-500: 101 126 107;
+  --medical-600: 77 107 84;
+  --medical-700: 59 91 68;
+  --medical-800: 41 72 50;
+  --medical-900: 26 57 38;
   --surface: 255 255 255;
-  --strong: 23 59 44;
-  --overlay: 16 39 26;
-  --accent: 21 128 61;
-  --accent-hover: 22 101 52;
+  --strong: 26 57 38;
+  --overlay: 18 42 28;
+  --accent: 58 119 84;
+  --accent-hover: 47 103 70;
 }
 
 ::view-transition-old(root),

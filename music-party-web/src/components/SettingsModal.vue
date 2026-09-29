@@ -27,34 +27,35 @@
               <p class="text-xs font-bold text-medical-500">自定义配色</p>
               <span v-if="uiStore.theme === 'custom'" class="text-[10px] font-mono text-accent">使用中</span>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
+            <div class="flex flex-wrap md:flex-nowrap items-end gap-4">
+              <div class="flex-shrink-0">
                 <p class="text-xs text-medical-500 mb-2">白 / 暗基调</p>
                 <div class="inline-flex border border-medical-200" role="group" aria-label="自定义主题基调">
                   <button v-for="base in [{ id: 'light', label: '白' }, { id: 'dark', label: '暗' }]" :key="base.id"
                           @click="customDraft.base = base.id" :aria-pressed="customDraft.base === base.id"
-                          class="px-5 py-2 text-sm font-bold transition-colors"
+                          class="px-4 py-2 text-sm font-bold transition-colors"
                           :class="customDraft.base === base.id ? 'bg-accent text-white' : 'bg-medical-50 text-medical-600 hover:text-accent'">
                     {{ base.label }}
                   </button>
                 </div>
               </div>
-              <div>
+              <div class="flex-shrink-0">
                 <label for="custom-theme-color" class="block text-xs text-medical-500 mb-2">主题色</label>
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-2 h-9">
                   <input id="custom-theme-color" v-model="customDraft.color" type="color" aria-label="选择自定义主题色"
-                         class="w-12 h-9 p-0.5 border border-medical-200 bg-surface cursor-pointer" />
+                         class="w-10 h-9 p-0.5 border border-medical-200 bg-surface cursor-pointer" />
                   <span class="text-xs font-mono text-medical-600">{{ customDraft.color.toUpperCase() }}</span>
                 </div>
               </div>
-            </div>
-            <div class="flex flex-wrap items-center justify-between gap-3">
-              <div class="flex items-center gap-2 border px-3 py-2 text-xs" :style="{ backgroundColor: previewColor('--medical-50'), borderColor: previewColor('--medical-200'), color: previewColor('--medical-900') }">
-                <span class="w-4 h-4 border" :style="{ backgroundColor: previewColor('--surface'), borderColor: previewColor('--medical-200') }"></span>
-                <span>配色预览</span>
-                <span class="px-2 py-1 font-bold" :style="{ backgroundColor: previewColor('--accent'), color: customDraft.base === 'dark' ? previewColor('--medical-50') : '#fff' }">主题色</span>
+              <div class="flex-shrink-0">
+                <p class="text-xs text-medical-500 mb-2">配色预览</p>
+                <div class="flex items-center gap-3 h-9">
+                  <span v-for="item in previewItems" :key="item.variable" class="flex items-center gap-1 text-[10px] text-medical-600 whitespace-nowrap">
+                    <span class="w-4 h-4 border" :style="{ backgroundColor: previewColor(item.variable), borderColor: previewColor('--medical-300') }"></span>{{ item.label }}
+                  </span>
+                </div>
               </div>
-              <button @click="applyCustomTheme" class="px-4 py-2 bg-strong text-white text-sm font-bold hover:bg-accent transition-colors">应用自定义主题</button>
+              <button @click="applyCustomTheme" class="flex-shrink-0 h-9 px-4 bg-strong text-white text-sm font-bold hover:bg-accent transition-colors">应用</button>
             </div>
           </div>
         </section>
@@ -71,7 +72,10 @@
                   <div class="text-[10px] text-medical-500">当前绑定 · {{ accountPlatform.label }}</div>
                   <div class="font-bold text-medical-900 truncate">{{ userStore[accountPlatform.nameField] || userStore.bindings[accountPlatform.id] }}</div>
                 </div>
-                <button @click="unbindUser(accountPlatform.id)" class="flex-shrink-0 px-3 py-1.5 border border-medical-300 text-sm text-medical-600 hover:border-accent hover:text-accent">解绑</button>
+                <button @click="unbindUser(accountPlatform.id)" :aria-label="`解绑${accountPlatform.label}`" :title="`解绑${accountPlatform.label}`"
+                        class="flex-shrink-0 w-[54px] h-[34px] flex items-center justify-center border border-medical-300 text-accent hover:border-accent">
+                  <Unlink2 class="w-5 h-5" />
+                </button>
               </div>
               <div class="flex gap-2">
                 <input v-model="userKeyword[accountPlatform.id]" @keyup.enter="searchUsers(accountPlatform.id)" :placeholder="accountPlatform.placeholder" :aria-label="accountPlatform.placeholder"
@@ -94,12 +98,14 @@
           <h3 class="font-bold text-medical-900">其他设置</h3>
           <div>
             <p class="text-xs font-bold text-medical-500 mb-2">歌词提前显示</p>
-            <div class="inline-flex border border-medical-200" role="group" aria-label="歌词提前显示行数">
-              <button v-for="count in [0, 1, 2]" :key="count" @click="uiStore.setLyricPreviewLines(count)"
+            <div class="lyric-slider relative inline-grid grid-cols-3 w-60 h-10 border border-medical-200 bg-medical-50 cursor-pointer" role="group" aria-label="歌词提前显示行数" @click="selectLyricSegment">
+              <span class="lyric-thumb absolute top-0 bottom-0 left-0 w-1/3 bg-accent/15 border border-accent pointer-events-none"
+                    :style="{ transform: `translateX(${uiStore.lyricPreviewLines * 100}%)` }"></span>
+              <button v-for="count in [0, 1, 2]" :key="count" @click.stop="uiStore.setLyricPreviewLines(count)"
                       :aria-pressed="uiStore.lyricPreviewLines === count"
-                      class="px-4 py-2 text-sm font-mono font-bold transition-colors border-r last:border-r-0 border-medical-200"
-                      :class="uiStore.lyricPreviewLines === count ? 'bg-accent text-white' : 'bg-medical-50 text-medical-600 hover:text-accent'">
-                {{ count }}L
+                      class="relative z-10 text-sm font-mono transition-colors"
+                      :class="uiStore.lyricPreviewLines === count ? 'text-accent font-bold' : 'text-medical-600 font-normal hover:text-accent'">
+                {{ count }}Line
               </button>
             </div>
           </div>
@@ -111,7 +117,7 @@
 
 <script setup>
 import { computed, reactive, watch } from 'vue';
-import { Settings, X } from 'lucide-vue-next';
+import { Settings, Unlink2, X } from 'lucide-vue-next';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
 import { usePlayerStore } from '../stores/player';
@@ -131,12 +137,18 @@ const themes = [
   { id: 'night', label: '暗橙', color: '#FB923C' },
   { id: 'blue', label: '白蓝', color: '#2563EB' },
   { id: 'night-blue', label: '暗蓝', color: '#2563EB' },
-  { id: 'green', label: '白绿', color: '#15803D' },
+  { id: 'green', label: '白绿', color: '#3A7754' },
   { id: 'night-green', label: '暗绿', color: '#15803D' }
 ];
 const customDraft = reactive({ ...uiStore.customThemeConfig });
 const customPreview = computed(() => deriveCustomPalette(customDraft));
 const previewColor = name => `rgb(${customPreview.value[name]})`;
+const previewItems = [
+  { label: '基调色', variable: '--medical-50' },
+  { label: '主题色', variable: '--accent' },
+  { label: '边框色', variable: '--medical-200' },
+  { label: '背景色', variable: '--surface' }
+];
 const accountPlatforms = [
   { id: 'netease', label: '网易云音乐', placeholder: '搜索网易云用户名', initial: '云', nameField: 'neteaseUsername', avatarField: 'neteaseAvatar' },
   { id: 'bilibili', label: 'Bilibili', placeholder: '搜索Bilibili用户名', initial: 'B', nameField: 'bilibiliUsername', avatarField: 'bilibiliAvatar' }
@@ -186,6 +198,12 @@ const applyCustomTheme = (event) => {
   uiStore.setTheme('custom', rect.left + rect.width / 2, rect.top + rect.height / 2, customDraft);
 };
 
+const selectLyricSegment = (event) => {
+  const rect = event.currentTarget.getBoundingClientRect();
+  const count = Math.max(0, Math.min(2, Math.floor((event.clientX - rect.left) / (rect.width / 3))));
+  uiStore.setLyricPreviewLines(count);
+};
+
 const searchUsers = async (platform) => {
   if (!userKeyword[platform].trim() || searching[platform]) return;
   const keyword = userKeyword[platform].trim();
@@ -219,3 +237,12 @@ const unbindUser = (platform) => {
   success(`已解绑${platform === 'netease' ? '网易云' : 'Bilibili'}`);
 };
 </script>
+
+<style scoped>
+.lyric-slider, .lyric-slider button, .lyric-thumb { border-radius: 0; }
+.lyric-thumb { transition: transform 340ms cubic-bezier(.22, 1, .36, 1), box-shadow 200ms ease; }
+.lyric-slider:hover .lyric-thumb { box-shadow: 0 3px 10px rgb(var(--accent) / .24); }
+@media (prefers-reduced-motion: reduce) {
+  .lyric-thumb { transition: none; }
+}
+</style>
