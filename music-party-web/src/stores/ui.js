@@ -4,7 +4,7 @@ import { ref, watch } from 'vue';
 import { STORAGE_KEYS } from '../constants/keys';
 import client from '../api/client';
 
-const themeNames = ['classic', 'night', 'blue'];
+const themeNames = ['classic', 'night', 'blue', 'night-blue'];
 const savedTheme = localStorage.getItem('mp_theme');
 const initialTheme = themeNames.includes(savedTheme) ? savedTheme : 'classic';
 const savedLyricPreviewLines = Number(localStorage.getItem(STORAGE_KEYS.LYRIC_PREVIEW_LINES));
@@ -45,7 +45,7 @@ export const useUiStore = defineStore('ui', () => {
         }
 
         const overlay = document.createElement('div');
-        const palette = { classic: '249 250 251', night: '15 23 42', blue: '239 246 255' };
+        const palette = { classic: '249 250 251', night: '15 23 42', blue: '239 246 255', 'night-blue': '15 23 42' };
         overlay.className = 'theme-ripple';
         overlay.style.setProperty('--theme-ripple-color', palette[name]);
         overlay.style.setProperty('--theme-ripple-x', `${x}px`);

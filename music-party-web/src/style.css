@@ -21,7 +21,8 @@
   --accent-hover: 234 88 12;
 }
 
-:root[data-theme='night'] {
+:root[data-theme='night'],
+:root[data-theme='night-blue'] {
   color-scheme: dark;
   --medical-50: 15 23 42;
   --medical-100: 23 32 51;
@@ -38,6 +39,11 @@
   --overlay: 15 23 42;
   --accent: 251 146 60;
   --accent-hover: 249 115 22;
+}
+
+:root[data-theme='night-blue'] {
+  --accent: 37 99 235;
+  --accent-hover: 29 78 216;
 }
 
 :root[data-theme='blue'] {

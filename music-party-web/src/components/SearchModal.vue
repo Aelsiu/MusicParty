@@ -165,7 +165,7 @@
           <!-- 歌单导航栏固定在右侧内容区顶部，歌曲列表单独滚动。 -->
           <div v-if="currentPlaylistId && listMode === 'playlist' && !loading" class="flex-shrink-0 bg-surface border-b border-medical-200 px-3 py-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
             <div class="min-w-0">
-              <div class="text-[10px] font-sans text-medical-400">用户歌单</div>
+              <div class="text-[10px] font-sans text-medical-400">歌单内容</div>
               <div class="font-bold text-base truncate">{{ currentPlaylistId }}</div>
               <div class="text-[10px] text-medical-400 font-mono">{{ songs.length }} LOADED<span v-if="playlistFilterKeyword"> · {{ displayedSongs.length }} MATCHED</span></div>
             </div>

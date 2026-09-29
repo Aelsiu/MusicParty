@@ -50,14 +50,14 @@
               v-for="(line, i) in activeLines"
               :key="`${line.time}-${i}`"
               class="w-full transition-all duration-300"
-              :class="i === currentVisibleIndex ? 'opacity-100 text-[1.2em] font-bold text-medical-900' : i > currentVisibleIndex ? 'opacity-70 text-medical-700' : 'opacity-40 blur-[0.5px]'"
+              :class="i === currentVisibleIndex ? 'opacity-100 text-accent' : i > currentVisibleIndex ? 'opacity-70 text-medical-700' : 'opacity-40 blur-[0.5px]'"
           >
             <div
                 :ref="el => setLineRef(el, i)"
                 class="flex items-center overflow-hidden whitespace-nowrap md:whitespace-normal"
                 :class="[
-                  // 当前行且文字溢出：黑色背景槽固定在容器上（居中，至多占屏幕 70%），文字在槽内滚动
-                  i === currentVisibleIndex && isMobile && isOverflowing(i) ? 'bg-strong text-white' : '',
+                  // 当前行且文字溢出：主题色背景槽固定在容器上（居中，至多占屏幕 70%），文字在槽内滚动
+                  i === currentVisibleIndex && isMobile && isOverflowing(i) ? 'bg-accent/10' : '',
                   // 溢出行（当前或刚结束）：文字起始贴槽左缘，滚动/定格位置一致；其余行居中（桌面左对齐）
                   isOverflowing(i) ? 'justify-start' : 'justify-center md:justify-start'
                 ]"
@@ -67,8 +67,8 @@
               <span
                   class="inline-block whitespace-nowrap md:whitespace-normal will-change-transform"
                   :class="[
-                    // 已测量且未溢出的当前行：保留紧凑黑底高亮（未测量前不渲染背景，避免闪全幅黑条）
-                    {'bg-strong text-white px-1': i === currentVisibleIndex && isMobile && isShort(i)},
+                    // 已测量且未溢出的当前行：保留紧凑主题色高亮（未测量前不渲染背景，避免闪全幅色条）
+                    {'bg-accent/10 px-1': i === currentVisibleIndex && isMobile && isShort(i)},
                     {'marquee-scroll': i === currentVisibleIndex && isOverflowing(i) && isMobile}
                   ]"
                   :style="i === currentVisibleIndex && isOverflowing(i) ? {
