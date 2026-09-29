@@ -9,18 +9,18 @@
       </button>
 
       <!-- 头部 -->
-      <div class="p-4 md:p-6 border-b border-medical-200 bg-surface flex-shrink-0">
-        <h2 class="text-xl md:text-2xl font-bold font-mono mb-3 md:mb-4 text-medical-900 flex items-center gap-2">
+      <div class="p-3 md:p-4 border-b border-medical-200 bg-surface flex-shrink-0">
+        <h2 class="text-xl font-bold font-mono mb-2 text-medical-900 flex items-center gap-2">
           <Search class="w-5 h-5 text-accent"/> SEARCH
         </h2>
 
         <!-- 平台切换 TAB (移动端收紧内边距，防小屏换行)；全长方形，选中用主题色高亮 -->
-        <div class="flex gap-1 mb-3 md:mb-4 flex-wrap">
+        <div class="flex gap-1 mb-2 flex-wrap">
           <button
               v-for="p in ['netease', 'bilibili']" :key="p"
               @click="selectPlatform(p)"
               :disabled="!isPlatformEnabled(p)"
-              class="px-4 md:px-6 py-2 text-sm font-bold uppercase transition-all"
+              class="px-4 md:px-6 py-1.5 text-sm font-bold uppercase transition-all"
               :class="[
                 mode === 'search' && platform === p ? 'bg-accent text-white' : 'bg-medical-200 text-medical-500 hover:bg-medical-300',
                 !isPlatformEnabled(p) ? 'opacity-30 cursor-not-allowed grayscale' : ''
@@ -31,7 +31,7 @@
           <!-- 本地点赞列表标签（仅本地缓存，不上报服务器） -->
           <button
               @click="mode = 'likesong'"
-              class="px-4 md:px-6 py-2 text-sm font-bold transition-all"
+              class="px-4 md:px-6 py-1.5 text-sm font-bold transition-all"
               :class="mode === 'likesong' ? 'bg-accent text-white' : 'bg-medical-200 text-medical-500 hover:bg-medical-300'"
           >
             LIKESONG
@@ -44,11 +44,11 @@
               v-model="keyword"
               @keyup.enter="handleSearchAction"
               :placeholder="mode === 'likesong' ? '搜索点赞的歌曲...' : '搜索音乐...'"
-              class="flex-1 min-w-0 border p-2.5 md:p-3 outline-none transition-colors duration-300 font-sans bg-medical-100 border-medical-200 focus:border-accent"
+              class="flex-1 min-w-0 border px-3 py-2 outline-none transition-colors duration-300 font-sans bg-medical-100 border-medical-200 focus:border-accent"
           />
           <button
               @click="handleSearchAction"
-              class="text-white px-3 md:px-6 py-2 font-bold transition-colors text-xs md:text-base flex-shrink-0 font-sans bg-accent hover:bg-accent-hover"
+              class="text-white px-3 md:px-5 py-2 font-bold transition-colors text-xs md:text-sm flex-shrink-0 font-sans bg-accent hover:bg-accent-hover"
           >
             SEARCH
           </button>
@@ -172,11 +172,13 @@
                 <div class="text-xs text-medical-400 font-mono">{{ songs.length }} LOADED<span v-if="playlistFilterKeyword"> · {{ displayedSongs.length }} MATCHED</span></div>
               </div>
               <div class="flex gap-2 w-full sm:w-auto flex-shrink-0">
-                <button @click="handleImportPlaylist" class="flex-1 min-w-0 sm:flex-none sm:w-28 bg-strong text-white py-2 text-xs font-bold hover:bg-accent transition-colors flex items-center justify-center gap-1 font-sans whitespace-nowrap">
-                  <ListPlus class="w-4 h-4"/> 导入全部
+                <button @click="handleImportPlaylist" aria-label="导入全部" class="group flex-none w-9 hover:w-20 focus-visible:w-20 h-9 px-2.5 overflow-hidden bg-strong text-white text-xs font-bold hover:bg-accent transition-[width,background-color] duration-200 flex items-center gap-1.5 font-sans">
+                  <PlaylistImportIcon variant="all" class="w-4 h-4 shrink-0" />
+                  <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">ALL</span>
                 </button>
-                <button @click="handleImportSelected" :disabled="!importableSelectedSongs.length" class="flex-1 min-w-0 sm:flex-none sm:w-28 bg-strong text-white py-2 text-xs font-bold hover:bg-accent transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-sans whitespace-nowrap">
-                  导入已选<span v-if="importableSelectedSongs.length"> ({{ importableSelectedSongs.length }})</span>
+                <button @click="handleImportSelected" :disabled="!importableSelectedSongs.length" :aria-label="`导入已选（${importableSelectedSongs.length} 首）`" class="group flex-none w-9 hover:w-28 focus-visible:w-28 h-9 px-2.5 overflow-hidden bg-strong text-white text-xs font-bold hover:bg-accent transition-[width,background-color] duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 font-sans">
+                  <PlaylistImportIcon variant="selected" class="w-4 h-4 shrink-0" />
+                  <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">SELECTED</span>
                 </button>
                 <input v-model="playlistFilterInput" type="search" aria-label="筛选歌单歌曲" placeholder="筛选歌曲" class="flex-1 min-w-0 sm:flex-none sm:w-28 border border-medical-200 bg-medical-50 px-2 py-2 text-xs outline-none focus:border-accent" />
               </div>
@@ -239,8 +241,9 @@ import { useSearchLogic } from '../composables/useSearchLogic';
 import { usePlaylistLogic } from '../composables/usePlaylistLogic';
 import { useLikedSongs } from '../composables/useLikedSongs';
 import { matchesPlaylistSong } from '../utils/playlistFilter';
-import { X, Search, PlusCircle, ListPlus, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink } from 'lucide-vue-next';
+import { X, Search, PlusCircle, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink } from 'lucide-vue-next';
 import CoverImage from './CoverImage.vue';
+import PlaylistImportIcon from './PlaylistImportIcon.vue';
 
 const props = defineProps(['isOpen']);
 const emit = defineEmits(['close']);
