@@ -71,18 +71,14 @@
                           <span class="text-[10px] font-bold text-medical-800">{{ playerStore.isFairShuffle ? '公平模式' : '全部随机' }}</span>
                           <span class="text-[8px] text-medical-400 font-mono uppercase">算法类型</span>
                         </div>
-                        <button @click="execPlayerAction('TOGGLE_FAIR_SHUFFLE')" class="w-8 h-4 rounded-full relative transition-colors" :class="playerStore.isFairShuffle ? 'bg-accent' : 'bg-medical-300'">
-                          <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-surface rounded-full transition-transform duration-300" :style="{ transform: playerStore.isFairShuffle ? 'translateX(16px)' : 'translateX(0)' }"></div>
-                        </button>
+                        <RoundSwitch :model-value="playerStore.isFairShuffle" @update:model-value="execPlayerAction('TOGGLE_FAIR_SHUFFLE')" label="公平随机模式" />
                       </div>
                       <div class="flex items-center justify-between border-l border-medical-100 pl-3">
                         <div class="flex flex-col">
                           <span class="text-[10px] font-bold text-medical-800">{{ playerStore.allowOfflineShuffle ? '含离线' : '仅在线' }}</span>
                           <span class="text-[8px] text-medical-400 font-mono uppercase">曲库范围</span>
                         </div>
-                        <button @click="execPlayerAction('TOGGLE_ALLOW_OFFLINE')" class="w-8 h-4 rounded-full relative transition-colors" :class="playerStore.allowOfflineShuffle ? 'bg-accent' : 'bg-medical-300'">
-                          <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-surface rounded-full transition-transform duration-300" :style="{ transform: playerStore.allowOfflineShuffle ? 'translateX(16px)' : 'translateX(0)' }"></div>
-                        </button>
+                        <RoundSwitch :model-value="playerStore.allowOfflineShuffle" @update:model-value="execPlayerAction('TOGGLE_ALLOW_OFFLINE')" label="随机播放包含离线成员" />
                       </div>
                     </div>
 
@@ -93,9 +89,7 @@
                           <span class="text-[10px] font-bold text-medical-800">投票切歌模式</span>
                           <span class="text-[8px] text-medical-400 font-mono uppercase">VOTE_SKIP_MODE</span>
                         </div>
-                        <button @click="updateInstantConfig({ voteSkipEnabled: !playerStore.config.voteSkipEnabled })" class="w-8 h-4 rounded-full relative transition-colors" :class="playerStore.config.voteSkipEnabled ? 'bg-accent' : 'bg-medical-300'">
-                          <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-surface rounded-full transition-transform duration-300" :style="{ transform: playerStore.config.voteSkipEnabled ? 'translateX(16px)' : 'translateX(0)' }"></div>
-                        </button>
+                        <RoundSwitch :model-value="playerStore.config.voteSkipEnabled" @update:model-value="enabled => updateInstantConfig({ voteSkipEnabled: enabled })" label="投票切歌模式" />
                       </div>
                       <div v-if="playerStore.config.voteSkipEnabled" class="grid grid-cols-2 gap-3 pt-1 border-t border-medical-100">
                         <div class="space-y-1">
@@ -159,13 +153,8 @@
                         <span class="text-[10px] font-bold text-medical-800">{{ sw.label }}</span>
                         <span class="text-[8px] text-medical-400 font-mono uppercase">{{ sw.hint }}</span>
                       </div>
-                      <button @click="togglePrivateDjSwitch(sw.field)"
-                              class="w-8 h-4 rounded-full relative transition-colors disabled:opacity-40"
-                              :class="privateDj[sw.field] ? 'bg-accent' : 'bg-medical-300'"
-                              :disabled="privateDj.mode === 'OFF'">
-                        <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-surface rounded-full transition-transform duration-300"
-                             :style="{ transform: privateDj[sw.field] ? 'translateX(16px)' : 'translateX(0)' }"></div>
-                      </button>
+                      <RoundSwitch :model-value="privateDj[sw.field]" @update:model-value="togglePrivateDjSwitch(sw.field)"
+                                   :disabled="privateDj.mode === 'OFF'" :label="sw.label" />
                     </div>
                   </div>
                 </div>
@@ -213,9 +202,7 @@
                   <div class="grid grid-cols-2 gap-3">
                     <div class="p-3 bg-medical-50 border border-medical-100 flex flex-col items-center gap-2 rounded-sm">
                       <span class="text-[9px] font-bold text-medical-400 uppercase font-mono">直播推流</span>
-                      <button @click="toggleStream" class="w-10 h-5 rounded-full relative transition-colors" :class="playerStore.streamActive ? 'bg-accent' : 'bg-medical-300'">
-                        <div class="absolute top-0.5 left-0.5 w-4 h-4 bg-surface rounded-full transition-transform duration-300" :style="{ transform: playerStore.streamActive ? 'translateX(20px)' : 'translateX(0)' }"></div>
-                      </button>
+                      <RoundSwitch :model-value="playerStore.streamActive" @update:model-value="toggleStream" label="直播推流" />
                     </div>
                     <div class="p-3 bg-medical-50 border border-medical-100 flex flex-col gap-2 rounded-sm">
                       <span class="text-[9px] font-bold text-medical-400 uppercase font-mono text-center">数据清理</span>
@@ -239,13 +226,7 @@
                    <div v-for="plat in platforms" :key="plat.id" class="space-y-2 border-b border-medical-50 pb-3 last:border-0 last:pb-0">
                     <div class="flex justify-between items-center">
                       <span class="text-[10px] font-bold text-medical-600 font-mono">{{ plat.name }} // {{ plat.tokenName }}</span>
-                      <button
-                        @click="togglePlatform(plat.id)"
-                        class="w-8 h-4 rounded-full relative transition-colors"
-                        :class="playerStore.config[`${plat.id}Enabled`] ? 'bg-accent' : 'bg-medical-300'"
-                      >
-                        <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-surface rounded-full transition-transform duration-300" :style="{ transform: playerStore.config[`${plat.id}Enabled`] ? 'translateX(16px)' : 'translateX(0)' }"></div>
-                      </button>
+                      <RoundSwitch :model-value="playerStore.config[`${plat.id}Enabled`]" @update:model-value="togglePlatform(plat.id)" :label="`${plat.name}平台`" />
                     </div>
                     <NeteaseQrLogin v-if="plat.id==='netease'" />
                     <label class="block text-[11px] font-bold text-medical-500">{{ plat.id==='netease'?'手动更新网易云 Cookie':'手动更新B站Cookie' }}</label>
@@ -287,6 +268,7 @@
 </template>
 
 <script setup>
+import RoundSwitch from './RoundSwitch.vue';
 import { ref, computed, watch } from 'vue';
 import { useAdminStore } from '../stores/admin';
 import { usePlayerStore } from '../stores/player';

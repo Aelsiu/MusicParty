@@ -101,13 +101,7 @@
               <p class="text-xs font-bold text-medical-500">可视化</p>
               <p class="text-xs text-medical-400 mt-1">让丝带与环形频谱随音乐舞动</p>
             </div>
-            <button @click="uiStore.visualizationEnabled = !uiStore.visualizationEnabled"
-                    role="switch" :aria-checked="uiStore.visualizationEnabled" aria-label="可视化"
-                    class="relative flex-shrink-0 w-12 h-6 border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
-                    :class="uiStore.visualizationEnabled ? 'border-accent bg-accent/15' : 'border-medical-300 bg-medical-100'">
-              <span class="absolute top-0.5 left-0.5 w-4 h-4 transition-transform duration-200"
-                    :class="uiStore.visualizationEnabled ? 'translate-x-6 bg-accent' : 'bg-medical-400'"></span>
-            </button>
+            <RoundSwitch v-model="uiStore.visualizationEnabled" label="可视化" />
           </div>
           <div>
             <p class="text-xs font-bold text-medical-500 mb-2">歌词提前显示</p>
@@ -131,6 +125,7 @@
 <script setup>
 import { computed, reactive, watch } from 'vue';
 import { Settings, Unlink2, X } from 'lucide-vue-next';
+import RoundSwitch from './RoundSwitch.vue';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
 import { usePlayerStore } from '../stores/player';

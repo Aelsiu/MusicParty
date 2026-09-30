@@ -5,6 +5,7 @@ import { Search, Settings, Users, ListMusic, X, Minimize2, Maximize2, Volume2, A
 import UserList from '../UserList.vue';
 import QueueList from '../QueueList.vue';
 import CoverImage from '../CoverImage.vue';
+import RoundSwitch from '../RoundSwitch.vue';
 import { useUserStore } from '../../stores/user';
 import { useUiStore } from '../../stores/ui';
 import { usePlayerStore } from '../../stores/player';
@@ -196,12 +197,7 @@ const handleSearchClick = () => {
 
         <!-- 后台自动精简开关 (变色优化) -->
         <label class="flex items-center gap-2 cursor-pointer group select-none">
-           <div class="relative w-8 h-4 rounded-full transition-colors duration-300"
-                :class="uiStore.autoLiteMode ? 'bg-accent' : 'bg-medical-200'">
-              <input type="checkbox" v-model="uiStore.autoLiteMode" class="hidden" />
-              <div class="absolute left-0.5 top-0.5 w-3 h-3 bg-surface rounded-full transition-transform duration-300"
-                   :style="{ transform: uiStore.autoLiteMode ? 'translateX(16px)' : 'translateX(0)' }"></div>
-           </div>
+           <RoundSwitch v-model="uiStore.autoLiteMode" label="后台播放时自动进入精简模式" />
            <span class="text-[10px] font-mono text-medical-400 group-hover:text-medical-600 transition-colors">
               后台播放时自动进入精简模式
            </span>

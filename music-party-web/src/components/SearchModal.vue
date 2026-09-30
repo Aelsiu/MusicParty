@@ -43,7 +43,7 @@
           <input
               v-model="keyword"
               @keyup.enter="handleSearchAction"
-              :placeholder="mode === 'likesong' ? '搜索点赞的歌曲...' : '搜索音乐...'"
+              :placeholder="mode === 'likesong' ? '搜索点赞的歌曲...' : '在曲库中搜索...'"
               class="flex-1 min-w-0 border px-3 py-2 outline-none transition-colors duration-300 font-sans bg-medical-100 border-medical-200 focus:border-accent"
           />
           <button
@@ -53,10 +53,6 @@
             SEARCH
           </button>
         </div>
-      </div>
-
-      <div v-if="mode !== 'likesong'" class="p-2 md:p-3 bg-medical-100 border-b border-medical-200 text-xs font-bold text-medical-500 font-sans flex-shrink-0">
-        用户歌单
       </div>
 
       <!-- 内容区 -->

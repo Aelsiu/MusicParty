@@ -77,7 +77,7 @@ watch(audioRef, (audio, previous) => {
   previous?.pause();
   audioSpectrum.dispose();
   if (!audio) return;
-  audio.volume = ui.volume;
+  audio.volume = ui.audioVolume;
   if (spectrumMode.value) {
     try {
       audioSpectrum.attach(audio);
@@ -125,7 +125,7 @@ watch(isErrorState, (val) => {
 });
 
 // 监听音量
-watch(() => ui.volume, (newVol) => {
+watch(() => ui.audioVolume, (newVol) => {
   if (audioRef.value) {
     audioRef.value.volume = newVol;
   }
@@ -143,7 +143,7 @@ onMounted(() => {
   document.addEventListener('pointerdown', audioResume);
   document.addEventListener('keydown', audioResume);
   if (audioRef.value) {
-    audioRef.value.volume = ui.volume;
+    audioRef.value.volume = ui.audioVolume;
   }
 });
 

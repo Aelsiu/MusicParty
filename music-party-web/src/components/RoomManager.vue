@@ -35,9 +35,8 @@
         </template>
         <form v-else-if="view==='create'" @submit.prevent="submitRoom">
           <label for="new-room-name" class="text-xs font-bold text-medical-500 block mb-2">房间名</label>
-          <input id="new-room-name" v-model="roomName" type="text" inputmode="text" autocomplete="off" :spellcheck="false" @compositionstart="composing=true" @compositionend="composing=false" @keydown.enter="guardComposition" class="w-full bg-medical-50 border border-medical-200 px-3 py-3 text-base" placeholder="请输入房间名">
+          <input id="new-room-name" v-model="roomName" type="text" inputmode="text" autocomplete="off" :spellcheck="false" @compositionstart="composing=true" @compositionend="composing=false" @keydown.enter="guardComposition" class="w-full bg-medical-50 border border-medical-200 px-3 py-3 text-base" placeholder="名称可重复">
           <p class="text-[11px] text-medical-400 mt-2">{{ graphemes(roomName).length }} / 16 · 中文与 emoji 均可</p>
-          <p class="text-[11px] text-medical-400 mt-3">名称可重复，房间由唯一 ID 区分</p>
           <div class="flex gap-2 mt-6"><button type="button" @click="cancelEdit" class="flex-1 border border-medical-200 py-3 text-xs font-bold">CANCEL</button><button :disabled="busy||composing" class="flex-1 bg-accent text-white py-3 text-xs font-bold disabled:opacity-40">{{ busy?'CREATING...':'CREATE ROOM' }}</button></div>
         </form>
         <form v-else @submit.prevent="submitLicense">

@@ -1,9 +1,10 @@
 // src/stores/ui.js
 import { defineStore } from 'pinia';
-import { ref, watch } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { STORAGE_KEYS } from '../constants/keys';
 import client from '../api/client';
 import { DEFAULT_CUSTOM_THEME, deriveCustomPalette, normalizeCustomTheme } from '../utils/customTheme';
+import { clampVolume, readSavedVolume, volumeToGain } from '../utils/volumeMapping';
 
 const themeNames = ['classic', 'night', 'blue', 'night-blue', 'green', 'night-green', 'custom'];
 const customThemeKey = 'mp_custom_theme';
@@ -26,7 +27,8 @@ document.documentElement.dataset.theme = initialTheme;
 
 export const useUiStore = defineStore('ui', () => {
     const isLiteMode = ref(false);
-    const volume = ref(parseFloat(localStorage.getItem(STORAGE_KEYS.VOLUME) ?? '0.1'));
+    const volume = ref(readSavedVolume(localStorage.getItem(STORAGE_KEYS.VOLUME)));
+    const audioVolume = computed(() => volumeToGain(volume.value));
     const autoLiteMode = ref(localStorage.getItem('mp_auto_lite_mode') !== 'false'); // 默认 true
     const lyricPreviewLines = ref([0, 1, 2].includes(savedLyricPreviewLines) ? savedLyricPreviewLines : 0);
     const visualizationEnabled = ref(localStorage.getItem(STORAGE_KEYS.VISUALIZATION) === 'true');
@@ -88,7 +90,7 @@ export const useUiStore = defineStore('ui', () => {
     };
 
     const setVolume = (val) => {
-        volume.value = Math.max(0, Math.min(1, val));
+        volume.value = clampVolume(val);
     };
 
     const setLyricPreviewLines = (count) => {
@@ -105,9 +107,9 @@ export const useUiStore = defineStore('ui', () => {
         }
     };
 
-    // 监听音量变化并持久化
+    // 始终保存实际输出值，兼容旧线性音量记忆，避免重载时再次迁移
     watch(volume, (newVal) => {
-        localStorage.setItem(STORAGE_KEYS.VOLUME, newVal.toString());
+        localStorage.setItem(STORAGE_KEYS.VOLUME, String(volumeToGain(newVal)));
     });
 
     watch(autoLiteMode, (newVal) => {
@@ -126,6 +128,7 @@ export const useUiStore = defineStore('ui', () => {
         isLiteMode,
         toggleLiteMode,
         volume,
+        audioVolume,
         setVolume,
         lyricPreviewLines,
         setLyricPreviewLines,
