@@ -50,7 +50,7 @@
               v-for="(line, i) in activeLines"
               :key="`${line.time}-${i}`"
               class="w-full transition-all duration-300"
-              :class="i === currentVisibleIndex ? 'opacity-100 text-accent' : i > currentVisibleIndex ? 'opacity-70 text-medical-700' : 'opacity-40 blur-[0.5px]'"
+              :class="i === currentVisibleIndex ? 'opacity-100 text-accent active-lyric' : i > currentVisibleIndex ? 'opacity-70 text-medical-700' : 'opacity-40 blur-[0.5px]'"
           >
             <div
                 :ref="el => setLineRef(el, i)"
@@ -97,10 +97,10 @@
       <div class="relative">
         <div v-if="actualQualityLabel" class="absolute -top-4 left-0 text-[10px] font-mono text-accent flex items-center gap-2 z-20 select-none">
           <span class="font-bold text-medical-500 border-b border-medical-300 leading-tight">P_QUAL</span>
-          <span>{{ actualQualityLabel }}</span>
+          <span class="theme-label-glow">{{ actualQualityLabel }}</span>
         </div>
         <div v-if="player.nowPlaying?.enqueuedById" class="absolute -top-4 right-0 text-[10px] font-mono text-accent flex items-center gap-2 z-20 select-none">
-          <span>REQ_BY</span>
+          <span class="theme-label-glow">REQ_BY</span>
           <span class="font-bold text-medical-500 border-b border-medical-300 leading-tight">
             {{ userStore.resolveName(player.nowPlaying.enqueuedById, player.nowPlaying.enqueuedByName) }}
           </span>
@@ -500,6 +500,13 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.theme-label-glow {
+  text-shadow: 0 0 2px rgb(var(--medical-500) / 0.5), 0 0 5px rgb(var(--accent) / 0.3);
+}
+.active-lyric {
+  text-shadow: 0 1px 2px rgb(var(--overlay) / 0.24), 0 0 3px rgb(var(--medical-50) / 0.65);
+}
+
 /*
  * 移动端长歌词滚动：黑底固定不动，仅文字在槽内滚动。
  * 起点：首字母贴黑底左缘（translateX(0)）；终点：末字母右缘贴黑底右缘（--mp-scroll-dist）。

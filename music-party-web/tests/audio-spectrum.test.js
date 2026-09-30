@@ -53,13 +53,16 @@ test('frequency sampling is capped at 30 Hz and reuses the same buffers', () => 
     const spectrum = createSpectrum();
     spectrum.setActive(true);
     const buffer = spectrum.bins;
+    const columns = spectrum.bars;
     const bands = spectrum.readBands(0);
     assert.equal(spectrum.readBands(16), bands);
     assert.equal(spectrum.analyser.reads, 1);
     spectrum.readBands(34);
     assert.equal(spectrum.analyser.reads, 2);
     assert.equal(spectrum.bins, buffer);
+    assert.equal(spectrum.bars, columns);
     for (const energy of bands) assert.ok(Math.abs(energy - 128 / 255) < 0.00001);
+    for (const energy of columns) assert.ok(Math.abs(energy - 128 / 255) < 0.00001);
     spectrum.dispose();
 });
 
@@ -69,10 +72,33 @@ test('pausing or buffering returns zero energy without reading the FFT', () => {
     spectrum.readBands(0);
     spectrum.audio.paused = true;
     assert.deepEqual([...spectrum.readBands(100)], [0, 0, 0]);
+    assert.ok(spectrum.bars.every(value => value === 0));
     spectrum.audio.paused = false;
     spectrum.audio.readyState = 1;
     assert.deepEqual([...spectrum.readBands(200)], [0, 0, 0]);
+    assert.ok(spectrum.bars.every(value => value === 0));
     assert.equal(spectrum.analyser.reads, 1);
+    spectrum.dispose();
+});
+
+test('ring columns distinguish low and high frequencies and join smoothly at the seam', () => {
+    const spectrum = createSpectrum();
+    spectrum.setActive(true);
+    let peakBin = 1;
+    spectrum.analyser.getByteFrequencyData = (buffer) => {
+        buffer.fill(0);
+        buffer[peakBin] = 255;
+    };
+    spectrum.readBands(0);
+    const lowPeak = spectrum.bars.indexOf(Math.max(...spectrum.bars));
+    peakBin = 50;
+    spectrum.readBands(34);
+    const highPeak = spectrum.bars.indexOf(Math.max(...spectrum.bars));
+    assert.ok(highPeak > lowPeak + 5);
+    assert.ok(spectrum.bars.some(value => value > 0));
+    for (let i = 0; i < spectrum.bars.length / 2; i++) {
+        assert.equal(spectrum.bars[i], spectrum.bars[spectrum.bars.length - 1 - i]);
+    }
     spectrum.dispose();
 });
 

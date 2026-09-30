@@ -38,6 +38,7 @@ export class AudioVisualizer {
 
         // 配置参数 (Performance Optimized)
         this.breatheBars = 60; // Reduced from 120
+        this.smoothBars = new Float32Array(this.breatheBars);
         this.breatheRadiusBase = 180;
 
         // 圆环定义
@@ -89,7 +90,10 @@ export class AudioVisualizer {
 
     setSpectrumEnabled(enabled) {
         this.spectrumEnabled = enabled;
-        if (!enabled) this.smoothBands.fill(0);
+        if (!enabled) {
+            this.smoothBands.fill(0);
+            this.smoothBars.fill(0);
+        }
     }
 
     /**
@@ -227,13 +231,22 @@ export class AudioVisualizer {
         });
         ctx.restore();
 
-        // --- 3. 绘制呼吸态频谱 (前景灰色) ---
+        // --- 3. 绘制环形频谱；关闭可视化时保留原呼吸动画 ---
         ctx.globalCompositeOperation = 'source-over';
         this.breatheOffset += 0.05 * step;
 
         for (let i = 0; i < this.breatheBars; i++) {
             const angle = (Math.PI * 2 * i) / this.breatheBars;
-            const h = Math.sin(i * 0.5 + Date.now() / 500) * 5 + 5;
+            let h;
+            if (this.spectrumEnabled) {
+                const values = audioSpectrum.bars;
+                const target = bands ? (values[(i + this.breatheBars - 1) % this.breatheBars] + values[i] * 2 + values[(i + 1) % this.breatheBars]) / 4 : 0;
+                const response = target > this.smoothBars[i] ? 0.38 : 0.13;
+                this.smoothBars[i] += (target - this.smoothBars[i]) * (1 - (1 - response) ** step);
+                h = 2 + this.smoothBars[i] * 48;
+            } else {
+                h = Math.sin(i * 0.5 + Date.now() / 500) * 5 + 5;
+            }
 
             const startX = center + Math.cos(angle) * (this.breatheRadiusBase + 10);
             const startY = center + Math.sin(angle) * (this.breatheRadiusBase + 10);

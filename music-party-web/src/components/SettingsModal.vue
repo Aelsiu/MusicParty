@@ -99,7 +99,7 @@
           <div class="flex items-center justify-between gap-4">
             <div>
               <p class="text-xs font-bold text-medical-500">可视化</p>
-              <p class="text-xs text-medical-400 mt-1">让背景丝带随音乐舞动</p>
+              <p class="text-xs text-medical-400 mt-1">让丝带与环形频谱随音乐舞动</p>
             </div>
             <button @click="uiStore.visualizationEnabled = !uiStore.visualizationEnabled"
                     role="switch" :aria-checked="uiStore.visualizationEnabled" aria-label="可视化"

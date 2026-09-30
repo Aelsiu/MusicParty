@@ -7,6 +7,7 @@ export class AudioSpectrum {
         this.audio = null;
         this.active = false;
         this.bands = new Float32Array(3);
+        this.bars = new Float32Array(60);
         this.lastReadAt = -Infinity;
     }
 
@@ -24,6 +25,12 @@ export class AudioSpectrum {
         const binHz = this.context.sampleRate / this.analyser.fftSize;
         this.ranges = [40, 250, 2000, 10000].map(hz =>
             Math.min(this.bins.length, Math.max(1, Math.round(hz / binHz))));
+        // 半圈按对数频率分配，另一半镜像衔接，避免圆环首尾突然跳变。
+        const half = this.bars.length / 2;
+        this.barRanges = new Uint16Array(half + 1);
+        for (let i = 0; i <= half; i++) {
+            this.barRanges[i] = Math.min(this.bins.length - 1, Math.max(1, Math.round(50 * (10000 / 50) ** (i / half) / binHz)));
+        }
         this.source = this.context.createMediaElementSource(audio);
         // 保持原音频直接输出，分析器仅作旁路，不改变音量或音质。
         this.source.connect(this.context.destination);
@@ -41,6 +48,7 @@ export class AudioSpectrum {
         else this.source.disconnect(this.analyser);
         this.active = next;
         this.bands.fill(0);
+        this.bars.fill(0);
         this.lastReadAt = -Infinity;
     }
 
@@ -48,6 +56,7 @@ export class AudioSpectrum {
         if (!this.active || this.audio.paused || this.audio.ended
                 || this.audio.readyState < 2 || this.context.state !== 'running') {
             this.bands.fill(0);
+            this.bars.fill(0);
             return this.bands;
         }
         if (now - this.lastReadAt < 1000 / 30) return this.bands;
@@ -59,6 +68,15 @@ export class AudioSpectrum {
             let energy = 0;
             for (let i = start; i < end; i++) energy += (this.bins[i] / 255) ** 2;
             this.bands[band] = Math.sqrt(energy / (end - start));
+        }
+        // 与丝带共用本次 FFT 和缓冲区，不增加频谱采样次数。
+        const half = this.bars.length / 2;
+        for (let bar = 0; bar < half; bar++) {
+            const start = this.barRanges[bar];
+            const end = Math.max(start + 1, this.barRanges[bar + 1]);
+            let energy = 0;
+            for (let i = start; i < end; i++) energy += (this.bins[i] / 255) ** 2;
+            this.bars[bar] = this.bars[this.bars.length - 1 - bar] = Math.sqrt(energy / (end - start));
         }
         return this.bands;
     }
@@ -73,6 +91,7 @@ export class AudioSpectrum {
         this.audio = null;
         this.active = false;
         this.bands.fill(0);
+        this.bars.fill(0);
     }
 }
 
