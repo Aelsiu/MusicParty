@@ -22,6 +22,7 @@ export class AudioSpectrum {
         this.analyser.minDecibels = -85;
         this.analyser.maxDecibels = -25;
         this.bins = new Uint8Array(this.analyser.frequencyBinCount);
+        this.floatBins = new Float32Array(this.analyser.frequencyBinCount);
         const binHz = this.context.sampleRate / this.analyser.fftSize;
         this.ranges = [40, 250, 2000, 10000].map(hz =>
             Math.min(this.bins.length, Math.max(1, Math.round(hz / binHz))));
@@ -69,14 +70,22 @@ export class AudioSpectrum {
             for (let i = start; i < end; i++) energy += (this.bins[i] / 255) ** 2;
             this.bands[band] = Math.sqrt(energy / (end - start));
         }
-        // 与丝带共用本次 FFT 和缓冲区，不增加频谱采样次数。
+        // 圆形读取同一次 FFT 的完整分贝值，避免强音在 byte 转换时被截成相同高度。
+        // 丝带继续使用上面的 byte 数据，保留原来的响应。
+        this.analyser.getFloatFrequencyData(this.floatBins);
         const half = this.bars.length / 2;
         for (let bar = 0; bar < half; bar++) {
             const start = this.barRanges[bar];
             const end = Math.max(start + 1, this.barRanges[bar + 1]);
-            let energy = 0;
-            for (let i = start; i < end; i++) energy += (this.bins[i] / 255) ** 2;
-            this.bars[bar] = this.bars[this.bars.length - 1 - bar] = Math.sqrt(energy / (end - start));
+            let power = 0;
+            for (let i = start; i < end; i++) {
+                const decibels = this.floatBins[i];
+                if (Number.isFinite(decibels)) power += 10 ** (decibels / 10);
+            }
+            const decibels = power > 0 ? 10 * Math.log10(power / (end - start)) : -Infinity;
+            // -80dB 以下留在底部；强音保留层次，只有接近 -5dB 才触及峰值。
+            const level = Math.max(0, Math.min(1, (decibels + 80) / 75)) ** 1.6;
+            this.bars[bar] = this.bars[this.bars.length - 1 - bar] = level;
         }
         return this.bands;
     }

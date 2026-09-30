@@ -79,7 +79,7 @@
               </div>
               <div class="flex gap-2">
                 <input v-model="userKeyword[accountPlatform.id]" @keyup.enter="searchUsers(accountPlatform.id)" :placeholder="accountPlatform.placeholder" :aria-label="accountPlatform.placeholder"
-                       class="flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 outline-none focus:border-accent text-medical-900" />
+                       class="placeholder-mono flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 outline-none focus:border-accent text-medical-900" />
                 <button @click="searchUsers(accountPlatform.id)" :disabled="searching[accountPlatform.id]" class="flex-shrink-0 px-3 py-2 bg-accent hover:bg-accent-hover text-white disabled:opacity-50">搜索</button>
               </div>
               <div v-if="searchResults[accountPlatform.id].length" class="border border-medical-200 max-h-48 overflow-y-auto">
@@ -96,26 +96,26 @@
 
         <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
           <h3 class="font-bold text-medical-900">其他设置</h3>
-          <div class="flex flex-wrap items-start gap-x-10 gap-y-5">
+          <div class="space-y-5">
             <div class="space-y-2">
-              <div class="flex items-center gap-3 h-7">
+              <div class="flex items-center justify-between gap-4 h-7">
                 <p class="text-xs font-bold text-medical-500">可视化</p>
                 <RoundSwitch v-model="uiStore.visualizationEnabled" label="可视化" />
               </div>
               <p class="info-tip text-xs text-medical-400">让丝带与环形频谱随音乐舞动</p>
             </div>
-            <div class="space-y-2">
+            <div class="flex items-center justify-between gap-4">
               <p class="text-xs font-bold text-medical-500 h-7 flex items-center">歌词提前显示</p>
-              <div class="lyric-slider relative inline-grid grid-cols-3 w-36 h-7 border border-medical-200 bg-medical-50 cursor-pointer" role="group" aria-label="歌词提前显示行数" @click="selectLyricSegment">
-              <span class="lyric-thumb absolute top-0 bottom-0 left-0 w-1/3 bg-accent/15 border border-accent pointer-events-none"
-                    :style="{ transform: `translateX(${uiStore.lyricPreviewLines * 100}%)` }"></span>
-              <button v-for="count in [0, 1, 2]" :key="count" @click.stop="uiStore.setLyricPreviewLines(count)"
-                      :aria-pressed="uiStore.lyricPreviewLines === count"
-                      class="relative z-10 text-[11px] font-mono transition-colors"
-                      :class="uiStore.lyricPreviewLines === count ? 'text-accent font-bold' : 'text-medical-600 font-normal hover:text-accent'">
-                {{ count }}Line
-              </button>
-            </div>
+              <div class="lyric-slider relative inline-grid grid-cols-3 w-36 h-7 shrink-0 border border-medical-200 bg-medical-50 cursor-pointer" role="group" aria-label="歌词提前显示行数" @click="selectLyricSegment">
+                <span class="lyric-thumb absolute top-0 bottom-0 left-0 w-1/3 bg-accent/15 border border-accent pointer-events-none"
+                      :style="{ transform: `translateX(${uiStore.lyricPreviewLines * 100}%)` }"></span>
+                <button v-for="count in [0, 1, 2]" :key="count" @click.stop="uiStore.setLyricPreviewLines(count)"
+                        :aria-pressed="uiStore.lyricPreviewLines === count"
+                        class="relative z-10 text-[11px] font-mono transition-colors"
+                        :class="uiStore.lyricPreviewLines === count ? 'text-accent font-bold' : 'text-medical-600 font-normal hover:text-accent'">
+                  {{ count }}Line
+                </button>
+              </div>
             </div>
           </div>
         </section>

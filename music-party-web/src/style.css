@@ -4,7 +4,7 @@
 
 .info-tip::before { content: 'ⓘ '; font-weight: normal; }
 
-/* 所有输入提示共用主题色与轻量字形，避免继承标题的粗体或代码字体。 */
+/* 输入提示共用主题色与常规字重，指定字段使用播放器的等宽字体。 */
 input::placeholder,
 textarea::placeholder {
   @apply font-sans;
@@ -14,6 +14,15 @@ textarea::placeholder {
   font-weight: 400;
   font-style: normal;
   letter-spacing: .025em;
+}
+
+input.placeholder-mono::placeholder {
+  @apply font-mono;
+  letter-spacing: normal;
+}
+
+input.placeholder-cookie::placeholder {
+  font-size: 10px;
 }
 
 :root,

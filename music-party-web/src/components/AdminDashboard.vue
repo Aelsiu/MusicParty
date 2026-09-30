@@ -235,7 +235,7 @@
                         type="password"
                         v-model="plat.value"
                         :placeholder="'输入新 ' + plat.tokenName + '...'"
-                        class="flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 text-base focus:border-accent"
+                        class="placeholder-mono placeholder-cookie flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 text-base focus:border-accent"
                       />
                       <button @click="updateCookie(plat.id, plat.value)" class="bg-strong text-white px-3 font-bold text-[10px] hover:bg-accent transition-colors">更新</button>
                     </div>
@@ -250,7 +250,7 @@
                   <span class="text-xs font-bold uppercase tracking-widest font-mono">数据清理 / Data_Cleanup</span>
                 </div>
                 <div class="p-4 space-y-2">
-                  <button v-for="target in cleanupTargets" :key="target.id" @click="clearData(target.id)"
+                  <button v-for="target in cleanupTargets" :key="target.id" @click="requestCleanup(target)"
                           class="w-full flex items-center gap-3 p-3 bg-medical-50 border border-medical-200 text-left transition-colors group hover:border-accent focus-visible:border-accent focus-visible:outline-none">
                     <span class="p-2 bg-surface text-medical-400 group-hover:text-accent group-focus-visible:text-accent transition-colors">
                       <component :is="target.icon" class="w-4 h-4" />
@@ -259,7 +259,6 @@
                       <span class="text-[10px] font-bold text-medical-800">{{ target.label }}</span>
                       <span class="text-[8px] text-medical-400 font-mono tracking-wider">{{ target.code }}</span>
                     </span>
-                    <Trash2 class="w-4 h-4 flex-shrink-0 text-medical-400 group-hover:text-accent group-focus-visible:text-accent transition-colors" />
                   </button>
                 </div>
               </div>
@@ -286,6 +285,16 @@
       </div>
     </div>
   </Transition>
+  <ConfirmDialog
+    :open="Boolean(pendingCleanup)"
+    title="数据清理 / DATA_CLEANUP"
+    :message="pendingCleanup?.message || ''"
+    confirm-label="确认清理"
+    :busy="cleanupBusy"
+    :error-message="cleanupError"
+    @cancel="cancelCleanup"
+    @confirm="confirmCleanup"
+  />
 </template>
 
 <script setup>
@@ -297,6 +306,7 @@ import { adminApi } from '../api/admin';
 import { useToast } from '../composables/useToast';
 import RoomPairingCard from './RoomPairingCard.vue';
 import NeteaseQrLogin from './NeteaseQrLogin.vue';
+import ConfirmDialog from './ConfirmDialog.vue';
 import { roomSession } from '../services/roomSession';
 import {
   Settings, X, Pause, Play, SkipForward, ListOrdered, Repeat1, Shuffle,
@@ -382,10 +392,18 @@ const platforms = ref([
 ]);
 
 const cleanupTargets = [
-  { id: 'QUEUE', label: '清理播放队列', code: 'PLAYBACK_QUEUE', icon: ListMusic },
-  { id: 'OFFLINE', label: '清理不在线成员歌曲', code: 'OFFLINE_MEMBER_SONGS', icon: UserMinus },
-  { id: 'CHAT', label: '清理聊天记录', code: 'CHAT_HISTORY', icon: MessageSquare }
+  { id: 'QUEUE', label: '清理播放队列', code: 'PLAYBACK_QUEUE', icon: ListMusic, message: '确定要清空本房间的播放队列吗？' },
+  { id: 'OFFLINE', label: '清理不在线成员歌曲', code: 'OFFLINE_MEMBER_SONGS', icon: UserMinus, message: '确定要清理本房间中不在线成员的点播歌曲吗？' },
+  { id: 'CHAT', label: '清理聊天记录', code: 'CHAT_HISTORY', icon: MessageSquare, message: '确定要清空本房间的聊天记录吗？' }
 ];
+const pendingCleanup = ref(null);
+const cleanupBusy = ref(false);
+const cleanupError = ref('');
+
+watch(() => [adminStore.showDashboard, roomSession.roomId], () => {
+  pendingCleanup.value = null;
+  cleanupError.value = '';
+}, { flush: 'sync' });
 
 // 私人电台/私人DJ 状态（来自 config.privateDj，服务端广播；mode 即开关：OFF=关闭/FM=私人FM/DJ=私人DJ）
 const privateDj = computed(() => playerStore.config.privateDj || {
@@ -450,19 +468,33 @@ const toggleStream = async () => {
   }
 };
 
-const clearData = async (target) => {
-  const targetName = {
-    'QUEUE': '播放队列',
-    'OFFLINE': '不在线成员的点播歌曲',
-    'CHAT': '聊天记录'
-  }[target] || target;
+const requestCleanup = (target) => {
+  if (cleanupBusy.value) return;
+  pendingCleanup.value = { ...target, roomId: roomSession.roomId };
+  cleanupError.value = '';
+};
 
-  if (!confirm(`确定要清空 ${targetName} 吗?`)) return;
+const cancelCleanup = () => {
+  if (cleanupBusy.value) return;
+  pendingCleanup.value = null;
+  cleanupError.value = '';
+};
+
+const confirmCleanup = async () => {
+  const target = pendingCleanup.value;
+  if (!target || cleanupBusy.value || !adminStore.showDashboard || target.roomId !== roomSession.roomId) return;
+  cleanupBusy.value = true;
+  cleanupError.value = '';
   try {
-    const data = await adminApi.clearData(adminStore.adminPassword, target);
-    warning(data.message);
+    const data = await adminApi.clearData(adminStore.adminPassword, target.id);
+    if (pendingCleanup.value === target) {
+      pendingCleanup.value = null;
+      warning(data.message);
+    }
   } catch (e) {
-    error('清理操作失败');
+    if (pendingCleanup.value === target) cleanupError.value = e.response?.data?.message || '清理操作失败，请重试';
+  } finally {
+    cleanupBusy.value = false;
   }
 };
 

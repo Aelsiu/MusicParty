@@ -241,7 +241,8 @@ export class AudioVisualizer {
             if (this.spectrumEnabled) {
                 const values = audioSpectrum.bars;
                 const target = bands ? (values[(i + this.breatheBars - 1) % this.breatheBars] + values[i] * 2 + values[(i + 1) % this.breatheBars]) / 4 : 0;
-                const response = target > this.smoothBars[i] ? 0.38 : 0.13;
+                // 保留快速抬升，稍快回落，减少强拍过后的高柱停留。
+                const response = target > this.smoothBars[i] ? 0.38 : 0.18;
                 this.smoothBars[i] += (target - this.smoothBars[i]) * (1 - (1 - response) ** step);
                 h = 2 + this.smoothBars[i] * 48;
             } else {

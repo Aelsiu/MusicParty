@@ -44,7 +44,7 @@
               v-model="keyword"
               @keyup.enter="handleSearchAction"
               :placeholder="mode === 'likesong' ? '搜索点赞的歌曲...' : '在曲库中搜索...'"
-              class="flex-1 min-w-0 border px-3 py-2 outline-none transition-colors duration-300 font-sans bg-medical-100 border-medical-200 focus:border-accent"
+              class="placeholder-mono flex-1 min-w-0 border px-3 py-2 outline-none transition-colors duration-300 font-sans bg-medical-100 border-medical-200 focus:border-accent"
           />
           <button
               @click="handleSearchAction"
