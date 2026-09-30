@@ -12,6 +12,7 @@ import org.thornex.musicparty.dto.User;
 import org.thornex.musicparty.enums.PlayerAction;
 
 @Component
+@org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 @Slf4j
 public class AdminCommand implements ChatCommand {

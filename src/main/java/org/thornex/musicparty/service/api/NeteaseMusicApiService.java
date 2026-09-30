@@ -20,6 +20,7 @@ import java.util.List;
 import java.util.stream.StreamSupport;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class NeteaseMusicApiService implements IMusicApiService {
 
@@ -67,7 +68,7 @@ public class NeteaseMusicApiService implements IMusicApiService {
         });
     }
 
-    private Mono<Boolean> checkCookie(String cookie) {
+    public Mono<Boolean> checkCookie(String cookie) {
         return webClient.get()
                 .uri(baseUrl + "/user/account?cookie={cookie}", cookie)
                 .retrieve()

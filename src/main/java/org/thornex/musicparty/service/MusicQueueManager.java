@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 public class MusicQueueManager {
 

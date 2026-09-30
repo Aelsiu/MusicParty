@@ -3,11 +3,17 @@
 This project (Music Party Launcher) bundles or interacts with the following third-party software:
 
 ## 1. NeteaseCloudMusicApi (api-enhanced)
-- **Source**: [https://github.com/Binaryify/NeteaseCloudMusicApi](https://github.com/Binaryify/NeteaseCloudMusicApi)
+- **Source**: [NeteaseCloudMusicApiEnhanced/api-enhanced](https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced)
 - **License**: MIT License
 - **Copyright**: Copyright (c) 2017-2024 Binaryify
 
 ---
+
+The launcher also bundles Node.js 22, its upstream LICENSE file is included with the runtime assets
+https://github.com/nodejs/node/blob/main/LICENSE
+
+The backend bundles SQLite JDBC (Apache 2.0 / BSD 2-Clause), SQLite itself is in the public domain
+https://github.com/xerial/sqlite-jdbc
 
 ## MIT License Text
 

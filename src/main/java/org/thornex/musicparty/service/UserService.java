@@ -16,6 +16,7 @@ import java.util.concurrent.*;
 import java.util.stream.Collectors;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class UserService {
 
@@ -28,11 +29,20 @@ public class UserService {
     private final ApplicationEventPublisher eventPublisher;
 
     // 延迟任务调度器，用于处理断连抖动
-    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    private final ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor(r -> { Thread thread = new Thread(org.thornex.musicparty.room.RoomContext.capture(r), "room-user-grace"); thread.setDaemon(true); return thread; });
     private final Map<String, ScheduledFuture<?>> pendingLeaveEvents = new ConcurrentHashMap<>();
 
     private static final long USER_EXPIRATION_MS = 1 * 60 * 60 * 1000L;
     private static final long LEAVE_DELAY_SEC = 10; // 10秒延迟判定真正离开
+
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.room.RoomRepository profiles;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.room.RoomLifecycleService lifecycle;
+    private final com.fasterxml.jackson.databind.ObjectMapper profileMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+    private void saveProfile(User user) { if (profiles != null) try { profiles.saveProfile(user.getToken(), profileMapper.writeValueAsString(java.util.Map.of("name", user.getName(), "bindings", user.getBindings()))); } catch (java.io.IOException e) { throw new IllegalStateException(e); } }
+    private void loadProfile(User user) { if (profiles != null) { String value = profiles.profile(user.getToken()); if (value != null) try { var data = profileMapper.readTree(value); user.setName(data.path("name").asText(user.getName())); user.setGuest(false); user.getBindings().clear(); data.path("bindings").fields().forEachRemaining(e -> user.getBindings().put(e.getKey(), e.getValue().asText())); } catch (java.io.IOException e) { throw new IllegalStateException(e); } } }
+    @jakarta.annotation.PreDestroy public void stop() { scheduler.shutdownNow(); }
 
     public UserService(ApplicationEventPublisher eventPublisher) {
         this.eventPublisher = eventPublisher;
@@ -66,9 +76,6 @@ public class UserService {
 
             log.info("User Reconnected: {} (Token: {}) -> New Session: {}", user.getName(), user.getToken(), sessionId);
             // ... (保持原有逻辑)
-            if (user.getSessionId() != null) {
-                sessionToToken.remove(user.getSessionId());
-            }
             user.setSessionId(sessionId);
         }
         // 2. 新用户注册
@@ -78,7 +85,9 @@ public class UserService {
             initialName = deduplicateName(initialName);
 
             user = new User(newToken, sessionId, initialName);
+            loadProfile(user);
             usersByToken.put(newToken, user);
+            if (!user.isGuest()) saveProfile(user);
             log.info("New User Registered: {} (Token: {})", initialName, newToken);
             // 注意：新注册的游客不发加入日志，只有改名后才发
         }
@@ -98,7 +107,7 @@ public class UserService {
             // 🟢 关键修复：多标签页支持
             // 只有当断开的 Session ID 等于用户当前的主 Session ID 时，才认为用户真的掉线了
             // 如果不等，说明用户已经连接了新的 Session (比如打开了新标签页，关闭了旧标签页)，此时忽略旧连接的断开
-            if (sessionId.equals(user.getSessionId())) {
+            if (!sessionToToken.containsValue(token)) {
                 user.setSessionId(null); // 标记离线
                 user.setLastActiveTime(System.currentTimeMillis());
                 log.info("User Offline (Pending Confirmation): {}", user.getName());
@@ -117,6 +126,7 @@ public class UserService {
                 eventPublisher.publishEvent(new UserCountChangeEvent(this, getOnlineUserSummaries().size()));
                 return Optional.of(user);
             } else {
+                if (sessionId.equals(user.getSessionId())) user.setSessionId(sessionToToken.entrySet().stream().filter(e -> e.getValue().equals(token)).map(java.util.Map.Entry::getKey).findFirst().orElse(null));
                 log.debug("Ignored disconnect for stale session {} (Current: {})", sessionId, user.getSessionId());
             }
         }
@@ -126,7 +136,8 @@ public class UserService {
     public Optional<User> getUserBySession(String sessionId) {
         String token = sessionToToken.get(sessionId);
         if (token == null) return Optional.empty();
-        return Optional.ofNullable(usersByToken.get(token));
+        User user = usersByToken.get(token); if (user != null) loadProfile(user);
+        return Optional.ofNullable(user);
     }
 
     public Optional<User> getUser(String sessionId) {
@@ -162,7 +173,8 @@ public class UserService {
 
             log.info("User Renamed: '{}' -> '{}'", oldName, finalName);
             user.setName(finalName);
-            user.setGuest(false); // 改名成功，移除游客身份
+            user.setGuest(false);
+            saveProfile(user); // 改名成功，移除游客身份
 
             // 1. 如果是从游客变成正式用户 -> 发布加入事件
             if (wasGuest) {
@@ -195,12 +207,14 @@ public class UserService {
     public boolean bindAccount(String sessionId, String platform, String accountId) {
         return getUserBySession(sessionId).map(user -> {
             user.getBindings().put(platform, accountId);
+            saveProfile(user);
             return true;
         }).orElse(false);
     }
 
     public List<UserSummary> getOnlineUserSummaries() {
         return usersByToken.values().stream()
+                .peek(this::loadProfile)
                 // 只返回在线用户 (sessionId != null)
                 .filter(u -> u.getSessionId() != null)
                 .map(user -> new UserSummary(user.getToken(), user.getSessionId(), user.getName(), user.isGuest()))
@@ -209,14 +223,16 @@ public class UserService {
 
     /** 使空闲房间的现有会话失效；前端收到广播后主动断开并返回入口。 */
     public void kickOnlineUsersForIdle() {
+        sessionToToken.clear();
         usersByToken.values().forEach(user -> {
             String sessionId = user.getSessionId();
-            if (sessionId != null && sessionToToken.remove(sessionId, user.getToken())) {
+            if (sessionId != null) {
                 user.setSessionId(null);
                 user.setLastActiveTime(System.currentTimeMillis());
             }
         });
         eventPublisher.publishEvent(new UserCountChangeEvent(this, getOnlineUserSummaries().size()));
+        if (lifecycle != null) lifecycle.kickRoom(org.thornex.musicparty.room.RoomContext.require());
     }
 
     /**
@@ -229,7 +245,6 @@ public class UserService {
                 .collect(Collectors.toSet());
     }
 
-    @Scheduled(fixedRate = 3600000)
     public void cleanupExpiredUsers() {
         long now = System.currentTimeMillis();
         int initialSize = usersByToken.size();
@@ -254,6 +269,7 @@ public class UserService {
     }
 
     public Optional<User> getUserByToken(String token) {
-        return Optional.ofNullable(usersByToken.get(token));
+        User user = usersByToken.get(token); if (user != null) loadProfile(user);
+        return Optional.ofNullable(user);
     }
 }

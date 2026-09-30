@@ -38,10 +38,17 @@ build/
 /scripts/publish-image.ps1
 /data/queue-data.json
 /config/application.properties
+/config/licenses.json
+/data/multi-rooms.sqlite*
 /music_party/
 /music-party-web/node_modules/
 /music-party-web/dist/
+/src/main/resources/static/
 /music-party-web/.npm-cache/
+/launcher/bin/
+/launcher/frontend/node_modules/
+/launcher/frontend/dist/
+/launcher/frontend/src/wailsjs/
 
 ### 运行时产物 ###
 # B站音频本地缓存

@@ -16,6 +16,7 @@ import org.thornex.musicparty.service.stream.StreamTokenService;
 import java.util.UUID;
 
 @Component
+@org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 public class StreamCommand implements ChatCommand {
 
@@ -32,7 +33,7 @@ public class StreamCommand implements ChatCommand {
     @Override
     public void execute(String args, User user) {
         if (!liveStreamService.isEnabled()) {
-            sendPrivateSystemMessage(user, "当前直播流服务未开启。请联系管理员启用。");
+            sendPrivateSystemMessage(user, "当前直播流服务未开启，请联系管理员启用");
             return;
         }
 
@@ -45,7 +46,7 @@ public class StreamCommand implements ChatCommand {
             base = base.substring(0, base.length() - 1);
         }
         
-        String link = base + "/radio/stream?key=" + token;
+        String link = base + "/radio/stream?roomId=" + org.thornex.musicparty.room.RoomContext.require() + "&key=" + token;
         
         String msg = String.format("直播流链接已生成（24小时有效，4小时闲置失效）： %s", link);
         sendPrivateSystemMessage(user, msg);

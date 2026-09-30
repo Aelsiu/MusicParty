@@ -15,7 +15,7 @@ ENV VITE_APP_VERSION=${APP_VERSION}
 # 复制前端项目定义文件
 COPY music-party-web/package*.json ./
 # 安装依赖
-RUN npm install
+RUN npm ci
 
 # 复制前端源代码
 COPY music-party-web/ .
@@ -41,8 +41,8 @@ COPY src ./src
 # Spring Boot 默认会服务 static 目录下的 index.html
 COPY --from=frontend-builder /app/frontend/dist ./src/main/resources/static/
 
-# 编译 JAR 包，跳过测试
-RUN mvn clean package -DskipTests -Drevision=${APP_VERSION}
+# 编译与验证多房间隔离和原有播放功能
+RUN mvn clean package -Drevision=${APP_VERSION}
 
 # ============================
 # Stage 3: Runtime Image

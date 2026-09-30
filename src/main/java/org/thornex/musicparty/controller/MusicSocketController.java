@@ -18,6 +18,7 @@ import org.thornex.musicparty.service.UserService;
 import java.util.List;
 
 @Controller
+@org.thornex.musicparty.room.RoomScoped
 public class MusicSocketController {
 
     private final MusicPlayerService musicPlayerService;
@@ -92,13 +93,13 @@ public class MusicSocketController {
             musicPlayerService.broadcastOnlineUsers();
             // PUSH updated user info to the user
             userService.getUser(sessionId).ifPresent(user -> {
-                UserSummary summary = new UserSummary(user.getToken(), user.getSessionId(), user.getName(), user.isGuest());
+                UserSummary summary = new UserSummary(user.getToken(), sessionId, user.getName(), user.isGuest());
                 messagingTemplate.convertAndSendToUser(sessionId, "/queue/me", summary, createSessionHeaders(sessionId));
             });
         } else {
             // RENAME_FAILED
             userService.getUser(sessionId).ifPresent(user -> {
-                PlayerEvent errorEvent = new PlayerEvent("ERROR", "RENAME_FAILED", user.getToken(), "该名称已被占用或包含非法字符，请更换。", null);
+                PlayerEvent errorEvent = new PlayerEvent("ERROR", "RENAME_FAILED", user.getToken(), "该名称已被占用或包含非法字符，请更换", null);
                 messagingTemplate.convertAndSendToUser(sessionId, "/queue/events", errorEvent, createSessionHeaders(sessionId));
             });
         }
@@ -122,12 +123,17 @@ public class MusicSocketController {
     @SubscribeMapping("/user/me")
     public UserSummary getMyUserInfo(@Header("simpSessionId") String sessionId) {
         return userService.getUser(sessionId)
-                .map(u -> new UserSummary(u.getToken(), u.getSessionId(), u.getName(), u.isGuest()))
+                .map(u -> new UserSummary(u.getToken(), sessionId, u.getName(), u.isGuest()))
                 .orElse(new UserSummary(sessionId, sessionId, "Unknown", true));
     }
 
     private boolean isGuest(String sessionId) {
         return userService.getUser(sessionId).map(User::isGuest).orElse(true);
+    }
+
+    @SubscribeMapping("/user/profile")
+    public java.util.Map<String,Object> getSharedProfile(@Header("simpSessionId") String sessionId) {
+        return userService.getUser(sessionId).map(user -> java.util.Map.<String,Object>of("name",user.getName(),"bindings",java.util.Map.copyOf(user.getBindings()))).orElse(java.util.Map.of());
     }
 
     // 聊天消息处理
@@ -161,7 +167,7 @@ public class MusicSocketController {
             // 保存到历史
             chatService.addMessage(message);
 
-            messagingTemplate.convertAndSend("/topic/chat", message);
+            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/chat"), message);
         });
     }
 

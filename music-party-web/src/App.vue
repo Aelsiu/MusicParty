@@ -4,7 +4,7 @@
   <ToastNotification ref="toastInstance" />
 
   <div class="h-screen w-screen overflow-hidden font-sans">
-    <AudioEngine />
+    <AudioEngine v-if="userStore.isAuthPassed" />
     <!-- 1. 认证遮罩 -->
     <AuthOverlay @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed" />
 
@@ -13,17 +13,21 @@
     <div v-if="userStore.isAuthPassed && !hasStarted" class="absolute inset-0 z-[100] bg-medical-50 flex flex-col items-center justify-center space-y-8">
       <div class="text-4xl font-black tracking-tighter text-medical-900">MUSIC PARTY</div>
       <div class="text-lg font-bold text-accent -mt-6">{{ userStore.roomName }}</div>
-      <div class="font-mono text-xs text-medical-400 tracking-widest">SYSTEM READY</div>
+      <div class="font-mono text-xs text-medical-400 tracking-widest">ROOM ID / {{ userStore.roomId }}</div>
+      <div class="font-mono text-xs text-medical-400 tracking-widest">{{ connecting ? 'CONNECTING...' : 'SYSTEM READY' }}</div>
+      <div class="flex flex-col items-center gap-1">
       <button
-          @click="startGame"
+          :disabled="connecting" @click="startGame"
           class="px-12 py-4 bg-strong text-white font-bold text-xl hover:bg-accent transition-colors chamfer-br"
       >
         CONNECT
       </button>
+      <button @click="returnEntry" class="font-mono text-xs text-medical-400 tracking-widest p-2 min-h-11">RETURN</button>
+      </div>
     </div>
 
     <!-- 3. 主界面 (当 hasStarted 为 true 时显示) -->
-    <MainLayout v-if="hasStarted" @search="handleSearchClick" @settings="showSettings = true">
+    <MainLayout v-if="hasStarted" @search="handleSearchClick" @settings="showSettings = true" @return="returnEntry">
       <!-- 中间插槽: 视觉控制台 -->
       <CenterConsole />
 
@@ -42,13 +46,17 @@
     <SettingsModal :isOpen="showSettings" @close="showSettings = false" />
     <NamePromptModal />
     <ChatOverlay v-if="hasStarted && !uiStore.isLiteMode" />
-    <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode" />
+    <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode && !adminStore.showDashboard && !adminStore.showAuthModal" />
     <AdminAuthModal />
     <AdminDashboard />
   </div>
 </template>
 
 <script setup>
+import { socketService } from './services/socket';
+import { useChatStore } from './stores/chat';
+import { roomSession } from './services/roomSession';
+import { handleModalBack } from './services/backNavigation';
 import { ref, onMounted } from 'vue';
 import { useEventListener } from '@vueuse/core';
 import { usePlayerStore } from './stores/player';
@@ -77,16 +85,44 @@ const userStore = useUserStore();
 const uiStore = useUiStore();
 const adminStore = useAdminStore();
 const hasStarted = ref(false);
+const connecting = ref(false);
+const chat = useChatStore();
 const showSearch = ref(false);
 const showSettings = ref(false);
 const toastInstance = ref(null);
 const { register, info } = useToast();
 
 const startGame = () => {
-  hasStarted.value = true;
+  if (connecting.value) return;
+  connecting.value = true;
   player.connect();
   maybeShowPwaHint();
 };
+
+const returnEntry = () => {
+  socketService.disconnect();
+  player.connected = false;
+  player.syncState({ nowPlaying: null, queue: [], isPaused: true, onlineUsers: [] });
+  chat.messages = []; chat.unreadCount = 0; chat.isOpen = false;
+  hasStarted.value = false; connecting.value = false; showSearch.value = false; showSettings.value = false;
+  adminStore.showDashboard = false; adminStore.showAuthModal = false; adminStore.isVerified = false;
+  userStore.resetAuthentication();
+  window.AndroidBridge?.updateMedia?.(JSON.stringify({ title: 'Music Party', artist: '', paused: true, position: 0, duration: 0, roomId: '' }));
+};
+useEventListener(window, 'musicparty:return-entry', returnEntry);
+useEventListener(window, 'musicparty:connected', () => { connecting.value = false; hasStarted.value = true; });
+window.musicPartyBack = () => {
+  if (userStore.showNameModal) { userStore.showNameModal = false; userStore.setPostNameAction(null); return true; }
+  if (handleModalBack()) return true;
+  if (adminStore.showAuthModal) { adminStore.showAuthModal = false; return true; }
+  if (adminStore.showDashboard) { adminStore.showDashboard = false; return true; }
+  if (showSearch.value) { showSearch.value = false; return true; }
+  if (showSettings.value) { showSettings.value = false; return true; }
+  if (chat.isOpen) { chat.isOpen = false; return true; }
+  if (userStore.isAuthPassed) { returnEntry(); return true; }
+  return false;
+};
+window.musicPartyLeave = returnEntry;
 
 const maybeShowPwaHint = () => {
   try {

@@ -31,10 +31,14 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class LocalCacheService {
 
     private final WebClient webClient;
+    private final String roomId = org.thornex.musicparty.room.RoomContext.current();
+    private final String cacheDirectory = roomId == null ? LocalResourceConfig.CACHE_DIR : Paths.get(LocalResourceConfig.CACHE_DIR, "rooms", roomId).toString();
+    public String getCacheDirectory() { return cacheDirectory; }
     private static final long DOWNLOAD_COOLDOWN_SECONDS = 3;
 
     // 内存中维护缓存文件的元数据
@@ -44,6 +48,8 @@ public class LocalCacheService {
     private final AppProperties appProperties;
     private final Sinks.Many<DownloadTask> downloadQueue = Sinks.many().unicast().onBackpressureBuffer();
     private Disposable queueSubscription;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.room.RoomResourceBudget resourceBudget;
 
     private record DownloadTask(
             String musicId,
@@ -77,7 +83,7 @@ public class LocalCacheService {
     @PostConstruct
     public void init() {
         // 初始化时扫描目录，重建索引和计算大小
-        File dir = new File(LocalResourceConfig.CACHE_DIR);
+        File dir = new File(cacheDirectory);
         if (!dir.exists()) dir.mkdirs();
 
         File[] files = dir.listFiles();
@@ -99,7 +105,7 @@ public class LocalCacheService {
 
         this.queueSubscription = downloadQueue.asFlux()
                 .concatMap(task ->
-                        processTask(task)
+                        (resourceBudget == null ? processTask(task) : resourceBudget.download(() -> processTask(task)))
                                 .onErrorResume(e -> {
                                     log.error("Unexpected error in download queue processing", e);
                                     return Mono.empty(); // 吞掉异常，防止队列崩溃
@@ -176,25 +182,18 @@ public class LocalCacheService {
                     entry.setOriginalUrl(src.url());
                     String fileName = musicId + src.extension();
                     entry.setFileName(fileName);
-                    Path destPath = Paths.get(LocalResourceConfig.CACHE_DIR, fileName);
+                    Path destPath = Paths.get(cacheDirectory, fileName);
 
-                    return webClient.get()
+                    var buffers = webClient.get()
                             .uri(src.url())
                             .headers(httpHeaders -> task.headers().forEach(httpHeaders::add))
                             .retrieve()
                             .bodyToFlux(DataBuffer.class)
-                            .collectList()
-                            .publishOn(Schedulers.boundedElastic())
-                            .doOnSuccess(dataBuffers -> {
+                            .doOnDiscard(DataBuffer.class, DataBufferUtils::release);
+                    // Write incrementally, cancellation closes the file before room cache cleanup.
+                    return DataBufferUtils.write(buffers, destPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)
+                            .then(Mono.fromRunnable(() -> {
                                 try {
-                                    try (var os = Files.newOutputStream(destPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING)) {
-                                        for (DataBuffer buffer : dataBuffers) {
-                                            byte[] bytes = new byte[buffer.readableByteCount()];
-                                            buffer.read(bytes);
-                                            os.write(bytes);
-                                            DataBufferUtils.release(buffer);
-                                        }
-                                    }
                                     long size = Files.size(destPath);
                                     entry.setSize(size);
                                     entry.setStatus(CacheStatus.COMPLETED);
@@ -205,7 +204,7 @@ public class LocalCacheService {
                                 } catch (IOException e) {
                                     throw new RuntimeException("File write error", e);
                                 }
-                            });
+                            })).subscribeOn(Schedulers.boundedElastic());
                 })
                 // 错误处理
                 .doOnError(error -> {
@@ -234,7 +233,7 @@ public class LocalCacheService {
                     if (currentTotalSize.get() <= appProperties.getCache().getMaxSize().toBytes()) return; // 容量够了就停
 
                     try {
-                        Path path = Paths.get(LocalResourceConfig.CACHE_DIR, entry.getFileName());
+                        Path path = Paths.get(cacheDirectory, entry.getFileName());
                         Files.deleteIfExists(path);
                         currentTotalSize.addAndGet(-entry.getSize());
                         cacheIndex.remove(entry.getId());
@@ -253,7 +252,7 @@ public class LocalCacheService {
         CacheEntry entry = cacheIndex.get(musicId);
         if (entry != null && entry.getStatus() == CacheStatus.COMPLETED) {
             touch(musicId);
-            return "/media/" + entry.getFileName();
+            return (roomId == null ? "/media/" : "/media/rooms/" + roomId + "/") + entry.getFileName();
         }
         return null;
     }

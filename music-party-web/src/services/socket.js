@@ -1,3 +1,4 @@
+import { roomSession } from './roomSession';
 import { Client } from '@stomp/stompjs';
 
 class SocketService {
@@ -5,6 +6,7 @@ class SocketService {
         this.client = null;
         this.connected = false;
         this.stompConfig = null;
+        this.generation = 0;
     }
 
     /**
@@ -23,30 +25,40 @@ class SocketService {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         const brokerURL = `${protocol}//${window.location.host}/ws`;
 
-        this.client = new Client({
+        const generation = ++this.generation;
+        const roomId = roomSession.roomId;
+        const current = () => generation === this.generation && roomId === roomSession.roomId;
+        const client = new Client({
             brokerURL,
             connectHeaders: authHeaders,
             heartbeatIncoming: 10000,
             heartbeatOutgoing: 10000,
             reconnectDelay: 2000,
+            beforeConnect: () => {
+                if (!current()) { client.deactivate(); return; }
+                client.connectHeaders = { ...authHeaders, 'room-id': roomId, 'room-token': roomSession.roomToken, 'management-token': roomSession.ownerAccess ? roomSession.managerToken : '' };
+            },
 
             onConnect: (frame) => {
+                if (!current()) { client.deactivate(); return; }
                 this.connected = true;
 
                 // 1. 注册所有订阅
                 Object.entries(subscriptions).forEach(([topic, handler]) => {
-                    this.client.subscribe(topic, (message) => {
+                    client.subscribe(topic.startsWith('/topic/') ? `/topic/rooms/${roomId}/${topic.slice(7)}` : topic, (message) => {
+                        if (!current()) return;
                         const body = JSON.parse(message.body);
                         handler(body);
                     });
                 });
 
                 // 2. 触发连接成功回调
-                if (callbacks.onConnect) callbacks.onConnect(frame);
+                if (callbacks.onConnect) callbacks.onConnect(frame, current);
             },
 
             // 监听非正常关闭 (如网络中断、服务器重启)
             onWebSocketClose: () => {
+                if (!current()) return;
                 console.warn('WebSocket connection closed.');
                 this.connected = false;
                 // 触发断开回调，让 Store 感知状态变化
@@ -54,17 +66,20 @@ class SocketService {
             },
 
             onDisconnect: () => {
+                if (!current()) return;
                 this.connected = false;
                 if (callbacks.onDisconnect) callbacks.onDisconnect();
             },
 
             onStompError: (frame) => {
+                if (!current()) return;
                 console.error('STOMP Error:', frame.body);
                 if (callbacks.onStompError) callbacks.onStompError(frame);
             }
         });
 
-        this.client.activate();
+        this.client = client;
+        client.activate();
     }
 
     /**
@@ -94,6 +109,7 @@ class SocketService {
      * 断开连接
      */
     disconnect() {
+        this.generation++;
         if (this.client) {
             this.client.deactivate();
             this.client = null;

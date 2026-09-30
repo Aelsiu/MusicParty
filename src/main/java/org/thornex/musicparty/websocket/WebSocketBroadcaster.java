@@ -25,7 +25,7 @@ public class WebSocketBroadcaster {
      */
     @EventListener
     public void onPlayerStateChanged(PlayerStateEvent event) {
-        messagingTemplate.convertAndSend("/topic/player/state", event.getState());
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/state"), event.getState());
     }
 
     /**
@@ -33,7 +33,7 @@ public class WebSocketBroadcaster {
      */
     @EventListener
     public void onQueueChanged(QueueUpdateEvent event) {
-        messagingTemplate.convertAndSend("/topic/player/queue", event.getQueue());
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/queue"), event.getQueue());
     }
 
     /**
@@ -67,6 +67,6 @@ public class WebSocketBroadcaster {
                 formattedMessage,
                 event.getPayload()
         );
-        messagingTemplate.convertAndSend("/topic/player/events", playerEvent);
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/events"), playerEvent);
     }
 }

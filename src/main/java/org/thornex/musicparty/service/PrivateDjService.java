@@ -19,6 +19,7 @@ import java.util.Map;
 /** 私人FM/私人DJ 内容提供器：批次拉取、缓存、顺序编排。 */
 @Slf4j
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 public class PrivateDjService {
 

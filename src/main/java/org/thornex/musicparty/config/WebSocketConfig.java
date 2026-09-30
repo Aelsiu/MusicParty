@@ -12,6 +12,15 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     private final WebSocketAuthInterceptor authInterceptor;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.thornex.musicparty.room.RoomSocketRegistry sockets;
+
+    @Override public void configureWebSocketTransport(org.springframework.web.socket.config.annotation.WebSocketTransportRegistration registration) {
+        registration.addDecoratorFactory(handler -> new org.springframework.web.socket.handler.WebSocketHandlerDecorator(handler) {
+            @Override public void afterConnectionEstablished(org.springframework.web.socket.WebSocketSession session) throws Exception { sockets.add(session); super.afterConnectionEstablished(session); }
+            @Override public void afterConnectionClosed(org.springframework.web.socket.WebSocketSession session, org.springframework.web.socket.CloseStatus status) throws Exception { sockets.remove(session.getId()); super.afterConnectionClosed(session,status); }
+        });
+    }
 
     public WebSocketConfig(WebSocketAuthInterceptor authInterceptor) {
         this.authInterceptor = authInterceptor;

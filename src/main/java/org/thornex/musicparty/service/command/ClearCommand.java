@@ -10,6 +10,7 @@ import org.thornex.musicparty.service.MusicQueueManager;
 import org.thornex.musicparty.service.MusicPlayerService;
 
 @Component
+@org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 public class ClearCommand implements ChatCommand {
 

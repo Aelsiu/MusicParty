@@ -14,6 +14,10 @@ import java.util.Map;
 @ControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
+    public ResponseEntity<Object> handleRoomAccess(org.springframework.web.server.ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode()).body(Map.of("message", ex.getReason() != null ? ex.getReason() : "请求失败"));
+    }
 
     @ExceptionHandler(ApiRequestException.class)
     public ResponseEntity<Object> handleApiRequestException(ApiRequestException ex) {

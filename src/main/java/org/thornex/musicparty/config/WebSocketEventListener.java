@@ -1,49 +1,26 @@
 package org.thornex.musicparty.config;
 
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.stereotype.Component;
-import org.springframework.web.socket.messaging.SessionConnectEvent;
-import org.springframework.web.socket.messaging.SessionDisconnectEvent;
-import org.thornex.musicparty.service.MusicPlayerService;
-import org.thornex.musicparty.service.UserService;
+import org.springframework.web.socket.messaging.*;
+import org.thornex.musicparty.service.*;
+import org.thornex.musicparty.room.*;
 
 @Component
-@Slf4j
 public class WebSocketEventListener {
-
-    private final UserService userService;
-    private final MusicPlayerService musicPlayerService;
-
-    public WebSocketEventListener(UserService userService, MusicPlayerService musicPlayerService) {
-        this.userService = userService;
-        this.musicPlayerService = musicPlayerService;
+    private final UserService users;
+    private final MusicPlayerService player;
+    private final RoomAccessService access;
+    private final RoomRepository repository;
+    private final RoomLifecycleService lifecycle;
+    public WebSocketEventListener(UserService users,MusicPlayerService player,RoomAccessService access,RoomRepository repository,RoomLifecycleService lifecycle) { this.users=users;this.player=player;this.access=access;this.repository=repository;this.lifecycle=lifecycle; }
+    @EventListener public void connected(SessionConnectEvent event) {
+        var h=StompHeaderAccessor.wrap(event.getMessage());var c=access.connection(h.getSessionId());
+        try(var ignored=RoomContext.enter(c.roomId())) { lifecycle.joined(c.roomId());users.handleConnect(h.getSessionId(),h.getFirstNativeHeader("user-token"),h.getFirstNativeHeader("user-name"));player.broadcastOnlineUsers(); }
     }
-
-    @EventListener
-    public void handleWebSocketConnectListener(SessionConnectEvent event) {
-        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
-        String sessionId = headerAccessor.getSessionId();
-
-        String initialName = headerAccessor.getFirstNativeHeader("user-name");
-        String token = headerAccessor.getFirstNativeHeader("user-token");
-
-        log.info("WebSocket Connect Request: Session={}, InitialName={}", sessionId, initialName);
-
-        if (sessionId != null) {
-            userService.handleConnect(sessionId, token, initialName);
-            musicPlayerService.broadcastOnlineUsers();
-        }
-    }
-
-    @EventListener
-    public void handleWebSocketDisconnectListener(SessionDisconnectEvent event) {
-        StompHeaderAccessor headerAccessor = StompHeaderAccessor.wrap(event.getMessage());
-        String sessionId = headerAccessor.getSessionId();
-        if (sessionId != null) {
-            userService.disconnectUser(sessionId);
-            musicPlayerService.broadcastOnlineUsers();
-        }
+    @EventListener public void disconnected(SessionDisconnectEvent event) {
+        var c=access.disconnect(event.getSessionId());if(c==null || !repository.exists(c.roomId()))return;
+        try(var ignored=RoomContext.enter(c.roomId())) { users.disconnectUser(event.getSessionId());player.broadcastOnlineUsers();lifecycle.departed(c.roomId()); }
     }
 }

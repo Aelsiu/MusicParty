@@ -3,14 +3,14 @@ import { ref } from 'vue';
 import { STORAGE_KEYS } from '../constants/keys';
 
 export const useAdminStore = defineStore('admin', () => {
-    const adminPassword = ref(localStorage.getItem(STORAGE_KEYS.ADMIN_PASSWORD) || '');
+    const adminPassword = ref('');
     const showAuthModal = ref(false);
     const showDashboard = ref(false);
     const isVerified = ref(false);
 
     const setAdminPassword = (pwd) => {
         adminPassword.value = pwd;
-        localStorage.setItem(STORAGE_KEYS.ADMIN_PASSWORD, pwd);
+        // Raw license keys are never persisted by the browser.
     };
 
     const logout = () => {

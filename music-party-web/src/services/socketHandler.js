@@ -1,3 +1,5 @@
+import { roomSession } from './roomSession';
+import { roomsApi } from '../api/rooms';
 import { usePlayerStore } from '../stores/player';
 import { useUserStore } from '../stores/user';
 import { useChatStore } from '../stores/chat';
@@ -24,20 +26,12 @@ function handleGameEvent(event) {
     }
 
     if (event.action === 'ADMIN_TRIGGER') {
-        if (adminStore.adminPassword) {
-            // Attempt auto-login
-            adminApi.verify(adminStore.adminPassword)
-                .then(() => {
-                    adminStore.isVerified = true;
-                    adminStore.showDashboard = true;
-                })
-                .catch(() => {
-                    adminStore.logout();
-                    adminStore.showAuthModal = true;
-                });
-        } else {
-            adminStore.showAuthModal = true;
-        }
+        const id = roomSession.roomId;
+        if (roomSession.managerToken) roomsApi.manage(id).then(() => {
+            if (!userStore.isAuthPassed || roomSession.roomId !== id) return;
+            adminStore.isVerified = true; adminStore.showDashboard = true;
+        }).catch(() => { if (userStore.isAuthPassed && roomSession.roomId === id) adminStore.showAuthModal = true; });
+        else adminStore.showAuthModal = true;
         return;
     }
 
@@ -63,7 +57,7 @@ function handleGameEvent(event) {
 
     if (event.action === 'RENAME_FAILED' || (event.type === 'ERROR' && event.message && (event.message.includes('taken') || event.message.includes('占用')))) {
         // 在改名弹窗内展示失败原因（弹窗背板会模糊背景 toast，故不走 toast）
-        userStore.renameError = event.message || '该名称已被占用，请更换。';
+        userStore.renameError = event.message || '该名称已被占用，请更换';
         userStore.showNameModal = true;
         return;
     }
@@ -103,6 +97,10 @@ export const createSocketSubscriptions = () => {
     const chatStore = useChatStore();
 
     return {
+        '/app/user/profile': profile => userStore.syncProfile(profile),
+        '/user/queue/profile': profile => userStore.syncProfile(profile),
+        '/topic/lifecycle': () => { window.dispatchEvent(new Event('musicparty:return-entry')); },
+        '/topic/pairing': () => { window.dispatchEvent(new Event('musicparty:pairing')); },
         // 1. 状态同步
         [WS_DEST.TOPIC_STATE]: (state) => playerStore.syncState(state),
         [WS_DEST.USER_STATE]: (state) => playerStore.syncState(state),
@@ -139,16 +137,15 @@ export const createSocketCallbacks = () => {
 
     return {
         // 连接成功
-        onConnect: () => {
+        onConnect: (frame, isCurrent = () => true) => {
             playerStore.connected = true;
+            window.dispatchEvent(new Event("musicparty:connected"));
+            if (roomSession.ownerAccess) roomsApi.connected(roomSession.roomId).then(result => { if (isCurrent() && result.openAdmin) { const admin=useAdminStore(); admin.isVerified=true; admin.showDashboard=true; } }).catch(() => {});
             // 发起同步
             setTimeout(() => {
-                socketService.send(WS_DEST.RESYNC);
+                if (isCurrent()) socketService.send(WS_DEST.RESYNC);
             }, 300);
-            // 恢复绑定
-            Object.entries(userStore.bindings).forEach(([platform, id]) => {
-                if (id) playerStore.bindAccount(platform, id);
-            });
+            // Bindings are restored by the shared profile subscription, never overwrite them with a stale tab.
         },
 
         // 连接断开 (含异常断开)
@@ -158,17 +155,9 @@ export const createSocketCallbacks = () => {
 
         // STOMP 协议层错误 (如密码错误、Token失效、服务器内部错误等)
         onStompError: (frame) => {
-            console.error('STOMP Error:', frame);
-
-            // 无论是密码错误，还是其他未知的协议级错误，都强制刷新以重置状态
-            const isAuthError = frame.body && frame.body.includes('INVALID_ROOM_PASSWORD');
-
-            if (isAuthError) {
-                userStore.resetAuthentication();
-            }
-
-            // 强制刷新页面 (STOMP ERROR 帧通常意味着连接已不可用)
-            window.location.reload();
+            console.error('Room connection refused');
+            socketService.disconnect();
+            window.dispatchEvent(new CustomEvent('musicparty:return-entry', { detail: { message: '房间连接已失效，请重新验证' } }));
         }
     };
 };

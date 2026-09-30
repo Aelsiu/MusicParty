@@ -59,8 +59,9 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue';
+import { ref, computed, onMounted, onBeforeUnmount, nextTick, watch } from 'vue';
 import { useWindowSize } from '@vueuse/core';
+import { registerBackHandler } from '../services/backNavigation';
 
 const isActive = ref(false);
 const currentStepIndex = ref(0);
@@ -76,45 +77,45 @@ const steps = [
   {
     targetId: 'tutorial-rename',
     mobileTargetId: 'tutorial-rename-mobile',
-    content: '点击这里可以修改你的昵称，输入后按回车确认。',
-    mobileContent: '点击这里打开用户列表，可以修改你的昵称。'
+    content: '点击这里可以修改你的昵称，输入后按回车确认',
+    mobileContent: '点击这里打开用户列表，可以修改你的昵称'
   },
   {
     targetId: 'tutorial-search',
-    content: '点击搜索按钮寻找歌曲。在此处也可以通过搜索用户名来查看平台账号歌单。'
+    content: '点击搜索按钮寻找歌曲在此处也可以通过搜索用户名来查看平台账号歌单'
   },
   {
     targetId: 'tutorial-like',
-    content: '点击中间的封面可以为当前歌曲点赞。'
+    content: '点击中间的封面可以为当前歌曲点赞'
   },
   {
     targetId: 'tutorial-queue',
     mobileTargetId: 'tutorial-queue-mobile',
-    content: '这里是播放队列。悬停在歌曲上可以进行置顶或删除操作。',
-    mobileContent: '点击这里查看播放队列。'
+    content: '这里是播放队列悬停在歌曲上可以进行置顶或删除操作',
+    mobileContent: '点击这里查看播放队列'
   },
   {
     targetId: 'tutorial-pause',
     mobileTargetId: 'tutorial-pause-mobile',
-    content: '注意：暂停/播放是全局生效的，会影响所有在线听众，请谨慎操作。'
+    content: '注意：暂停/播放是全局生效的，会影响所有在线听众，请谨慎操作'
   },
   {
     targetId: 'tutorial-download',
     mobileTargetId: 'tutorial-download-mobile',
-    content: '听到喜欢的歌？点击这里可以直接下载当前播放的音频文件。'
+    content: '听到喜欢的歌？点击这里可以直接下载当前播放的音频文件'
   },
   {
     targetId: 'tutorial-random',
     mobileTargetId: 'tutorial-random-mobile',
-    content: '随机播放模式采用“公平随机”算法，确保每个人点的歌都有均等的机会被播放。'
+    content: '随机播放模式采用“公平随机”算法，确保每个人点的歌都有均等的机会被播放'
   },
   {
     targetId: 'tutorial-chat',
-    content: '点击浮动按钮打开聊天窗口，可以和其他人聊天或查看记录。按钮可以拖动。'
+    content: '点击浮动按钮打开聊天窗口，可以和其他人聊天或查看记录按钮可以拖动'
   },
   {
     targetId: 'tutorial-source',
-    content: '点击底部的小封面，可以跳转到歌曲的源网页。'
+    content: '点击底部的小封面，可以跳转到歌曲的源网页'
   }
 ];
 
@@ -257,6 +258,8 @@ const finishTutorial = () => {
   isActive.value = false;
   localStorage.setItem(STORAGE_KEY, 'true');
 };
+const unregisterBack=registerBackHandler(90,()=>{if(!isActive.value)return false;finishTutorial();return true;});
+onBeforeUnmount(unregisterBack);
 
 const startTutorial = () => {
   // 检查是否已完成

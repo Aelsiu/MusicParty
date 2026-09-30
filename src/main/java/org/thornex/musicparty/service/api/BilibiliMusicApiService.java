@@ -24,6 +24,7 @@ import reactor.util.retry.Retry;
 import java.util.*;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class BilibiliMusicApiService implements IMusicApiService {
 

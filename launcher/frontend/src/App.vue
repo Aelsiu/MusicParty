@@ -100,7 +100,7 @@ const toggleServices = async () => {
     isJavaReady.value = false;
     isApiReady.value = false;
     logs.value = [];
-    await StartServices();
+    try { await StartServices(); } catch (err) { isRunning.value = false; logs.value.push({ id: Date.now(), time: new Date().toLocaleTimeString(), text: String(err) }); }
   }
 };
 
@@ -172,8 +172,8 @@ const openWeb = () => {
                 <input v-model="config.baseUrl" class="w-full bg-medical-50 border border-medical-200 px-2 py-1.5 text-sm font-mono outline-none focus:border-medical-900" />
               </div>
               <div class="space-y-1">
-                <label class="text-[10px] font-bold text-medical-500 uppercase">管理员控制台密码</label>
-                <input v-model="config.adminPassword" type="text" placeholder="留空则默认为 admin123" class="w-full bg-medical-50 border border-medical-200 px-2 py-1.5 text-sm outline-none focus:border-medical-900" />
+                <label class="text-[10px] font-bold text-medical-500 uppercase">最高许可</label>
+                <p class="text-xs text-medical-400">直接编辑服务端 config/application.properties 中的 app.rooms.root-key，保存后重新启动服务</p>
               </div>
             </div>
             <div class="bg-white p-4 border border-medical-200 shadow-sm space-y-4">
@@ -198,7 +198,7 @@ const openWeb = () => {
               <div class="space-y-4" :class="!config.neteaseEnabled ? 'opacity-40 grayscale pointer-events-none' : ''">
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-medical-500 uppercase">账号 Cookie</label>
-                  <textarea v-model="config.neteaseCookie" placeholder="用于获取高清音质和私人歌单" rows="3" class="w-full bg-medical-50 border border-medical-200 px-2 py-1.5 text-[10px] font-mono outline-none focus:border-medical-900 resize-none"></textarea>
+                  <p class="text-xs text-medical-400">请在各房间管理台配置 Cookie</p>
                 </div>
                 <div class="space-y-1">
                   <label class="text-[10px] font-bold text-medical-500 uppercase">解析音质上限</label>
@@ -219,7 +219,7 @@ const openWeb = () => {
               </div>
               <div class="space-y-1" :class="!config.bilibiliEnabled ? 'opacity-40 grayscale pointer-events-none' : ''">
                 <label class="text-[10px] font-bold text-medical-500 uppercase">Cookie</label>
-                <input v-model="config.biliCookie" placeholder="浏览器完整Cookie串(含SESSDATA)" class="w-full bg-medical-50 border border-medical-200 px-2 py-1.5 text-[10px] font-mono outline-none focus:border-medical-900" />
+                  <p class="text-xs text-medical-400">请在各房间管理台配置 Cookie</p>
               </div>
             </div>
           </div>

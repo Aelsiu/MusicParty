@@ -67,3 +67,13 @@ test('renaming inside the room updates the remembered ID without replacing ident
     user.prepareEntry('Renamed Alice', '1234');
     assert.equal(user.userToken, 'alice-token');
 });
+test('a shared profile refresh updates another room without restoring its old binding', () => {
+    user.initUser('alice-session', 'Alice', false);
+    user.updateBinding('netease', 'old-account', 'Old Account', 'old.png');
+    user.syncProfile({ name: 'Renamed Alice', bindings: { netease: 'new-account', bilibili: 'shared-video' } });
+    assert.equal(user.currentUser.name, 'Renamed Alice');
+    assert.equal(user.bindings.netease, 'new-account');
+    assert.equal(user.neteaseAvatar, '');
+    assert.equal(user.bindings.bilibili, 'shared-video');
+    assert.equal(user.userToken, 'alice-token');
+});

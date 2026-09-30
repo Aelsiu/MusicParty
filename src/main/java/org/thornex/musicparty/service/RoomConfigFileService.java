@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
 
 /** Keeps the externally mounted Spring config in sync with administrator edits. */
 @Service
+@org.thornex.musicparty.room.RoomScoped
 public class RoomConfigFileService {
     private final Path configFile;
 
@@ -29,7 +30,7 @@ public class RoomConfigFileService {
     }
 
     public boolean isConfigured() {
-        return Files.isRegularFile(configFile);
+        return org.thornex.musicparty.room.RoomContext.current() == null && Files.isRegularFile(configFile);
     }
 
     public synchronized void persist(AdminConfigUpdateRequest request) throws IOException {

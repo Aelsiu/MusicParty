@@ -1,0 +1,103 @@
+# 多房间版本部署与使用
+
+## 首次配置
+
+本版本使用新的 `data/multi-rooms.sqlite`，不会读取或迁移旧版 `queue-data.json`，旧文件可保留
+
+将 `config/application.properties.example` 复制为 `config/application.properties`，直接编辑下面的必填项
+
+```properties
+app.rooms.root-key=你的最高许可密钥
+```
+
+最高许可必须为 8–16 位 ASCII 可见字符，可使用大小写英文字母、数字及符号，不含空白，示例中的中文占位文字必须替换
+
+配置文件遵循 Java properties 转义规则，密钥中每个反斜杠需要写成 `\\`，转义后的实际密钥仍需满足 8–16 位限制
+
+未配置或格式错误时，服务拒绝启动，最高许可只能在这个服务端文件中更换，更换后重启服务，网页不提供更换入口
+
+`app.music-api.base-url` 应配置为实际对外访问地址，Docker 的网易云接口地址为 `http://netease-api:3000`，Windows 启动器使用 `http://127.0.0.1:3000`
+
+## Docker
+
+在仓库根目录运行
+
+```sh
+cp config/application.properties.example config/application.properties
+# 编辑最高许可和对外访问地址后启动
+docker compose up -d --build
+```
+
+默认页面地址为 `http://服务器IP:8848`，Compose 挂载的三个目录分别保存服务配置与普通许可、音频缓存、SQLite 数据
+
+## Windows 启动器
+
+启动器运行目录是 EXE 所在目录，首次启动会生成 `config/application.properties` 空模板
+
+直接编辑该文件的最高许可后再启动服务，启动器设置页面只说明文件位置，不接受输入或修改最高许可，也不再传入全服 Cookie
+
+发布流程随包提供 Node.js 22 和 NCM API 源码运行时，替代原先的 Node.js 18 打包运行时，Java 21、FFmpeg 继续随包提供
+
+本地源码构建需要 Node.js 22 或以上、Java 21、Maven、Go 1.23.12、Wails 2.12.0，以及 FFmpeg，可运行
+
+```powershell
+.\build-local.ps1 -NeteaseApiPath '..\api-enhanced' -FfmpegPath 'C:\tools\ffmpeg.exe'
+```
+
+`NeteaseApiPath` 指向预先检出的 `NeteaseCloudMusicApiEnhanced/api-enhanced`，输出为 `launcher/build/bin/MusicParty.exe`
+
+## 许可清单与管理入口
+
+两秒内点击入口的 `SECURITY ACCESS` 五次，验证许可后使用 `MANAGE`，普通许可管理自己的房间，最高许可管理所有房间和普通许可清单
+
+每个许可最多创建 9 个自己的房间，最高许可也适用，房间名允许重名，实际操作始终使用 8 位房间 ID
+
+普通清单保存在 `config/licenses.json`，首次自动创建空清单，也可停服后手动编辑
+
+```json
+[
+  { "id": "LICENSE-A", "key": "ReplaceMe9" },
+  { "id": "LICENSE-B", "key": "ReplaceMe8" }
+]
+```
+
+ID 为 1–64 位英文字母、数字、下划线或连字符，须唯一且不能为 `ROOT`，密钥遵循与最高许可相同的格式规则，所有密钥必须互不相同
+
+手动替换密钥时保留原 ID，所属房间跟随该 ID 保留，删除清单中的 ID 会在下次启动时删除其全部房间
+
+运行中使用网页 `UPDATE` 和 `DEL` 会立即生效，旧管理会话失效，删除许可同时删除所属房间及缓存，管理会话默认有效 12 小时
+
+## 房间与凭据
+
+新房间为空队列、暂停播放、未配置 Cookie，首次点击 `CONNECT` 成功后自动打开一次管理台，播放界面沿用原项目
+
+网易云优先使用 `获取 Cookie` 二维码登录，也可手动更新，B站手动更新 Cookie，凭据与房间配置保存在 SQLite，仅当前房间生效
+
+配对码为 4 位数字，包含前导零，每小时的 00/10/20/30/40/50 分统一更新，旧码 30 分钟内不再使用
+
+同一周期刷新、关闭再开、重连免验证，服务重启也可恢复周期内的入房凭据，码更新后重新连接需要新码，保持连接的成员继续使用
+
+最后一个网页或 Android 成员离开后保留 10 秒重连缓冲，到期暂停播放并停止转码、断开直播收听连接，之后重新加入保持暂停，由成员手动播放
+
+昵称和平台绑定为同一用户身份共享，队列、聊天、播放进度、设置与 Cookie 按房间隔离，可以同时打开多个房间
+
+Android 返回键先关闭弹窗，再返回房间入口，继续返回可切换服务器，离开房间时锁屏媒体状态同步为暂停
+
+## 备份、恢复与资源
+
+停止服务后一起备份 `config/application.properties`、`config/licenses.json`、`data/multi-rooms.sqlite` 及同名 `-wal`、`-shm` 文件，如果存在，同时可备份 `cached_media/rooms`
+
+恢复时使用同一套配置、清单与数据库，启动时重新核对许可归属和配对码周期，所有房间保持暂停
+
+持久化沿用原项目的待播队列、历史和聊天记录，并保存房间设置及 Cookie，服务重启不恢复当前曲目的临时音频直链和运行中播放进度
+
+99 个总房间、9 个同时使用、每房间 9 人为容量目标，服务不据此拒绝创建或加入，只保留每个许可的 9 个自建房间额度
+
+全服默认同时下载 3 个任务、同时转码 12 个直播，超出后排队，每房间仍按原项目顺序处理下载，以下配置只限制资源工作并发，不限制房间或成员数
+
+```properties
+app.rooms.max-concurrent-downloads=3
+app.rooms.max-concurrent-transcoders=12
+```
+
+缓存保留按房间计量的原有 `app.music-api.cache.max-size` 设置，部署时根据磁盘和带宽调整，新房间按服务端默认参数初始化，已有房间的网页设置不会被这些默认值覆盖

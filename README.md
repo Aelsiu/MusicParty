@@ -11,7 +11,7 @@
 
 **Music Party** 是一个开源的、私有化部署的多人实时在线WEB听歌平台。
 
-它允许你和朋友在一个虚拟房间内，通过 **网易云音乐** 或 **Bilibili** 搜索并点播歌曲。系统实现了播放进度同步，无论是在 PC 端还是移动端，所有人听到的都是同一秒的旋律。
+它允许你和朋友在多个独立房间内，通过 **网易云音乐** 或 **Bilibili** 搜索并点播歌曲，同一房间的播放进度实时同步，房间之间的队列、聊天、配置与 Cookie 独立
 
 （本项目并非“破解版”，对于VIP歌曲/高音质等会员内容，需要具有相应资格账号的cookie来获取，下方有获取cookie的教程）
 
@@ -21,8 +21,8 @@
 
 ## 本 fork 相对上游的主要改动
 
-* **房间与身份**：创建房间时填写房间名并设置 4 位数字密码；成员用自己的 ID 和密码加入。ID 可在入房前修改；管理员可设置无音乐播放时踢出在线成员的开关和时长。
-* **部署与配置**：Compose 从本仓库源码构建；配置集中在 `config/application.properties`，管理员在网页保存参数后立即生效并写回文件。
+* **房间与身份**：通过许可创建和管理房间，每个许可最多创建 9 个自己的房间，成员使用四位动态配对码进入，昵称和平台绑定共享，原有播放界面与功能继续复用
+* **部署与配置**：Docker 和 Windows 启动器读取服务端最高许可配置，普通许可清单及多房间 SQLite 持久化分别保存，网易云支持二维码登录与手动 Cookie 更新
 * **歌单与绑定**：设置中可分别绑定、解绑网易云和 Bilibili 用户；歌单支持多选导入和本地模糊筛选，筛选支持中文拼音及日文假名罗马音。
 * **播放与音质**：网易云音质增加“高清臻音”；封面左上角的 `P_QUAL` 显示接口返回的实际播放档位。歌词可提前显示 0、1 或 2 行，音量百分比可直接输入。
 * **外观**：提供白橙、暗橙、白蓝、暗蓝、白绿、暗绿六种预设，并可选择白/暗基调与主题色生成自定义配色。
@@ -37,7 +37,7 @@
         * 此外，b站源风控现象严重，极不稳定，建议能用网易云就用网易云。
 *   **精准同步**：基于 WebSocket (STOMP) 的状态分发，结合前端追帧，实现播放状态、进度、歌单、歌词的实时同步。
 *   **响应式设计**：完美适配 PC 宽屏与移动端；支持媒体会话锁屏控制，移动端推荐『添加到主屏幕』以启用 PWA 后台播放。
-*   **房间权限**：使用 4 位数字房间密码，并可由管理员实时锁定/解锁房间。
+*   **房间权限**：四位配对码每整十分钟同步更新，管理资格由独立许可控制，最高许可可以配置普通许可
 *   **实时互动**：内置聊天室、点赞动效、系统日志广播。
 *   **智能队列**：实现“公平随机”算法，防止单人霸榜。
 *   **私人电台 / 私人DJ**：接入网易云推荐，支持私人FM 持续推歌与私人DJ（AI 语音点评+歌曲）两种模式。
@@ -45,39 +45,34 @@
 
 ## Docker 部署（推荐）
 
-本 fork 提供 Ubuntu 服务器部署包，包含已构建的网页与服务端 JAR、运行时 Dockerfile 和 Compose 配置；从源码部署时则由仓库根目录的 Dockerfile 编译前后端。两种方式均从部署目录的 `config/application.properties` 读取启动配置。配置文件包含管理员密码和 Cookie，已被 Git 忽略；可跟踪的样例是 `config/application.properties.example`。
+本分支从源码构建多房间版本，启动配置样例为 `config/application.properties.example`，完整说明见 [多房间部署文档](docs/multi-rooms-deployment.md)，首次运行必须直接编辑文件配置最高许可
 
 ### 使用 Docker Compose 一键启动
 
-在 [本 fork 的 Releases](https://github.com/Aelsiu/MusicParty/releases) 下载 `ubuntu-docker.tar.gz` 部署包并在 Ubuntu 服务器解压。服务器需要安装 Docker Engine 和 Docker Compose 插件。
-
-进入包含 `compose.yaml` 和 `Dockerfile` 的解压目录执行（Compose 会同时拉取并启动 NeteaseCloudMusicApi；首次构建还需联网拉取 Java 基础镜像并安装 FFmpeg）：
+安装 Docker Engine 和 Docker Compose 插件后，在仓库根目录执行
 
 ```bash
 cp config/application.properties.example config/application.properties
-# 编辑 config/application.properties：至少设置管理员密码，并按需填写 Cookie、外部访问地址
+# 编辑 app.rooms.root-key 为自己的 8–16 位 ASCII 可见字符密钥，并配置外部访问地址
 docker compose up -d --build
 ```
 
-启动后访问 `http://服务器IP:8848`。请将 `app.music-api.base-url` 设置为实际访问地址，并为管理员设置独立密码。部署包内的 `README-ubuntu.md` 包含更新、备份和诊断说明。
+启动后访问 `http://服务器IP:8848`，将 `app.music-api.base-url` 设置为实际访问地址，两秒内点击 `SECURITY ACCESS` 五次可验证许可并进入 `MANAGE`
 
-以后在聊天窗口输入 `//admin`，验证管理员密码后保存房间参数会立即生效，并写回 `config/application.properties`，无需重启容器。如果手动编辑此文件，则需要重启应用容器才会重新读取。修改源码后需要重新构建镜像。部署包使用 `compose.yaml`，源码仓库使用 `docker-compose.yml`，均只保留端口、构建、网络和卷等 Docker 配置。
+网页保存房间配置和 Cookie 后立即生效并写入 SQLite，最高许可只在服务端文件中更换，更换后重启，普通许可通过最高许可管理界面新增、更新、删除
 
 ### 旧版环境变量说明
 
-下面的环境变量仍可由包内默认配置读取。本 fork 的 Compose 使用 `config/application.properties`；完整键名和默认值请查看示例文件。
+以下环境变量提供新房间的默认参数，已有房间的配置从 SQLite 恢复，Cookie 在各房间管理台配置，旧版 `ADMIN_PASSWORD`、`NETEASE_COOKIE`、`BILIBILI_COOKIE` 不再作为全服凭据使用，完整配置见示例文件
 
 | 变量名                       | 必填 | 说明                                                                          |
 |:--------------------------|:---|:----------------------------------------------------------------------------|
 | `APP_AUTHOR_NAME`         | 否  | 页面显示的作者名字，地点在左上角标题后面。默认为 `ThorNex X Aelsiu`。                                |
 | `APP_BACK_WORDS`          | 否  | 中间专辑封面后方的装饰性背景字，强制大写。默认为 `MUSIC PARTY`。                                     |
-| `ADMIN_PASSWORD`          | 是  | 管理员密码，用于打开管理员面板。                                                            |
 | `NETEASE_ENABLED`         | 是  | 网易云源是否开启。                                                                   |
 | `NETEASE_API_URL`         | 是  | NeteaseCloudMusicApi 的地址，Docker 部署时默认为 `http://netease-api:3000`。           |
 | `BASE_URL`                | 否  | 服务的域名（带协议）。用户获取直播流链接时，拼接在前面。默认为 `http://localhost:8848`。                    |
 | `BILIBILI_ENABLED`        | 否  | B站源是否开启。                                                                    |
-| `BILIBILI_COOKIE`         | 否  | B站账号的**完整 Cookie**（浏览器登录后复制的完整 Cookie 串，含 buvid3/SESSDATA/bili_jct 等）。不填仅 B站源不可用，不影响其他音乐源；填入后可用 B站源并解析高音质 DASH 音频。 |
-| `NETEASE_COOKIE`          | 否  | 网易云账号 Cookie。配置后可播放 VIP 歌曲及获取更高音质。                                          |
 | `NETEASE_QUALITY`         | 否  | 网易云请求音质。可选：`standard`, `higher`, `exhigh`, `lossless`, `hires`, `jyeffect`（高清臻音）。默认 `exhigh`；实际播放档位以页面 `P_QUAL` 为准。 |
 | `QUEUE_MAX_SIZE`          | 否  | 播放队列最大长度，默认 `1000`。                                                         |
 | `QUEUE_HISTORY_SIZE`      | 否  | 播放历史记录保留数量，默认 `50`。当播放列表里没有音乐时，会从历史记录随机抽选。                                  |
@@ -87,30 +82,30 @@ docker compose up -d --build
 | `CHAT_MIN_INTERVAL`       | 否  | 聊天发言最小间隔 (毫秒)，默认 `1000`。                                                    |
 | `CHAT_MAX_LENGTH`         | 否  | 单条聊天消息最大长度 (字符)，默认 `200`。                                                   |
 | `CACHE_MAX_SIZE`          | 否  | 本地音乐缓存上限，默认 `1GB`。支持格式如 `512MB`, `2GB`。                                     |
-| `AUTH_RATE_LIMIT_ENABLED` | 否  | 是否开启密码验证频率限制，默认 `true`。                                                     |
-| `AUTH_MAX_ATTEMPTS`       | 否  | 密码验证最大尝试次数，默认 `5`。                                                          |
-| `AUTH_WINDOW_SECONDS`     | 否  | 密码验证统计时间窗口 (秒)，默认 `60`。                                                     |
-| `AUTH_BLOCK_DURATION`     | 否  | 超过尝试次数后的封锁时长 (秒)，默认 `300`。                                                  |
+
+许可与配对码认证使用全服统一的失败尝试限制，同一来源一分钟内最多尝试 10 次，成功验证会清除失败计数，旧版 `AUTH_*` 参数不再控制多房间认证
 
 ---
 
-##  Windows 启动器（仅旧版）
+## Windows 启动器
 
-启动器来自上游 Releases，**不包含本 fork 的改动**。要运行本 fork，目前只能使用上面的 Docker 部署方式。
+本分支的启动器已适配多房间配置与新版 NCM 运行时，可以通过 `build-local.ps1` 构建，首次运行需直接编辑 EXE 同目录的 `config/application.properties` 配置最高许可，详见 [多房间部署文档](docs/multi-rooms-deployment.md)
+
+上游旧版 Releases 的启动器不包含本分支的改动，本次修改尚未发布新的安装包
 
 ---
 
-## 房间密码
+## 房间、许可与配对码
 
-部署后首次启动需要填写房间名并设置 4 位数字密码，其他成员输入自己的 ID 和密码即可加入，无需填写房间名。
+许可验证后可以创建房间，房间名支持 2–16 个可见字符、中文及 emoji，允许重名，身份由唯一房间 ID 确定
 
-房间创建后，密码也可以在管理员面板中更改，仍须为 4 位数字。
+房主在管理台查看动态四位配对码，所有房间每整十分钟同步更新，旧码冷却 30 分钟，当前周期内刷新、重开和重连免重复验证，保持连接的成员不受更新影响
 
 本地记忆的 ID 仅作预填，入房时换填其他 ID 会作为新用户加入。若只需改名，请使用原 ID 入房后在在线成员列表修改，服务器确认后会更新本地记忆。
 
-从旧版升级时，如果持久化记录中没有房间名或密码不是 4 位数字，首次启动会要求重新创建房间；播放队列和聊天记录仍会恢复。建议升级前备份 `music_party/data/queue-data.json`。
+本版本从空数据开始，不迁移旧版队列和聊天记录，也不删除旧文件，使用独立的 `data/multi-rooms.sqlite`
 
-管理员可在 `//admin` 管理终端开启“无音乐播放时踢出在线成员”（暂停也计入），时间可设为 1–60 分钟；默认关闭。网页保存后立即生效并写回外部配置文件。
+最后一个成员离开后保留 10 秒重连缓冲，到期暂停播放、停止转码并断开直播，重新进入后手动播放，直播收听者不算在线成员，原有空闲踢出设置仍按房间生效
 
 ---
 
@@ -134,7 +129,7 @@ docker compose up -d --build
 在前端**聊天窗口**中可以输入以下命令：
 *   `//clear`: 从播放队列中清空自己点播的所有歌曲。
 *   `//stream`: 获取自己的直播流链接（需要开放直播流）。
-*   `//admin`: 打开管理员控制面板（需要管理员密码）。
+*   `//admin`: 打开本房间管理面板，已验证所属许可或最高许可时免重复验证
 
 ---
 
@@ -177,16 +172,16 @@ docker compose up -d --build
 ---
 
 ## 管理员面板
-在聊天窗口输入//admin并输入管理员密码后，可以进入管理员面板修改配置。
+在聊天窗口输入 `//admin` 可以进入当前房间管理台，普通成员需要验证该房间所属许可或最高许可，入房前已验证的管理资格可以直接复用
 
-* 修改部署时的配置参数。
+* 修改当前房间的配置参数
 * 锁定播放，切歌，随机按钮以防止用户滥用。（建议保持播放按钮锁定，防止某一个用户因为卸下耳机等行为导致的自动暂停）
 * 随机播放与投票切歌相关配置。
 * 配置私人电台/私人DJ。
 * 开关直播流功能。
 * 更新歌曲源的凭证，或是启停歌曲源。
 * 对播放列表或者聊天记录进行清理。
-* 重置系统。
+* 重置当前房间的播放与队列
 
 ---
 
@@ -209,6 +204,8 @@ docker compose up -d --build
 ---
 
 ## Cookie凭证获取
+
+在房间管理台点击网易云 `获取 Cookie`，使用网易云音乐 App 扫码并确认登录，服务验证成功后将 Cookie 保存到当前房间，以下手动方式仍可使用
 * **网易云**
 浏览器打开网易云音乐，登录，按F12开启控制台，选择网络，然后点击我的音乐，在控制台中寻找playlist开头的请求，然后找到Cookie，将所有内容复制。
 <img width="1604" height="1084" alt="image" src="https://github.com/user-attachments/assets/afa77005-aebd-4120-90f3-ccddb2370712" />
@@ -223,7 +220,7 @@ docker compose up -d --build
 
 ### 前端 (music-party-web)
 
-1.  环境要求：Node.js 18+
+1.  环境要求：Node.js 22 或以上
 2.  进入目录并安装依赖：
     ```bash
     cd music-party-web
@@ -238,7 +235,7 @@ docker compose up -d --build
 ### 后端 (Java)
 
 1.  环境要求：JDK 21, Maven 3.x, 并已部署Netease Cloud Music Api。
-2.  配置：修改 `src/main/resources/application.yml` 或通过 IDEA 环境变量传入 `BILIBILI_COOKIE` 等配置。
+2.  配置：复制配置样例到 `config/application.properties` 并设置 `app.rooms.root-key`，配置网易云 API 地址，Cookie 在房间管理台配置
 3.  运行：
     ```bash
     mvn spring-boot:run

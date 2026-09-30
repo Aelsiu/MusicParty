@@ -1,26 +1,30 @@
 # Copy to config/application.properties before starting Docker Compose.
 # This file is mounted into /app/config and read by Spring Boot at startup.
 server.port=8080
-app.music-api.admin-password=change-me
+# Required: enter your own 8-16 printable ASCII characters, no whitespace
+app.rooms.root-key=
+app.rooms.database=data/multi-rooms.sqlite
+app.rooms.license-file=config/licenses.json
+app.rooms.management-session-hours=12
+app.rooms.reconnect-grace-seconds=10
+app.rooms.max-concurrent-downloads=3
+app.rooms.max-concurrent-transcoders=12
 app.music-api.base-url=http://localhost:8848
 app.music-api.author-name=ThorNex X Aelsiu
 app.music-api.back-words=MUSIC PARTY
 app.music-api.ffmpeg-path=ffmpeg
 
 app.music-api.netease.base-url=http://netease-api:3000
-app.music-api.netease.cookie=
+# Cookies are configured per room in the web management panel
 app.music-api.netease.quality=exhigh
 app.music-api.netease.enabled=true
 app.music-api.bilibili.base-url=https://api.bilibili.com
-app.music-api.bilibili.cookie=
 app.music-api.bilibili.enabled=true
 app.music-api.bilibili.max-duration-minutes=10
 
 app.music-api.queue.max-size=1000
 app.music-api.queue.history-size=50
 app.music-api.queue.max-user-songs=100
-app.music-api.queue.persistence-file=data/queue-data.json
-app.music-api.queue.persistence-interval-ms=60000
 app.music-api.player.max-playlist-import-size=100
 app.music-api.player.sync-broadcast-interval-ms=5000
 app.music-api.player.vote-skip-enabled=false

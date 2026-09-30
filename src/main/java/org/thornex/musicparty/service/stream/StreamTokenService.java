@@ -9,6 +9,7 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class StreamTokenService {
 
@@ -58,7 +59,6 @@ public class StreamTokenService {
         return true;
     }
 
-    @Scheduled(fixedRate = 3600000) // 每小时清理一次
     public void cleanup() {
         long now = System.currentTimeMillis();
         tokens.entrySet().removeIf(entry -> {

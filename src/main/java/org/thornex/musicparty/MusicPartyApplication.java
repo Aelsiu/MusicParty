@@ -8,7 +8,7 @@ import org.thornex.musicparty.config.AppProperties;
 
 @SpringBootApplication
 @EnableScheduling // Enable background task scheduling
-@EnableConfigurationProperties(AppProperties.class) // Enable custom properties class
+@EnableConfigurationProperties(org.thornex.musicparty.room.MultiRoomProperties.class) // Enable custom properties class
 public class MusicPartyApplication {
 
 	public static void main(String[] args) {

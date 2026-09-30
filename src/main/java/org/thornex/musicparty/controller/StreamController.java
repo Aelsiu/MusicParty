@@ -19,6 +19,7 @@ import org.thornex.musicparty.service.stream.StreamTokenService;
 @RequestMapping("/radio")
 @RequiredArgsConstructor
 @Slf4j
+@org.thornex.musicparty.room.RoomScoped
 public class StreamController {
 
     private final LiveStreamService liveStreamService;
@@ -28,7 +29,7 @@ public class StreamController {
     @GetMapping(value = "/stream", produces = "audio/mpeg")
     public ResponseBodyEmitter streamAudio(HttpServletRequest request, HttpServletResponse response,
                                            @RequestParam(name = "key", required = false) String key) {
-        if (!liveStreamService.isEnabled()) {
+        if (!liveStreamService.isEnabled() || liveStreamService.isRoomEmpty()) {
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return null;
         }
@@ -63,9 +64,10 @@ public class StreamController {
 
         // 先注册终态回调再 addListener：若泵线程因 emitter 初始化竞态提前终止，
         // onCompletion 也能确保 removeListener 执行清理（见 StreamClient#sendWithRetry）
-        emitter.onCompletion(() -> liveStreamService.removeListener(client));
-        emitter.onTimeout(() -> liveStreamService.removeListener(client));
-        emitter.onError(e -> liveStreamService.removeListener(client));
+        emitter.onCompletion(org.thornex.musicparty.room.RoomContext.capture(() -> liveStreamService.removeListener(client)));
+        emitter.onTimeout(org.thornex.musicparty.room.RoomContext.capture(() -> liveStreamService.removeListener(client)));
+        String currentRoom = org.thornex.musicparty.room.RoomContext.require();
+        emitter.onError(e -> { try (var ignored = org.thornex.musicparty.room.RoomContext.enter(currentRoom)) { liveStreamService.removeListener(client); } });
 
         if (!liveStreamService.addListener(client)) {
             client.close();

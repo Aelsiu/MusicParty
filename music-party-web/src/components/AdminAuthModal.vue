@@ -20,12 +20,12 @@
 
         <div class="p-6">
           <div class="mb-4">
-            <label class="block text-[10px] font-bold text-medical-500 mb-1 uppercase tracking-wider font-mono">Password</label>
+            <label class="block text-[10px] font-bold text-medical-500 mb-1 uppercase tracking-wider font-mono">许可密钥</label>
             <input
                 ref="inputRef"
                 v-model="password"
                 type="password"
-                placeholder="ENTER ADMIN PASSWORD"
+                placeholder="ENTER LICENSE KEY"
                 class="w-full bg-medical-50 border border-medical-200 px-3 py-2 text-sm outline-none focus:border-accent font-sans transition-colors"
                 @keyup.enter="handleVerify"
             />
@@ -65,7 +65,7 @@ const handleVerify = async () => {
   loading.value = true;
   try {
     await adminApi.verify(password.value);
-    adminStore.setAdminPassword(password.value);
+    adminStore.setAdminPassword('');
     adminStore.isVerified = true;
     adminStore.showAuthModal = false;
     adminStore.showDashboard = true;

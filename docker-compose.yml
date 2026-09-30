@@ -23,11 +23,11 @@ services:
     networks:
       - music-net
     volumes:
-      # 外部启动配置；管理者在网页保存房间设置时写回此目录
+      # 服务端最高许可配置与普通许可清单，房间配置保存到 SQLite
       - ./config:/app/config
       # 挂载音频缓存目录，防止重启后 B 站歌曲重新下载
       - ./music_party/cached_media:/app/cached_media
-      # 挂载数据目录，用于持久化播放列表和历史记录
+      # 多房间 SQLite 数据、配对码冷却记录和共享用户资料
       - ./music_party/data:/app/data
 
 networks:

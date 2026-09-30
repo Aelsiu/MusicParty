@@ -25,8 +25,30 @@ import static org.mockito.Mockito.*;
  * ChatService 原实现播放时现场按 token 查名字 → 查不到 → "Unknown"。</p>
  */
 class ChatServicePlayStartNameTest {
+    private org.thornex.musicparty.room.RoomContext context;
+    @org.junit.jupiter.api.BeforeEach void room() { context = org.thornex.musicparty.room.RoomContext.enter("TestRm01"); }
+    @org.junit.jupiter.api.AfterEach void clear() { context.close(); }
 
-    private static final String DEST = "/topic/chat";
+    private static final String DEST = "/topic/rooms/TestRm01/chat";
+
+    @Test
+    void privateCommandUsesSendingTabWithoutChangingSharedProfile() {
+        UserService users = mock(UserService.class);
+        User profile = new User("shared-token", "newer-tab", "小明");
+        profile.getBindings().put("netease", "1234");
+        when(users.getUser("older-tab")).thenReturn(Optional.of(profile));
+        ChatCommand command = mock(ChatCommand.class);
+        when(command.getCommand()).thenReturn("stream");
+        ChatService chat = new ChatService(mock(SimpMessagingTemplate.class), users, new AppProperties(), List.of(command));
+
+        assertTrue(chat.processIncomingMessage("older-tab", "//stream"));
+        ArgumentCaptor<User> sender = ArgumentCaptor.forClass(User.class);
+        verify(command).execute(eq(""), sender.capture());
+        assertEquals("older-tab", sender.getValue().getSessionId());
+        assertEquals("shared-token", sender.getValue().getToken());
+        assertEquals("1234", sender.getValue().getBindings().get("netease"));
+        assertEquals("newer-tab", profile.getSessionId());
+    }
 
     @Test
     void playStartUsesSnapshotNameWhenUserPurged() {

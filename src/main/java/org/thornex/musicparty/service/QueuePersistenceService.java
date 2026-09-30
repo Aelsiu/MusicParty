@@ -23,8 +23,14 @@ import java.util.List;
 
 @Slf4j
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 public class QueuePersistenceService {
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.thornex.musicparty.room.RoomRepository roomRepository;
+
+    public void ensureLoaded() {}
+    public void saveNow() { saveData(); }
 
     private final MusicQueueManager musicQueueManager;
     private final ChatService chatService;
@@ -45,12 +51,13 @@ public class QueuePersistenceService {
         saveData();
     }
 
-    @Scheduled(fixedDelayString = "${app.music-api.queue.persistence-interval-ms:60000}")
     public void scheduledSave() {
         saveData();
     }
 
     synchronized void saveData() {
+        String roomId = org.thornex.musicparty.room.RoomContext.current();
+        if (roomRepository != null && roomId != null && !roomRepository.exists(roomId)) return;
         try {
             File file = getPersistenceFile();
             PersistentData data = new PersistentData();
@@ -59,14 +66,31 @@ public class QueuePersistenceService {
             data.setChatHistory(chatService.getHistoryFull());
             data.setSettings(buildSettingsSnapshot());
 
-            objectMapper.writeValue(file, data);
+            if (roomRepository != null && org.thornex.musicparty.room.RoomContext.current() != null) {
+                Object config = appProperties instanceof org.springframework.aop.scope.ScopedObject scoped ? scoped.getTargetObject() : appProperties;
+                roomRepository.save(org.thornex.musicparty.room.RoomContext.require(), objectMapper.writeValueAsString(data), objectMapper.writeValueAsString(config));
+            } else objectMapper.writeValue(file, data);
             log.debug("Queue, music history and chat history saved to {}", file.getAbsolutePath());
         } catch (Exception e) {
+            if (roomRepository != null && roomId != null && !roomRepository.exists(roomId)) return;
             log.error("Failed to save persistence data", e);
         }
     }
 
     synchronized void loadData() {
+        if (roomRepository != null && org.thornex.musicparty.room.RoomContext.current() != null) {
+            try {
+                String json = roomRepository.payload(org.thornex.musicparty.room.RoomContext.require(), "payload");
+                if (json != null) {
+                    PersistentData data = objectMapper.readValue(json, PersistentData.class);
+                    musicQueueManager.restore(data.getQueue() != null ? data.getQueue() : Collections.emptyList(), data.getHistory() != null ? data.getHistory() : Collections.emptyList());
+                    chatService.restore(data.getChatHistory() != null ? data.getChatHistory() : Collections.emptyList());
+                    applySettings(data.getSettings());
+                }
+                musicPlayerService.pauseForEmptyRoom();
+            } catch (Exception e) { throw new IllegalStateException("Room snapshot could not be restored", e); }
+            return;
+        }
         File file = getPersistenceFile();
         if (!file.exists()) {
             log.info("No persistence file found at {}, starting fresh.", file.getAbsolutePath());
@@ -145,7 +169,9 @@ public class QueuePersistenceService {
         }
         if (s.streamEnabled() != null) liveStreamService.setEnabled(s.streamEnabled());
 
-        log.info("Restored persisted runtime settings from {}", appProperties.getQueue().getPersistenceFile());
+        if (org.thornex.musicparty.room.RoomContext.current() != null) {
+            log.info("Restored persisted runtime settings for room {}", org.thornex.musicparty.room.RoomContext.require());
+        } else log.info("Restored persisted runtime settings from {}", appProperties.getQueue().getPersistenceFile());
     }
 
     private SettingsSnapshot buildSettingsSnapshot() {
@@ -176,6 +202,7 @@ public class QueuePersistenceService {
     }
 
     private File getPersistenceFile() {
+        if (roomRepository != null && org.thornex.musicparty.room.RoomContext.current() != null) return new File("data/unused-room-snapshot");
         String path = appProperties.getQueue().getPersistenceFile();
         File file = new File(path);
         if (file.getParentFile() != null && !file.getParentFile().exists()) {

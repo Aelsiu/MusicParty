@@ -1,13 +1,14 @@
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { roomSession, clearRoom } from '../services/roomSession.js';
 import { STORAGE_KEYS } from '../constants/keys.js';
 
 const generateToken = () => {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
+    const bytes = crypto.getRandomValues(new Uint8Array(16));
+    bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+    const hex = [...bytes].map(n => n.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0,8)}-${hex.slice(8,12)}-${hex.slice(12,16)}-${hex.slice(16,20)}-${hex.slice(20)}`;
+};
 
 let storedToken = localStorage.getItem(STORAGE_KEYS.TOKEN);
 if (!storedToken) {
@@ -28,6 +29,8 @@ export const useUserStore = defineStore('user', () => {
     const isAuthPassed = ref(false);
     const roomPassword = ref('');
     const roomName = ref('');
+    const roomId = computed(() => roomSession.roomId);
+    const justReturned = ref(false);
 
     // 启动时：严格从 LocalStorage 读取，默认值只在这里设定一次
     const storageName = localStorage.getItem('mp_username');
@@ -154,11 +157,14 @@ export const useUserStore = defineStore('user', () => {
 
     const resetAuthentication = () => {
         isAuthPassed.value = false;
+        justReturned.value = true;
+        clearRoom();
         roomPassword.value = '';
         localStorage.removeItem(STORAGE_KEYS.ROOM_PASSWORD); // 清理旧版本保存的房间密码
     };
 
     const prepareEntry = (name, password) => {
+        justReturned.value = false;
         const previousName = localStorage.getItem(STORAGE_KEYS.USERNAME);
         if (!previousName || name !== previousName) clearBindings();
         if (previousName && name !== previousName) {
@@ -169,8 +175,16 @@ export const useUserStore = defineStore('user', () => {
         currentUser.value.name = name;
         roomPassword.value = password;
     };
+    const syncProfile = (profile) => {
+        if (profile.name) { currentUser.value.name = profile.name; if (!isGuest.value) localStorage.setItem(STORAGE_KEYS.USERNAME, profile.name); }
+        if (profile.bindings) for (const platform of ['netease', 'bilibili']) {
+            const accountId = profile.bindings[platform] || '';
+            if ((bindings.value[platform] || '') !== accountId) updateBinding(platform, accountId);
+        }
+    };
 
     return {
+        roomId, justReturned, syncProfile,
         onlineUsers,
         currentUser,
         bindings,

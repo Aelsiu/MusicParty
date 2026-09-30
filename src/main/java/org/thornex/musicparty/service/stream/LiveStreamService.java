@@ -46,8 +46,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * </ol>
  */
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class LiveStreamService {
+    private final String roomId = org.thornex.musicparty.room.RoomContext.current();
+    public void suspendForEmptyRoom() { stopTranscoding(); broadcaster.closeAll(); }
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.room.RoomAccessService roomAccess;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.room.RoomResourceBudget resourceBudget;
+    public boolean isRoomEmpty() { return roomAccess != null && roomAccess.count(roomId) == 0; }
 
     /** 同源 seek 重启的最小间隔，防止位置事件风暴导致反复重启 */
     private static final long MIN_SEEK_RESTART_INTERVAL_MS = 5000;
@@ -114,12 +122,12 @@ public class LiveStreamService {
 
     @PostConstruct
     public void init() {
-        streamExecutor = Executors.newCachedThreadPool();
-        broadcaster.setOnClientRemoved(this::handleClientRemoved);
+        streamExecutor = Executors.newCachedThreadPool(r -> { Thread t = new Thread(org.thornex.musicparty.room.RoomContext.capture(r), "room-stream"); t.setDaemon(true); return t; });
+        broadcaster.setOnClientRemoved(client -> { try (var ignored = org.thornex.musicparty.room.RoomContext.enter(roomId)) { handleClientRemoved(client); } });
         // 预生成 MP3 静音作为常驻基底，保证任何连接随时能收到数据（不依赖歌曲转码器状态）
-        silenceChunk = generateSilence();
+        silenceChunk = resourceBudget == null ? generateSilence() : resourceBudget.silence(this::generateSilence);
         if (silenceChunk != null && silenceChunk.length > 0) {
-            silenceThread = Thread.ofPlatform().daemon().name("stream-silence-filler").start(this::silenceLoop);
+            silenceThread = Thread.ofPlatform().daemon().name("stream-silence-filler").start(org.thornex.musicparty.room.RoomContext.capture(this::silenceLoop));
         } else {
             log.warn("Stream: silence fallback unavailable; idle connections may stall");
         }
@@ -143,6 +151,7 @@ public class LiveStreamService {
 
     @PreDestroy
     public void cleanup() {
+        if (resourceBudget != null) resourceBudget.cancel(roomId);
         if (silenceThread != null) {
             silenceThread.interrupt();
         }
@@ -389,7 +398,9 @@ public class LiveStreamService {
     }
 
     private synchronized void startTranscoding(TranscodeTarget target) {
-        stopTranscoding();
+        stopTranscoding(false);
+        var lease = resourceBudget == null ? null : resourceBudget.transcoder(roomId);
+        if (resourceBudget != null && lease == null) return;
 
         long launchPos = estimatePlayerPosition();
         runningSourceKey = target.key();
@@ -443,11 +454,15 @@ public class LiveStreamService {
             transcoderStartTimeMs = now;
             lastTranscoderOutputMs = now;
             ProcessBuilder pb = new ProcessBuilder(command);
-            transcoderProcess = pb.start();
-            streamExecutor.submit(() -> readLoop(transcoderProcess, target));
+            Process launched = pb.start();
+            transcoderProcess = launched;
+            if (lease != null) launched.onExit().whenComplete((process, error) -> lease.close());
+            streamExecutor.submit(() -> readLoop(launched, target));
             // 异步读取 stderr：ffmpeg 卡住/拉流失败的原因会打到应用日志
-            streamExecutor.submit(() -> readErrorLoop(transcoderProcess));
-        } catch (IOException e) {
+            streamExecutor.submit(() -> readErrorLoop(launched));
+        } catch (IOException | RuntimeException e) {
+            if (transcoderProcess != null && transcoderProcess.isAlive()) transcoderProcess.destroyForcibly();
+            if (lease != null) lease.close();
             log.error("Stream: failed to start ffmpeg", e);
             transcoderProcess = null;
         }
@@ -459,7 +474,7 @@ public class LiveStreamService {
              java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.InputStreamReader(is))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                if (Thread.currentThread().isInterrupted()) {
+                if (Thread.currentThread().isInterrupted() || process != transcoderProcess) {
                     break;
                 }
                 log.warn("Stream ffmpeg: {}", line);
@@ -470,6 +485,11 @@ public class LiveStreamService {
     }
 
     private synchronized void stopTranscoding() {
+        stopTranscoding(true);
+    }
+
+    private synchronized void stopTranscoding(boolean cancelWaiting) {
+        if (resourceBudget != null && cancelWaiting) resourceBudget.cancel(roomId);
         // 清空各客户端缓冲，丢弃暂停/切歌前的过期音频
         broadcaster.flushAll();
         // 交还静音基底：此后由静音填充线程维持连接数据流
@@ -492,7 +512,7 @@ public class LiveStreamService {
             byte[] buf = new byte[chunkSize];
             int n;
             while ((n = is.read(buf)) != -1) {
-                if (Thread.currentThread().isInterrupted()) {
+                if (Thread.currentThread().isInterrupted() || process != transcoderProcess) {
                     break;
                 }
                 if (n <= 0) {
@@ -525,7 +545,7 @@ public class LiveStreamService {
             // 进程被杀或管道关闭，忽略
         } finally {
             log.debug("Stream: transcoding finished/stopped.");
-            handleTranscoderExit();
+            if (process == transcoderProcess) handleTranscoderExit();
         }
     }
 
@@ -573,9 +593,10 @@ public class LiveStreamService {
      * 转码器看门狗：检测"进程活着但没在产出"的情况（网络源拉流卡住 / 静默失败），
      * 超时后杀掉重启——否则当前歌曲会整首静音，VRC 只能等到切歌才有声。
      */
-    @Scheduled(fixedRate = 5000)
+
     public void transcodeWatchdog() {
         Process process = transcoderProcess;
+        if (process == null && resourceBudget != null && !isRoomEmpty() && isEnabled.get() && !isPaused) checkState();
         if (process == null || !process.isAlive()) {
             return; // 未运行或已退出（退出由 handleTranscoderExit 处理）
         }
@@ -608,7 +629,7 @@ public class LiveStreamService {
     private TranscodeTarget resolveTarget() {
         LocalCacheService.CacheEntry entry = localCacheService.getCacheEntry(currentMusic.id());
         if (entry != null && entry.getStatus() == CacheStatus.COMPLETED) {
-            Path filePath = Paths.get(LocalResourceConfig.CACHE_DIR, entry.getFileName());
+            Path filePath = Paths.get(localCacheService.getCacheDirectory(), entry.getFileName());
             if (Files.exists(filePath)) {
                 return new TranscodeTarget(
                         filePath.toAbsolutePath().toString(),

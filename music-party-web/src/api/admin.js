@@ -1,11 +1,13 @@
 import client from './client';
+import { roomsApi } from './rooms';
+import { roomSession, saveManager } from '../services/roomSession';
 
 /**
  * 管理员后台专用接口封装
  */
 export const adminApi = {
     // 验证密码
-    verify: (password) => client.post('/api/admin/verify', { password }),
+    verify: async (password) => { const result = await roomsApi.login(password); saveManager(result); await roomsApi.manage(roomSession.roomId); roomSession.ownerAccess = true; return result; },
 
     // 锁定控制 (PAUSE/SKIP/SHUFFLE/ALL)
     setLock: (adminPwd, type, locked) => client.post('/api/admin/lock', { type, locked }, {
@@ -14,11 +16,6 @@ export const adminApi = {
 
     // 强制播放器操作 (PAUSE/SKIP/SHUFFLE)
     playerAction: (adminPwd, action) => client.post('/api/admin/player/action', { action }, {
-        headers: { 'X-Admin-Password': adminPwd }
-    }),
-
-    // 修改四位数字房间密码
-    setRoomPassword: (adminPwd, password) => client.post('/api/admin/room/password', { password }, {
         headers: { 'X-Admin-Password': adminPwd }
     }),
 

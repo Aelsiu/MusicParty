@@ -1,5 +1,6 @@
 // src/stores/player.js
 
+import { roomSession } from '../services/roomSession';
 import { defineStore } from 'pinia';
 import { ref, computed, watch } from 'vue';
 import { useUserStore } from './user';
@@ -142,7 +143,9 @@ export const usePlayerStore = defineStore('player', () => {
         const authHeaders = {
             'user-name': userStore.currentUser.name || '游客',
             'user-token': userStore.userToken,
-            'room-password': userStore.roomPassword
+            'room-id': roomSession.roomId,
+            'room-token': roomSession.roomToken,
+            'management-token': roomSession.ownerAccess ? roomSession.managerToken : ''
         };
 
         // 使用抽离出的订阅配置

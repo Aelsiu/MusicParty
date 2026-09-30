@@ -31,6 +31,7 @@ import java.util.Optional;
  * 运行期会定期刷新其中的 {@code bili_ticket}（3 天过期）并从响应收割最新 WBI key。</p>
  */
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class BilibiliCookieService {
 

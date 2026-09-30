@@ -20,6 +20,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class ChatService {
 
@@ -77,7 +78,14 @@ public class ChatService {
             if (handler != null) {
                 log.info("Executing command handler: {}", cmdKey);
                 userService.getUser(sessionId).ifPresentOrElse(
-                    user -> handler.execute(args, user),
+                    user -> {
+                        // A shared profile can have several live tabs, private replies belong to the sender.
+                        User sender = new User(user.getToken(), sessionId, user.getName());
+                        sender.setGuest(user.isGuest());
+                        sender.setLastActiveTime(user.getLastActiveTime());
+                        sender.getBindings().putAll(user.getBindings());
+                        handler.execute(args, sender);
+                    },
                     () -> log.warn("User not found for session {}", sessionId)
                 );
                 return true; // 拦截消息
@@ -153,7 +161,7 @@ public class ChatService {
                 MessageType.SYSTEM
         );
         addMessage(sysMsg);
-        messagingTemplate.convertAndSend("/topic/chat", sysMsg);
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/chat"), sysMsg);
     }
 
     /**
@@ -218,6 +226,6 @@ public class ChatService {
         addMessage(sysMsg);
 
         // 2. 广播到聊天频道
-        messagingTemplate.convertAndSend("/topic/chat", sysMsg);
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/chat"), sysMsg);
     }
 }

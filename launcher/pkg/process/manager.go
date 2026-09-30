@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"sync"
 	"runtime"
+	"sync"
 	"syscall"
 )
 
@@ -17,12 +17,13 @@ type ProcessStatus struct {
 }
 
 type ServiceManager struct {
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
-	LogChannel chan string
-	StatusLock sync.RWMutex
-	Statuses   map[string]bool
+	ctx              context.Context
+	cancel           context.CancelFunc
+	wg               sync.WaitGroup
+	LogChannel       chan string
+	StatusLock       sync.RWMutex
+	Statuses         map[string]bool
+	WorkingDirectory string
 }
 
 func NewServiceManager() *ServiceManager {
@@ -38,14 +39,15 @@ func NewServiceManager() *ServiceManager {
 func (m *ServiceManager) StartProcess(name string, command string, args ...string) {
 	m.wg.Add(1)
 	m.setStatus(name, true)
-	
+
 	go func() {
 		defer m.wg.Done()
 		defer m.setStatus(name, false)
-		
+
 		m.LogChannel <- fmt.Sprintf("[SYSTEM] Starting %s...", name)
 		cmd := exec.CommandContext(m.ctx, command, args...)
-		
+		cmd.Dir = m.WorkingDirectory
+
 		// 隐藏 Windows 命令行窗口
 		if runtime.GOOS == "windows" {
 			cmd.SysProcAttr = &syscall.SysProcAttr{
@@ -53,18 +55,18 @@ func (m *ServiceManager) StartProcess(name string, command string, args ...strin
 				CreationFlags: 0x08000000, // CREATE_NO_WINDOW
 			}
 		}
-		
+
 		stdout, _ := cmd.StdoutPipe()
 		stderr, _ := cmd.StderrPipe()
-		
+
 		go m.captureOutput(name, stdout)
 		go m.captureOutput(name, stderr)
-		
+
 		if err := cmd.Start(); err != nil {
 			m.LogChannel <- fmt.Sprintf("[%s ERROR] Failed to start: %v", name, err)
 			return
 		}
-		
+
 		cmd.Wait()
 		m.LogChannel <- fmt.Sprintf("[SYSTEM] %s exited.", name)
 	}()

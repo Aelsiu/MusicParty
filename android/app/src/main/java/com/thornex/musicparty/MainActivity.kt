@@ -109,9 +109,15 @@ class MainActivity : AppCompatActivity() {
         // 返回键：主页 → 起始页；起始页 → 退出
         onBackPressedDispatcher.addCallback(this) {
             if (webView.visibility == View.VISIBLE) {
-                urlInput.setText(getServerUrl().orEmpty())
-                webView.visibility = View.GONE
-                startPage.visibility = View.VISIBLE
+                webView.evaluateJavascript("window.musicPartyBack ? window.musicPartyBack() : false") { handled ->
+                    if (handled != "true") {
+                        webView.evaluateJavascript("window.musicPartyLeave && window.musicPartyLeave()", null)
+                        webView.loadUrl("about:blank")
+                        urlInput.setText(getServerUrl().orEmpty())
+                        webView.visibility = View.GONE
+                        startPage.visibility = View.VISIBLE
+                    }
+                }
             } else {
                 finish()
             }
@@ -169,7 +175,10 @@ class MainActivity : AppCompatActivity() {
         prefs.edit().putString("server_url", url).apply()
         startPage.visibility = View.GONE
         webView.visibility = View.VISIBLE
-        webView.loadUrl(url)
+        webView.evaluateJavascript("window.musicPartyLeave && window.musicPartyLeave()") {
+            MediaSessionManager.update("{\"title\":\"Music Party\",\"paused\":true}")
+            webView.loadUrl(url)
+        }
     }
 
     private fun getServerUrl(): String? = prefs.getString("server_url", null)
@@ -191,6 +200,10 @@ class MainActivity : AppCompatActivity() {
     override fun onStop() { super.onStop() /* 故意不调 webView.onPause() */ }
 
     override fun onDestroy() {
+        webView.stopLoading()
+        webView.loadUrl("about:blank")
+        webView.destroy()
+        stopService(serviceIntent)
         MediaSessionManager.onControl = null
         MediaSessionManager.destroy()
         super.onDestroy()

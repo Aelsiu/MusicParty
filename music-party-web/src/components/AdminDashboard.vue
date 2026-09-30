@@ -149,7 +149,7 @@
                               class="py-1.5 text-[10px] font-bold transition-colors"
                               :class="privateDj.mode === 'DJ' ? 'bg-accent text-white' : 'text-medical-500 hover:bg-medical-200'">私人DJ</button>
                     </div>
-                    <p class="text-[8px] text-medical-400">点选即开启，再点已选中的模式即关闭；私人DJ模式=先播语音再播歌；加入队列功能固定为私人FM</p>
+                    <p class="text-[8px] text-medical-400">点选即开启，再点已选中的模式即关闭，私人DJ模式=先播语音再播歌，加入队列功能固定为私人FM</p>
                   </div>
 
                   <!-- 三个功能开关 -->
@@ -212,14 +212,7 @@
                   <span class="text-xs font-bold uppercase tracking-widest font-mono">环境配置 / Environment</span>
                 </div>
                 <div class="p-4 space-y-4">
-                  <!-- Password -->
-                  <div class="space-y-2">
-                    <label class="block text-[10px] font-bold text-medical-400 uppercase font-mono">房间进入密码</label>
-                    <div class="flex items-center gap-2">
-                      <PinInput v-model="roomPassword" label="新房间密码" />
-                      <button @click="updateRoomPassword" class="bg-strong text-white px-3 py-1.5 text-[10px] font-bold hover:bg-accent">设置</button>
-                    </div>
-                  </div>
+                  <RoomPairingCard />
                   <!-- Toggles -->
                   <div class="grid grid-cols-2 gap-3">
                     <div class="p-3 bg-medical-50 border border-medical-100 flex flex-col items-center gap-2 rounded-sm">
@@ -258,12 +251,14 @@
                         <div class="absolute top-0.5 left-0.5 w-3 h-3 bg-surface rounded-full transition-transform duration-300" :style="{ transform: playerStore.config[`${plat.id}Enabled`] ? 'translateX(16px)' : 'translateX(0)' }"></div>
                       </button>
                     </div>
+                    <NeteaseQrLogin v-if="plat.id==='netease'" />
+                    <label class="block text-[11px] font-bold text-medical-500">{{ plat.id==='netease'?'手动更新网易云 Cookie':'手动更新B站Cookie' }}</label>
                     <div class="flex gap-2">
                       <input
                         type="password"
                         v-model="plat.value"
                         :placeholder="'输入新 ' + plat.tokenName + '...'"
-                        class="flex-1 bg-medical-50 border border-medical-200 px-3 py-2 text-[10px] outline-none focus:border-accent font-mono"
+                        class="flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 text-base focus:border-accent"
                       />
                       <button @click="updateCookie(plat.id, plat.value)" class="bg-strong text-white px-3 font-bold text-[10px] hover:bg-accent transition-colors">更新</button>
                     </div>
@@ -277,7 +272,7 @@
                   <AlertTriangle class="w-4 h-4" /> 危险区域 / DANGER_ZONE.SH
                 </h4>
                 <button @click="handleReset" class="w-full py-2 bg-red-600 text-white font-bold text-[10px] hover:bg-red-700 transition-all uppercase tracking-widest shadow-sm">
-                  全系统重置 (慎用)
+                  重置本房间
                 </button>
               </div>
             </div>
@@ -287,8 +282,8 @@
 
         <!-- Footer -->
         <div class="p-3 bg-medical-100 border-t border-medical-200 flex justify-between items-center text-[9px] font-mono text-medical-400">
-          <span class="flex items-center gap-1"><ShieldCheck class="w-3 h-3 text-green-500" /> 安全连接: AES-256-GCM</span>
-          <span>管理员哈希: {{ adminStore.adminPassword.substring(0, 4).toUpperCase() }}****</span>
+          <span class="flex items-center gap-1"><ShieldCheck class="w-3 h-3 text-green-500" /> ACCESS VERIFIED</span>
+          <span>{{ roomSession.root ? 'ROOT' : roomSession.licenseId }} / {{ roomSession.roomId }}</span>
         </div>
       </div>
     </div>
@@ -301,7 +296,9 @@ import { useAdminStore } from '../stores/admin';
 import { usePlayerStore } from '../stores/player';
 import { adminApi } from '../api/admin';
 import { useToast } from '../composables/useToast';
-import PinInput from './PinInput.vue';
+import RoomPairingCard from './RoomPairingCard.vue';
+import NeteaseQrLogin from './NeteaseQrLogin.vue';
+import { roomSession } from '../services/roomSession';
 import {
   Settings, X, Pause, Play, SkipForward, ListOrdered, Repeat1, Shuffle,
   Lock, Unlock, ShieldAlert, Save, AlertTriangle,
@@ -312,7 +309,7 @@ const adminStore = useAdminStore();
 const playerStore = usePlayerStore();
 const { success, error, warning } = useToast();
 
-const roomPassword = ref('');
+
 
 // Config Proxy for editing
 const configProxy = ref({ ...playerStore.config });
@@ -439,17 +436,6 @@ const toggleLock = async (type, locked) => {
   }
 };
 
-const updateRoomPassword = async () => {
-  if (!/^[0-9]{4}$/.test(roomPassword.value)) { error('请输入 4 位数字房间密码'); return; }
-  try {
-    const data = await adminApi.setRoomPassword(adminStore.adminPassword, roomPassword.value);
-    roomPassword.value = '';
-    success(data.message);
-  } catch (e) {
-    error('密码更新失败');
-  }
-};
-
 const toggleStream = async () => {
   try {
     const data = await adminApi.setStream(adminStore.adminPassword, !playerStore.streamActive);
@@ -497,12 +483,12 @@ const togglePlatform = async (platformId) => {
 };
 
 const handleReset = async () => {
-  if (!confirm('!!! 警告 !!! \n这将重置整个系统。 \n你确定要继续吗？')) return;
+  if (!confirm('!!! 警告 !!! \n这将清空本房间队列和播放历史，并停止播放 \n你确定要继续吗？')) return;
   try {
     const data = await adminApi.resetSystem(adminStore.adminPassword);
     warning(data.message);
   } catch (e) {
-    error('系统重置失败');
+    error('房间重置失败');
   }
 };
 </script>

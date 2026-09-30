@@ -34,6 +34,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class MusicPlayerService {
 
@@ -129,9 +130,9 @@ public class MusicPlayerService {
         isVoteSkipEnabled.set(playerConfig.isVoteSkipEnabled());
         voteSkipThreshold.set(playerConfig.getVoteSkipThreshold());
         voteSkipWaitTime.set(playerConfig.getVoteSkipWaitTime());
+        if (org.thornex.musicparty.room.RoomContext.current() != null) isPaused.set(true);
     }
 
-    @Scheduled(fixedRate = 1000)
     public void playerLoop() {
         if (isPaused.get()) {
             return;
@@ -185,6 +186,7 @@ public class MusicPlayerService {
     }
 
     private synchronized void playNextInQueue() {
+        if (org.thornex.musicparty.room.RoomContext.current() != null && isPaused.get()) return;
         if (currentMusic.get() != null || isLoading.get()) {
             return;
         }
@@ -845,7 +847,7 @@ public class MusicPlayerService {
         int eligibleCount = calculateEligibleUsers(onlineTokens);
 
         if (eligibleCount > 0 && (double) currentVoteCount / eligibleCount >= voteSkipThreshold.get()) {
-            String msg = String.format("投票切歌通过！(%d/%d 票)，正在进入下一首。", currentVoteCount, eligibleCount);
+            String msg = String.format("投票切歌通过！(%d/%d 票)，正在进入下一首", currentVoteCount, eligibleCount);
             eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.INFO, PlayerAction.SYSTEM_MESSAGE, "SYSTEM", msg));
             executeSkip("SYSTEM");
         }
@@ -950,9 +952,11 @@ public class MusicPlayerService {
 
     public void togglePause(String sessionId) {
         if (currentMusic.get() == null) {
+            if (org.thornex.musicparty.room.RoomContext.current() != null) { isPaused.set(false); timestampAnchor.set(System.currentTimeMillis()); }
             if (!queueManager.getQueueSnapshot().isEmpty()) {
                 playNextInQueue();
             }
+            if (org.thornex.musicparty.room.RoomContext.current() != null) broadcastFullPlayerState();
             return;
         }
         if (isRateLimited(sessionId)) return;
@@ -1021,7 +1025,7 @@ public class MusicPlayerService {
         timestampAnchor.set(0);
 
         queueManager.clearAll();
-        isPaused.set(false);
+        isPaused.set(org.thornex.musicparty.room.RoomContext.current() != null);
         isShuffle.set(false);
         playMode.set(PlayMode.SEQUENTIAL);
         isLoading.set(false);
@@ -1060,7 +1064,7 @@ public class MusicPlayerService {
      */
     @EventListener
     public void onUserCountChanged(UserCountChangeEvent event) {
-        if (event.getOnlineUserCount() == 0 && !isStreamActive.get()) {
+        if (org.thornex.musicparty.room.RoomContext.current() == null && event.getOnlineUserCount() == 0 && !isStreamActive.get()) {
             enterIdleMode();
         }
         
@@ -1078,6 +1082,7 @@ public class MusicPlayerService {
     public void onStreamStatusChanged(StreamStatusEvent event) {
         boolean hasListeners = event.isHasListeners();
         this.isStreamActive.set(hasListeners);
+        if (org.thornex.musicparty.room.RoomContext.current() != null) { broadcastFullPlayerState(); return; }
         log.info("System: Stream active status changed to: {}, Count: {}", hasListeners, event.getListenerCount());
 
         if (hasListeners) {
@@ -1123,10 +1128,19 @@ public class MusicPlayerService {
         }
     }
 
+    public synchronized void pauseForEmptyRoom() {
+        playHeadVersion.incrementAndGet();
+        positionAnchor.set(calculateCurrentPosition());
+        timestampAnchor.set(System.currentTimeMillis());
+        isPaused.set(true);
+        isLoading.set(false);
+        broadcastFullPlayerState();
+    }
+
     /**
      * 定时清理长时间暂停的播放器状态
      */
-    @Scheduled(fixedRate = 600000) // 每10分钟检查一次
+
     public void cleanupIdlePlayer() {
         if (isPaused.get() && currentMusic.get() != null) {
             // 在暂停状态下，timestampAnchor 记录的是暂停开始的时间
@@ -1136,13 +1150,12 @@ public class MusicPlayerService {
                 currentMusic.set(null);
                 positionAnchor.set(0);
                 timestampAnchor.set(0);
-                isPaused.set(false);
+                isPaused.set(org.thornex.musicparty.room.RoomContext.current() != null);
                 broadcastFullPlayerState();
             }
         }
     }
 
-    @Scheduled(fixedRate = 10000)
     public void checkIdleKick() {
         checkIdleKick(System.currentTimeMillis());
     }
@@ -1170,7 +1183,7 @@ public class MusicPlayerService {
      * 周期状态广播（心跳）：让所有客户端周期性重锚播放进度，主动防漂移，
      * 同时让客户端能通过"长时间收不到广播"识别假连接。空闲（无曲且暂停）时跳过。
      */
-    @Scheduled(fixedRateString = "${app.music-api.player.sync-broadcast-interval-ms:5000}")
+
     public void broadcastSyncHeartbeat() {
         if (currentMusic.get() == null && isPaused.get()) {
             return;

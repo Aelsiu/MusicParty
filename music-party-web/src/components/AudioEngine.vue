@@ -18,6 +18,7 @@
 </template>
 
 <script setup>
+import { mediaRoomUrl } from '../services/roomSession';
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import { usePlayerStore } from '../stores/player';
 import { useUiStore } from '../stores/ui';
@@ -49,9 +50,9 @@ watch(() => player.nowPlaying?.music?.url, (url) => {
 
 const audioSrc = computed(() => {
   const current = player.nowPlaying?.music?.url;
-  if (current) return current;
+  if (current) return mediaRoomUrl(current);
   // 服务器仍在加载下一首：继续播上一首，避免间隙中断
-  if (player.isLoading && lastGoodUrl.value) return lastGoodUrl.value;
+  if (player.isLoading && lastGoodUrl.value) return mediaRoomUrl(lastGoodUrl.value);
   // 服务器空闲：清空 src，音频自然停止
   return '';
 });

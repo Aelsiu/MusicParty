@@ -38,6 +38,7 @@ object MediaSessionManager {
     private lateinit var appContext: Context
     private var session: MediaSessionCompat? = null
     private var notification: Notification? = null
+    private val mediaGeneration = java.util.concurrent.atomic.AtomicLong()
 
     /** Web 端控制回调：通知按钮 → 执行 Web 端动作（由 MainActivity 注入） */
     var onControl: ((String) -> Unit)? = null
@@ -70,7 +71,8 @@ object MediaSessionManager {
         ?: NotificationCompat.Builder(appContext, CHANNEL_ID).setSmallIcon(android.R.drawable.ic_media_play).build()
 
     /** 由 JS 桥调用：Web 端推送播放状态 */
-    fun update(json: String) {
+    @Synchronized fun update(json: String) {
+        val generation = mediaGeneration.incrementAndGet()
         val s = session ?: return
         val o = try { JSONObject(json) } catch (e: Exception) { JSONObject() }
         val title = o.optString("title", "Music Party")
@@ -102,17 +104,18 @@ object MediaSessionManager {
         NotificationManagerCompat.from(appContext).notify(NOTIF_ID, notification!!)
 
         // 异步加载封面作大图（失败不影响控制）
-        if (coverUrl.isNotEmpty()) loadArtworkAsync(coverUrl, title, artist, paused)
+        if (coverUrl.isNotEmpty()) loadArtworkAsync(coverUrl, title, artist, paused, generation)
     }
 
-    fun destroy() {
+    @Synchronized fun destroy() {
+        mediaGeneration.incrementAndGet()
         onControl = null
         session?.isActive = false
         session?.release()
         session = null
     }
 
-    private fun loadArtworkAsync(coverUrl: String, title: String, artist: String, paused: Boolean) {
+    private fun loadArtworkAsync(coverUrl: String, title: String, artist: String, paused: Boolean, generation: Long) {
         Thread {
             var stream: java.io.InputStream? = null
             try {
@@ -123,7 +126,8 @@ object MediaSessionManager {
                 conn.setRequestProperty("Referer", "https://music.163.com/")
                 stream = conn.inputStream
                 val bmp = BitmapFactory.decodeStream(stream)
-                if (bmp != null) {
+                synchronized(MediaSessionManager) {
+                if (bmp != null && generation == mediaGeneration.get()) {
                     val s = session ?: return@Thread
                     // MediaMetadataCompat 没有 buildUpon()：用拷贝构造 Builder(旧元数据)
                     val cur = s.controller.metadata
@@ -134,6 +138,7 @@ object MediaSessionManager {
                     s.setMetadata(meta)
                     notification = buildNotification(title, artist, paused, bmp)
                     NotificationManagerCompat.from(appContext).notify(NOTIF_ID, notification!!)
+                }
                 }
             } catch (e: Exception) {
                 // 封面加载失败不影响控制

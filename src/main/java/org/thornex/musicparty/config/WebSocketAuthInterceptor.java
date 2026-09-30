@@ -1,51 +1,39 @@
 package org.thornex.musicparty.config;
 
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.MessageChannel;
-import org.springframework.messaging.MessageDeliveryException;
-import org.springframework.messaging.simp.stomp.StompCommand;
-import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
-import org.springframework.messaging.support.ChannelInterceptor;
-import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.messaging.*;
+import org.springframework.messaging.simp.stomp.*;
+import org.springframework.messaging.support.*;
 import org.springframework.stereotype.Component;
-import org.thornex.musicparty.controller.AuthController;
+import org.thornex.musicparty.room.*;
+import java.util.*;
 
 @Component
-@Slf4j
-public class WebSocketAuthInterceptor implements ChannelInterceptor {
-
-    private final AuthController authController;
-
-    public WebSocketAuthInterceptor(AuthController authController) {
-        this.authController = authController;
-    }
-
-    @Override
-    public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        StompHeaderAccessor accessor = MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
-
-        // 只拦截连接命令
-        if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            String inputPassword = accessor.getFirstNativeHeader("room-password");
-
-            if (!isPasswordValid(inputPassword)) {
-                log.warn("WebSocket Connection Refused: Invalid Room Password. Session: {}", accessor.getSessionId());
-                // 抛出异常将直接导致连接断开，并向客户端发送 ERROR 帧
-                throw new MessageDeliveryException("INVALID_ROOM_PASSWORD");
-            }
-
-            log.info("WebSocket Authenticated: Session {}", accessor.getSessionId());
+public class WebSocketAuthInterceptor implements ExecutorChannelInterceptor {
+    private final RoomAccessService access;
+    private final ThreadLocal<RoomContext> context = new ThreadLocal<>();
+    private static final Set<String> SENDS=Set.of("/app/player/resync","/app/enqueue","/app/enqueue/playlist","/app/control/next","/app/control/toggle-shuffle","/app/control/toggle-pause","/app/queue/top","/app/queue/remove","/app/control/like","/app/user/rename","/app/user/bind","/app/chat","/app/chat/history/fetch");
+    private static final Set<String> PRIVATE=Set.of("/app/user/me","/app/user/profile","/app/chat/history","/app/topic/player/state","/app/topic/users/online","/user/queue/me","/user/queue/profile","/user/queue/player/state","/user/queue/chat/history","/user/queue/events","/user/queue/chat/private");
+    public WebSocketAuthInterceptor(RoomAccessService access) { this.access=access; }
+    @Override public Message<?> preSend(Message<?> message,MessageChannel channel) {
+        var a=MessageHeaderAccessor.getAccessor(message,StompHeaderAccessor.class);
+        if(a==null || a.getCommand()==null) return message;
+        if(a.getCommand()==StompCommand.CONNECT) {
+            String room=a.getFirstNativeHeader("room-id");
+            access.connect(a.getSessionId(),room,a.getFirstNativeHeader("room-token"),a.getFirstNativeHeader("management-token"));
+        } else if(a.getCommand()==StompCommand.SEND || a.getCommand()==StompCommand.SUBSCRIBE) {
+            var c=access.connection(a.getSessionId());String d=a.getDestination();
+            if(a.getCommand()==StompCommand.SEND && !SENDS.contains(d)) throw new MessageDeliveryException("ACCESS_DENIED");
+            if(a.getCommand()==StompCommand.SUBSCRIBE && !PRIVATE.contains(d) && (d==null || !d.matches("/topic/rooms/"+c.roomId()+"/(player/(state|queue|events)|users/online|chat|lifecycle|pairing)"))) throw new MessageDeliveryException("ACCESS_DENIED");
         }
         return message;
     }
-
-    private boolean isPasswordValid(String input) {
-        String currentRoomPass = authController.getRawPassword();
-
-        return AuthController.isValidPin(currentRoomPass)
-                && AuthController.isValidPin(input)
-                && authController.getRoomName() != null
-                && currentRoomPass.equals(input);
+    @Override public Message<?> beforeHandle(Message<?> message,MessageChannel channel,MessageHandler handler) {
+        String session=(String)message.getHeaders().get("simpSessionId");
+        if(session!=null) {
+            try { context.set(RoomContext.enter(access.connection(session).roomId())); }
+            catch(RuntimeException e) { if(message.getHeaders().get("stompCommand")!=StompCommand.DISCONNECT) throw new MessageDeliveryException("ROOM_ACCESS_EXPIRED"); }
+        }
+        return message;
     }
+    @Override public void afterMessageHandled(Message<?> message,MessageChannel channel,MessageHandler handler,Exception ex) { var c=context.get();if(c!=null)c.close();context.remove(); }
 }

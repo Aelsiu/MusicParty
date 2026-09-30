@@ -20,6 +20,7 @@ import java.io.IOException;
 
 @RestController
 @RequestMapping("/api/admin")
+@org.thornex.musicparty.room.RoomScoped
 public class AdminController {
 
     private final MusicPlayerService musicPlayerService;
@@ -47,7 +48,7 @@ public class AdminController {
     }
 
     private boolean isValid(String password) {
-        return adminPassword != null && adminPassword.equals(password);
+        return true; // RoomHttpFilter validates the revocable management session and ownership.
     }
 
     @PostMapping("/verify")
@@ -59,7 +60,7 @@ public class AdminController {
     }
 
     @PostMapping("/lock")
-    public ResponseEntity<?> setLock(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminLockRequest request) {
+    public ResponseEntity<?> setLock(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminLockRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         
         String type = request.type().toUpperCase();
@@ -79,7 +80,7 @@ public class AdminController {
     }
 
     @PostMapping("/player/action")
-    public ResponseEntity<?> playerAction(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminPlayerActionRequest request) {
+    public ResponseEntity<?> playerAction(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminPlayerActionRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         String action = request.action().toUpperCase();
@@ -111,21 +112,8 @@ public class AdminController {
         return ResponseEntity.ok(Map.of("message", msg));
     }
 
-    @PostMapping("/room/password")
-    public ResponseEntity<?> setRoomPassword(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminRoomPasswordRequest request) {
-        if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-
-        String newPwd = request.password();
-        if (!AuthController.isValidPin(newPwd)) {
-            return ResponseEntity.badRequest().body(Map.of("message", "房间密码须为4位数字"));
-        }
-        authController.forceSetPassword(newPwd);
-        musicPlayerService.broadcastPasswordChanged();
-        return ResponseEntity.ok(Map.of("message", "房间访问密码已更新"));
-    }
-
     @PostMapping("/room/clear")
-    public ResponseEntity<?> clearData(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminClearRequest request) {
+    public ResponseEntity<?> clearData(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminClearRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         String target = request.target().toUpperCase();
@@ -142,15 +130,15 @@ public class AdminController {
     }
 
     @PostMapping("/system/reset")
-    public ResponseEntity<?> resetSystem(@RequestHeader("X-Admin-Password") String password) {
+    public ResponseEntity<?> resetSystem(@RequestHeader(value = "X-Admin-Password", required = false) String password) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         musicPlayerService.resetSystem();
-        return ResponseEntity.ok(Map.of("message", "系统核心已完成全量重置并重启"));
+        return ResponseEntity.ok(Map.of("message", "本房间播放与队列已重置"));
     }
 
     @PostMapping("/config/cookie")
-    public ResponseEntity<?> setCookie(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminCookieRequest request) {
+    public ResponseEntity<?> setCookie(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminCookieRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         if ("netease".equalsIgnoreCase(request.platform())) {
@@ -160,6 +148,7 @@ public class AdminController {
             return ResponseEntity.ok(Map.of("message", "网易云音乐凭据已更新"));
         } else if ("bilibili".equalsIgnoreCase(request.platform())) {
             bilibiliMusicApiService.updateCookie(request.value());
+            appProperties.getBilibili().setCookie(request.value());
             return ResponseEntity.ok(Map.of("message", "Bilibili Cookie 已更新"));
         } else {
             return ResponseEntity.badRequest().build();
@@ -167,7 +156,7 @@ public class AdminController {
     }
 
     @PostMapping("/room/stream")
-    public ResponseEntity<?> setStream(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminStreamRequest request) {
+    public ResponseEntity<?> setStream(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminStreamRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 
         liveStreamService.setEnabled(request.enabled());
@@ -176,7 +165,7 @@ public class AdminController {
     }
 
     @PostMapping("/config/update")
-    public ResponseEntity<?> updateConfig(@RequestHeader("X-Admin-Password") String password, @RequestBody AdminConfigUpdateRequest request) {
+    public ResponseEntity<?> updateConfig(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminConfigUpdateRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         String invalid = validateConfig(request);
         if (invalid != null) return ResponseEntity.badRequest().body(Map.of("message", invalid));
@@ -210,7 +199,7 @@ public class AdminController {
     }
 
     @PostMapping("/private-dj")
-    public ResponseEntity<?> updatePrivateDj(@RequestHeader("X-Admin-Password") String password,
+    public ResponseEntity<?> updatePrivateDj(@RequestHeader(value = "X-Admin-Password", required = false) String password,
                                              @RequestBody AdminPrivateDjUpdateRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
 

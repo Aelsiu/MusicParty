@@ -1,5 +1,9 @@
 server:
   port: 8080
+spring:
+  jackson:
+    parser:
+      include-source-in-location: false
 
 # Logging configuration
 logging:
@@ -11,15 +15,23 @@ logging:
 
 # Custom application properties
 app:
+  rooms:
+    # Required, configure in config/application.properties, no built-in root key
+    root-key:
+    database: data/multi-rooms.sqlite
+    license-file: config/licenses.json
+    management-session-hours: 12
+    reconnect-grace-seconds: 10
+    max-concurrent-downloads: 3
+    max-concurrent-transcoders: 12
   music-api:
-    admin-password: ${ADMIN_PASSWORD:admin123}
     base-url: ${BASE_URL:http://localhost:8080}
     author-name: ${APP_AUTHOR_NAME:ThorNex X Aelsiu}
     back-words: ${APP_BACK_WORDS:THORNEX}
     netease:
       # The base URL of your deployed NeteaseCloudMusicApi instance
       base-url: ${NETEASE_API_URL:http://netease-api:3000}
-      cookie: ${NETEASE_COOKIE:}
+      cookie: ""
       quality: ${NETEASE_QUALITY:exhigh}
       enabled: ${NETEASE_ENABLED:true}
     bilibili:
@@ -27,7 +39,7 @@ app:
       base-url: "https://api.bilibili.com"
       # 完整 Cookie（可选）：浏览器登录 B站后复制的完整 Cookie 串，含 buvid3/SESSDATA/bili_jct 等。
       # 不填仅 B站源不可用，不影响其他音乐源。
-      cookie: ${BILIBILI_COOKIE:}
+      cookie: ""
       enabled: ${BILIBILI_ENABLED:true}
       max-duration-minutes: ${BILIBILI_MAX_DURATION_MINUTES:10}
     queue:

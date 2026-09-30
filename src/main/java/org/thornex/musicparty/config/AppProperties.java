@@ -4,7 +4,6 @@ import lombok.Data;
 import lombok.EqualsAndHashCode;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@ConfigurationProperties(prefix = "app.music-api")
 @Data
 public class AppProperties {
     private NeteaseApiConfig  netease  = new NeteaseApiConfig();
@@ -62,6 +61,8 @@ public class AppProperties {
 
     @Data
     public static class CacheConfig {
+        @com.fasterxml.jackson.databind.annotation.JsonSerialize(using = com.fasterxml.jackson.databind.ser.std.ToStringSerializer.class)
+        @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = org.thornex.musicparty.room.DataSizeDeserializer.class)
         private org.springframework.util.unit.DataSize maxSize = org.springframework.util.unit.DataSize.ofGigabytes(1);
     }
 

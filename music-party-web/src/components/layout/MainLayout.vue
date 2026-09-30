@@ -9,7 +9,7 @@ import { useUserStore } from '../../stores/user';
 import { useUiStore } from '../../stores/ui';
 import { usePlayerStore } from '../../stores/player';
 
-const emit = defineEmits(['search', 'settings']);
+const emit = defineEmits(['search', 'settings', 'return']);
 const userStore = useUserStore();
 const uiStore = useUiStore();
 const playerStore = usePlayerStore();
@@ -83,6 +83,10 @@ const handleSearchClick = () => {
         </button>
       </div>
     </header>
+    <nav class="flex items-center justify-between gap-3 px-4 py-1.5 border-b border-medical-200 bg-surface text-[11px] text-medical-400 shrink-0" aria-label="房间导航">
+      <div class="flex items-center gap-3 min-w-0"><span class="truncate text-accent font-bold">{{ userStore.roomName }}</span><span class="font-mono whitespace-nowrap">ID {{ userStore.roomId }}</span></div>
+      <button @click="emit('return')" class="font-mono py-2 px-1 shrink-0" aria-label="返回房间入口">RETURN</button>
+    </nav>
 
     <!-- 2. 主体内容区 -->
     <div v-if="!uiStore.isLiteMode" class="flex-1 flex overflow-hidden relative">

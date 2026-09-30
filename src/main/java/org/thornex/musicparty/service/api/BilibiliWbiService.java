@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
  * 仅在无新鲜 key（每日更替）时退化为请求 {@code /x/web-interface/nav} 获取。</p>
  */
 @Service
+@org.thornex.musicparty.room.RoomScoped
 @Slf4j
 public class BilibiliWbiService {
 

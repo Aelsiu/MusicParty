@@ -10,7 +10,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strings"
+	"time"
 
 	wails_runtime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -19,14 +22,17 @@ import (
 var embeddedBin embed.FS
 
 type App struct {
-	ctx     context.Context
-	cfg     *config.AppConfig
-	manager *process.ServiceManager
+	ctx         context.Context
+	cfg         *config.AppConfig
+	manager     *process.ServiceManager
+	assetsReady chan struct{}
+	assetsError error
 }
 
 func NewApp() *App {
 	return &App{
-		cfg: config.LoadConfig(),
+		cfg:         config.LoadConfig(),
+		assetsReady: make(chan struct{}),
 	}
 }
 
@@ -47,6 +53,7 @@ func (a *App) startup(ctx context.Context) {
 }
 
 func (a *App) extractAssets() {
+	defer close(a.assetsReady)
 	baseDir := config.GetBaseDir()
 
 	a.logToTerminal("[SYSTEM] Preparing environment assets...")
@@ -86,6 +93,7 @@ func (a *App) extractAssets() {
 	})
 
 	if err != nil {
+		a.assetsError = err
 		a.logToTerminal(fmt.Sprintf("[ERROR] Asset extraction failed: %v", err))
 	} else {
 		a.logToTerminal("[SYSTEM] Environment ready.")
@@ -127,12 +135,46 @@ func (a *App) OpenBrowser(url string) {
 	}
 }
 
-func (a *App) StartServices() {
+func (a *App) StartServices() error {
+	select {
+	case <-a.assetsReady:
+		if a.assetsError != nil {
+			return fmt.Errorf("运行环境提取失败，请检查启动器所在目录")
+		}
+	case <-time.After(time.Minute):
+		return fmt.Errorf("运行环境仍在准备，请稍后重试")
+	}
+	baseDir := config.GetBaseDir()
+	configDir := filepath.Join(baseDir, "config")
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("无法创建服务端配置目录")
+	}
+	serverConfig := filepath.Join(configDir, "application.properties")
+	if _, err := os.Stat(serverConfig); os.IsNotExist(err) {
+		if err := os.WriteFile(serverConfig, []byte("# Configure a unique 8-16 character root license, then restart\napp.rooms.root-key=\n"), 0600); err != nil {
+			return fmt.Errorf("无法创建服务端配置文件")
+		}
+	}
+	content, err := os.ReadFile(serverConfig)
+	if err != nil {
+		return fmt.Errorf("无法读取服务端配置文件")
+	}
+	rootConfigured := false
+	for _, line := range strings.Split(string(content), "\n") {
+		parts := strings.SplitN(strings.TrimSpace(line), "=", 2)
+		if len(parts) == 2 && strings.TrimSpace(parts[0]) == "app.rooms.root-key" {
+			rootConfigured = regexp.MustCompile(`^[!-~]{8,16}$`).MatchString(strings.TrimSuffix(parts[1], "\r"))
+		}
+	}
+	if !rootConfigured {
+		return fmt.Errorf("请直接编辑 config/application.properties 中的 app.rooms.root-key，须为 8–16 位无空白字符，保存后重新启动")
+	}
 	if a.manager != nil {
 		a.StopServices()
 	}
-	
+
 	a.manager = process.NewServiceManager()
+	a.manager.WorkingDirectory = baseDir
 
 	go func() {
 		for logMsg := range a.manager.LogChannel {
@@ -143,18 +185,18 @@ func (a *App) StartServices() {
 	binDir := a.getBinDir()
 
 	// 1. 启动 Netease API
-	apiExe := filepath.Join(binDir, "netease-api.exe")
+	apiExe := filepath.Join(binDir, "node.exe")
 	if runtime.GOOS != "windows" {
-		apiExe = filepath.Join(binDir, "netease-api")
+		apiExe = filepath.Join(binDir, "node")
 	}
-	a.manager.StartProcess("NETEASE_API", apiExe, "-p", "3000")
+	a.manager.StartProcess("NETEASE_API", apiExe, filepath.Join(binDir, "netease-api", "app.js"))
 
 	// 2. 启动 Java 后端
 	javaExe := filepath.Join(binDir, "jre", "bin", "java.exe")
 	if _, err := os.Stat(javaExe); err != nil {
 		javaExe = "java"
 	}
-	
+
 	jarPath := filepath.Join(binDir, "server.jar")
 	os.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
@@ -163,14 +205,11 @@ func (a *App) StartServices() {
 		fmt.Sprintf("--server.address=%s", a.cfg.ServerIP),
 		fmt.Sprintf("--server.port=%s", a.cfg.ServerPort),
 		fmt.Sprintf("--app.music-api.base-url=%s", a.cfg.BaseURL),
-		fmt.Sprintf("--app.music-api.admin-password=%s", a.cfg.AdminPassword),
 		fmt.Sprintf("--app.music-api.author-name=%s", a.cfg.AuthorName),
 		fmt.Sprintf("--app.music-api.back-words=%s", a.cfg.BackWords),
 		fmt.Sprintf("--app.music-api.netease.base-url=http://127.0.0.1:3000"),
-		fmt.Sprintf("--app.music-api.netease.cookie=%s", a.cfg.NeteaseCookie),
 		fmt.Sprintf("--app.music-api.netease.quality=%s", a.cfg.NeteaseQuality),
 		fmt.Sprintf("--app.music-api.netease.enabled=%v", a.cfg.NeteaseEnabled),
-		fmt.Sprintf("--app.music-api.bilibili.cookie=%s", a.cfg.BiliCookie),
 		fmt.Sprintf("--app.music-api.bilibili.enabled=%v", a.cfg.BilibiliEnabled),
 		fmt.Sprintf("--app.music-api.queue.max-size=%d", a.cfg.QueueMaxSize),
 		fmt.Sprintf("--app.music-api.queue.history-size=%d", a.cfg.QueueHistorySize),
@@ -189,6 +228,7 @@ func (a *App) StartServices() {
 	}
 
 	a.manager.StartProcess("JAVA_SERVER", javaExe, args...)
+	return nil
 }
 
 func (a *App) getBinDir() string {
