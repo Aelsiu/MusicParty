@@ -5,7 +5,7 @@
         id="tutorial-source"
         @click="openSourcePage"
         class="w-16 h-16 md:w-20 md:h-20 -mt-6 md:mt-0 shadow-lg border-2 border-white chamfer-br flex-shrink-0 relative z-10 bg-strong cursor-pointer group overflow-hidden"
-        title="ⓘ Open Source Page"
+        title="Open Source Page"
     >
       <CoverImage :src="nowPlaying?.music.coverUrl" class="w-full h-full transition-transform duration-300 group-hover:scale-110 group-hover:opacity-50" />
 
@@ -52,13 +52,13 @@
 
       <!-- 进度条 -->
       <div class="h-5 w-full relative flex items-center outline-none focus-visible:ring-1 focus-visible:ring-accent"
-           role="slider" aria-label="播放进度" :aria-disabled="!player.canSeek || coolingDown" :tabindex="player.canSeek?0:-1"
+           role="slider" aria-label="播放进度" :aria-disabled="!player.canSeek || coolingDown" :tabindex="player.canSeek&&!coolingDown?0:-1"
            :aria-valuemin="0" :aria-valuemax="nowPlaying?.music.duration || 0" :aria-valuenow="Math.round(player.localProgress)"
-           :title="progressTitle" :class="player.canSeek&&!coolingDown?'cursor-pointer':'cursor-default'"
+           :class="player.canSeek&&!coolingDown?'cursor-pointer':'cursor-not-allowed'"
            @pointerdown="rememberPlayback" @click="seekFromPointer" @keydown="seekFromKeyboard">
         <div class="h-1 bg-medical-200 w-full relative">
         <span v-for="marker in player.chorusMarkers" :key="`chorus-${marker}`" class="absolute z-30 -translate-x-1/2 -top-1.5 text-accent"
-              :style="{left:(marker/(nowPlaying?.music.duration||1))*100+'%'}" :title="`ⓘ 副歌 ${formatDuration(marker)}`" :aria-label="`副歌 ${formatDuration(marker)}`">
+              :style="{left:(marker/(nowPlaying?.music.duration||1))*100+'%'}" :aria-label="`副歌 ${formatDuration(marker)}`">
           <span class="block w-0 h-0 border-x-[4px] border-x-transparent border-t-[5px] border-t-current"></span>
         </span>
 
@@ -129,11 +129,11 @@
       <!-- 播放控制 -->
       <div class="flex items-center gap-4 border-r border-medical-200 pr-6">
         <!-- 新增：下载按钮 (放在 Shuffle 旁边或者 Next 后面) -->
-        <button id="tutorial-download" @click="downloadCurrentMusic" class="text-medical-400 hover:text-accent transition-colors" title="ⓘ Download">
+        <button id="tutorial-download" @click="downloadCurrentMusic" class="text-medical-400 hover:text-accent transition-colors" title="Download">
           <Download class="w-5 h-5" />
         </button>
 
-        <button id="tutorial-random" @click="player.cyclePlayMode" :disabled="player.isPlayModeLocked" :class="['text-medical-400', player.isPlayModeLocked ? 'opacity-50 cursor-not-allowed' : '']" :title="`ⓘ ${modeTitle}`">
+        <button id="tutorial-random" @click="player.cyclePlayMode" :disabled="player.isPlayModeLocked" :class="['text-medical-400', player.isPlayModeLocked ? 'opacity-50 cursor-not-allowed' : '']" :title="modeTitle">
             <ListOrdered v-if="player.playMode === 'SEQUENTIAL'" class="w-5 h-5" />
             <Shuffle v-else-if="player.playMode === 'SHUFFLE'" class="w-5 h-5" />
             <Repeat1 v-else class="w-5 h-5" />
@@ -156,7 +156,7 @@
             @click="player.playNext" 
             :disabled="isSkipDisabled" 
             class="text-medical-800 hover:text-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed relative group/skip" 
-            :title="`ⓘ ${skipBtnTitle}`"
+            :title="skipBtnTitle"
         >
             <SkipForward class="w-6 h-6 fill-current" />
             <!-- Badge -->
@@ -195,7 +195,6 @@ const clock = ref(Date.now());
 const seekClock = setInterval(() => { clock.value=Date.now(); },100);
 onBeforeUnmount(() => clearInterval(seekClock));
 const coolingDown = computed(() => clock.value < player.seekDeadline);
-const progressTitle = computed(() => !player.canSeek?'ⓘ 本房间当前不允许你跳转进度':coolingDown.value?'ⓘ 房间跳转冷却中':'ⓘ 点击跳转，房间共用三秒冷却');
 let pointedPlayback;
 const rememberPlayback = () => { pointedPlayback=nowPlaying.value?.playbackId; };
 const seekFromPointer = event => {

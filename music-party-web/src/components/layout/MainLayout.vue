@@ -70,7 +70,7 @@ const handleSearchClick = () => {
         <button
             @click="uiStore.toggleLiteMode"
             class="flex items-center justify-center w-9 h-9 md:w-10 md:h-9 border border-medical-200 bg-medical-50 hover:bg-medical-100 text-medical-600 transition-all rounded-sm"
-            title="ⓘ 精简模式" aria-label="精简模式"
+            title="精简模式" aria-label="精简模式"
         >
           <Minimize2 class="w-4 h-4" />
         </button>
@@ -80,7 +80,7 @@ const handleSearchClick = () => {
           <Search class="w-4 h-4" />
           <span class="hidden md:inline">SEARCH</span>
         </button>
-        <button @click="emit('settings')" aria-label="设置" title="ⓘ 设置" class="flex items-center justify-center w-9 h-9 border border-medical-200 bg-medical-50 hover:bg-medical-100 text-medical-700 transition-colors rounded-sm">
+        <button @click="emit('settings')" aria-label="设置" title="设置" class="flex items-center justify-center w-9 h-9 border border-medical-200 bg-medical-50 hover:bg-medical-100 text-medical-700 transition-colors rounded-sm">
           <Settings class="w-4 h-4" />
         </button>
       </div>

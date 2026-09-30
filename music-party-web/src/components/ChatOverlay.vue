@@ -152,7 +152,7 @@
               @mousedown.stop
               @touchstart.stop
               placeholder="TYPE MESSAGE..."
-              class="flex-1 bg-medical-50 border border-medical-200 px-2 py-1.5 text-xs outline-none focus:border-accent font-sans transition-colors rounded-sm text-medical-900 placeholder-medical-300"
+              class="flex-1 bg-medical-50 border border-medical-200 px-2 py-1.5 text-xs outline-none focus:border-accent font-sans transition-colors rounded-sm text-medical-900"
           />
           <button
               @click="send"

@@ -15,7 +15,7 @@
           v-model="inputName"
           @keyup.enter="confirm"
           placeholder="ENTER CODENAME"
-          class="w-full bg-medical-50 border border-medical-200 p-3 outline-none focus:border-accent font-bold mb-4 text-medical-900 placeholder-medical-300"
+          class="w-full bg-medical-50 border border-medical-200 p-3 outline-none focus:border-accent font-bold mb-4 text-medical-900"
           autofocus
       />
       

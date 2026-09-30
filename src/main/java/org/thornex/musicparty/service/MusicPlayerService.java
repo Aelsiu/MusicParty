@@ -474,6 +474,8 @@ public class MusicPlayerService {
         timestampAnchor.set(now);
         seekAvailableAt = now + SEEK_COOLDOWN_MS;
         broadcastFullPlayerState();
+        eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.INFO,
+                PlayerAction.JUMP, user.getToken(), null));
         return true;
     }
 

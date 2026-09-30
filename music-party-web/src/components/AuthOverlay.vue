@@ -2,8 +2,7 @@
   <div class="fixed inset-0 z-[100] bg-medical-50 flex items-center justify-center p-4 overflow-y-auto">
     <section class="w-full max-w-md bg-surface border border-medical-200 p-8 shadow-xl chamfer-br relative">
       <div class="absolute inset-y-0 left-0 w-1.5 bg-strong"></div>
-      <button type="button" @click="secret" class="text-2xl font-black tracking-tight text-medical-900 text-left">SECURITY ACCESS</button>
-      <p class="info-tip text-xs text-medical-400 mt-2 mb-8">输入用户 ID 和四位配对码进入房间</p>
+      <button type="button" @click="secret" class="text-2xl font-black tracking-tight text-medical-900 text-left mb-8">SECURITY ACCESS</button>
       <label for="entry-name" class="block text-xs font-bold text-medical-500 mb-2">用户 ID</label>
       <input id="entry-name" v-model="name" autocomplete="nickname" maxlength="20" class="w-full bg-medical-50 border border-medical-200 p-3 text-base text-medical-900 focus:border-accent" placeholder="输入用户 ID" @keydown.enter="join">
       <p class="info-tip text-[11px] text-medical-400 mt-2 mb-6">更换 ID 将以新用户进入，仅改名请用原 ID 入房后修改</p>

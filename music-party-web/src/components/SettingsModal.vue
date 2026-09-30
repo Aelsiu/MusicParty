@@ -72,7 +72,7 @@
                   <div class="text-[10px] text-medical-500">当前绑定 · {{ accountPlatform.label }}</div>
                   <div class="font-bold text-medical-900 truncate">{{ userStore[accountPlatform.nameField] || userStore.bindings[accountPlatform.id] }}</div>
                 </div>
-                <button @click="unbindUser(accountPlatform.id)" :aria-label="`解绑${accountPlatform.label}`" :title="`ⓘ 解绑${accountPlatform.label}`"
+                <button @click="unbindUser(accountPlatform.id)" :aria-label="`解绑${accountPlatform.label}`" :title="`解绑${accountPlatform.label}`"
                         class="flex-shrink-0 w-9 h-9 flex items-center justify-center text-medical-500 hover:text-accent focus-visible:text-accent transition-colors">
                   <UnbindIcon class="w-5 h-5" />
                 </button>

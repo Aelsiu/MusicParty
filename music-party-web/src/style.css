@@ -4,6 +4,18 @@
 
 .info-tip::before { content: 'ⓘ '; font-weight: normal; }
 
+/* 所有输入提示共用主题色与轻量字形，避免继承标题的粗体或代码字体。 */
+input::placeholder,
+textarea::placeholder {
+  @apply font-sans;
+  color: rgb(var(--medical-500) / .75);
+  opacity: 1;
+  font-size: .875em;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: .025em;
+}
+
 :root,
 :root[data-theme='classic'] {
   --medical-50: 249 250 251;

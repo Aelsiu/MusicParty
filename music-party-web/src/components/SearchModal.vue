@@ -94,7 +94,7 @@
                 </button>
                 <button
                     @click="openLikedSource(song)"
-                    title="ⓘ 打开源页面"
+                    title="打开源页面"
                     class="ml-1 p-2 flex-shrink-0 text-medical-300 hover:text-accent transition-all duration-300"
                 >
                   <ExternalLink class="w-5 h-5" />

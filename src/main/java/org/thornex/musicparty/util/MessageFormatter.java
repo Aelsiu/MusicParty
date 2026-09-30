@@ -18,6 +18,7 @@ public class MessageFormatter {
             case PLAY -> userName + " 恢复了播放";
             case PAUSE -> userName + " 暂停了播放";
             case SKIP -> userName + " 切到了下一首";
+            case JUMP -> userName + " 跳转了播放进度";
             case ADD -> userName + " 添加了: " + payload;
             case REMOVE -> userName + " 移除了: " + payload;
             case TOP -> userName + " 置顶了: " + payload;

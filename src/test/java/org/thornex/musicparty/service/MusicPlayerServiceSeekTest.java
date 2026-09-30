@@ -7,7 +7,9 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.thornex.musicparty.config.AppProperties;
 import org.thornex.musicparty.dto.*;
 import org.thornex.musicparty.enums.QueueItemStatus;
+import org.thornex.musicparty.enums.PlayerAction;
 import org.thornex.musicparty.event.PlayerStateEvent;
+import org.thornex.musicparty.event.SystemMessageEvent;
 import org.thornex.musicparty.service.api.NeteaseMusicApiService;
 import org.thornex.musicparty.service.stream.LiveStreamService;
 import java.util.*;
@@ -46,6 +48,7 @@ class MusicPlayerServiceSeekTest {
         assertFalse(player.seek(request(5000),"other",true));
         assertEquals(0,player.getCurrentPlayerState().nowPlaying().seekAvailableAt());
         verify(publisher,never()).publishEvent(any(PlayerStateEvent.class));
+        verify(publisher,never()).publishEvent(any(SystemMessageEvent.class));
     }
     @Test void restrictedPolicyAllowsRequesterAndServerVerifiedManager() {
         props.getPlayer().setSeekPolicy("OWNER_AND_ENQUEUER");
@@ -68,6 +71,10 @@ class MusicPlayerServiceSeekTest {
         assertTrue(state.nowPlaying().seekAvailableAt()-state.nowPlaying().serverTime()>2500);
         assertFalse(player.seek(request(20000),"other",true));
         verify(publisher,times(1)).publishEvent(any(PlayerStateEvent.class));
+        verify(publisher,times(1)).publishEvent(any(SystemMessageEvent.class));
+        verify(publisher).publishEvent(argThat((org.springframework.context.ApplicationEvent value) ->
+                value instanceof SystemMessageEvent event && event.getAction() == PlayerAction.JUMP
+                        && "token-a".equals(event.getUserId()) && event.getLevel() == SystemMessageEvent.Level.INFO));
     }
     @Test void playingAndPausedStateArePreserved() {
         props.getPlayer().setSeekPolicy("ALL");

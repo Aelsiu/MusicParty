@@ -62,7 +62,7 @@
                     </button>
                   </div>
 
-                  <!-- Playback Core Settings (Shuffle & Vote Skip) -->
+                  <!-- Playback Core Settings (Shuffle, Vote Skip & Live Stream) -->
                   <div class="space-y-3 p-3 bg-medical-50 border border-medical-100 rounded-sm">
                     <!-- Shuffle Controls -->
                     <div v-if="playerStore.isShuffle" class="grid grid-cols-2 gap-3 pb-3 border-b border-medical-100">
@@ -111,6 +111,15 @@
                           />
                         </div>
                       </div>
+                    </div>
+
+                    <!-- Live Stream Controls -->
+                    <div class="flex items-center justify-between pt-3 border-t border-medical-100">
+                      <div class="flex flex-col">
+                        <span class="text-[10px] font-bold text-medical-800">直播推流</span>
+                        <span class="text-[8px] text-medical-400 font-mono uppercase">LIVE_STREAM_MODE</span>
+                      </div>
+                      <RoundSwitch :model-value="playerStore.streamActive" @update:model-value="toggleStream" label="直播推流" />
                     </div>
                   </div>
 
@@ -204,21 +213,6 @@
                 </div>
                 <div class="p-4 space-y-4">
                   <RoomPairingCard />
-                  <!-- Toggles -->
-                  <div class="grid grid-cols-2 gap-3">
-                    <div class="p-3 bg-medical-50 border border-medical-100 flex flex-col items-center gap-2 rounded-sm">
-                      <span class="text-[9px] font-bold text-medical-400 uppercase font-mono">直播推流</span>
-                      <RoundSwitch :model-value="playerStore.streamActive" @update:model-value="toggleStream" label="直播推流" />
-                    </div>
-                    <div class="p-3 bg-medical-50 border border-medical-100 flex flex-col gap-2 rounded-sm">
-                      <span class="text-[9px] font-bold text-medical-400 uppercase font-mono text-center">数据清理</span>
-                      <div class="flex flex-col gap-1 w-full">
-                        <button @click="clearData('QUEUE')" class="w-full py-1 border border-medical-200 text-[8px] font-bold hover:bg-red-50 hover:text-red-500 transition-all">清理播放队列</button>
-                        <button @click="clearData('OFFLINE')" class="w-full py-1 border border-medical-200 text-[8px] font-bold hover:bg-red-50 hover:text-red-500 transition-all">清理不在线成员歌曲</button>
-                        <button @click="clearData('CHAT')" class="w-full py-1 border border-medical-200 text-[8px] font-bold hover:bg-red-50 hover:text-red-500 transition-all">清理聊天记录</button>
-                      </div>
-                    </div>
-                  </div>
                 </div>
               </div>
 
@@ -246,6 +240,27 @@
                       <button @click="updateCookie(plat.id, plat.value)" class="bg-strong text-white px-3 font-bold text-[10px] hover:bg-accent transition-colors">更新</button>
                     </div>
                   </div>
+                </div>
+              </div>
+
+              <!-- Section: Data Cleanup -->
+              <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
+                <div class="p-3 bg-strong text-white flex items-center gap-2">
+                  <Trash2 class="w-4 h-4" />
+                  <span class="text-xs font-bold uppercase tracking-widest font-mono">数据清理 / Data_Cleanup</span>
+                </div>
+                <div class="p-4 space-y-2">
+                  <button v-for="target in cleanupTargets" :key="target.id" @click="clearData(target.id)"
+                          class="w-full flex items-center gap-3 p-3 bg-medical-50 border border-medical-200 text-left transition-colors group hover:border-accent focus-visible:border-accent focus-visible:outline-none">
+                    <span class="p-2 bg-surface text-medical-400 group-hover:text-accent group-focus-visible:text-accent transition-colors">
+                      <component :is="target.icon" class="w-4 h-4" />
+                    </span>
+                    <span class="flex-1 min-w-0 flex flex-col gap-1">
+                      <span class="text-[10px] font-bold text-medical-800">{{ target.label }}</span>
+                      <span class="text-[8px] text-medical-400 font-mono tracking-wider">{{ target.code }}</span>
+                    </span>
+                    <Trash2 class="w-4 h-4 flex-shrink-0 text-medical-400 group-hover:text-accent group-focus-visible:text-accent transition-colors" />
+                  </button>
                 </div>
               </div>
 
@@ -286,7 +301,8 @@ import { roomSession } from '../services/roomSession';
 import {
   Settings, X, Pause, Play, SkipForward, ListOrdered, Repeat1, Shuffle,
   Lock, Unlock, ShieldAlert, Save, AlertTriangle,
-  PlayCircle, Database, Globe, Sliders, ShieldCheck, Radio
+  PlayCircle, Database, Globe, Sliders, ShieldCheck, Radio,
+  Trash2, ListMusic, UserMinus, MessageSquare
 } from 'lucide-vue-next';
 
 const adminStore = useAdminStore();
@@ -364,6 +380,12 @@ const platforms = ref([
   { id: 'netease', name: '网易云音乐', tokenName: 'COOKIE', value: '' },
   { id: 'bilibili', name: '哔哩哔哩', tokenName: 'COOKIE', value: '' }
 ]);
+
+const cleanupTargets = [
+  { id: 'QUEUE', label: '清理播放队列', code: 'PLAYBACK_QUEUE', icon: ListMusic },
+  { id: 'OFFLINE', label: '清理不在线成员歌曲', code: 'OFFLINE_MEMBER_SONGS', icon: UserMinus },
+  { id: 'CHAT', label: '清理聊天记录', code: 'CHAT_HISTORY', icon: MessageSquare }
+];
 
 // 私人电台/私人DJ 状态（来自 config.privateDj，服务端广播；mode 即开关：OFF=关闭/FM=私人FM/DJ=私人DJ）
 const privateDj = computed(() => playerStore.config.privateDj || {
