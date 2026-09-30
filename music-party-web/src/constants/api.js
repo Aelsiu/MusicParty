@@ -7,6 +7,7 @@ export const WS_DEST = {
     PLAYER_PAUSE: '/app/control/toggle-pause',
     PLAYER_SHUFFLE: '/app/control/toggle-shuffle',
     PLAYER_LIKE: '/app/control/like',
+    PLAYER_SEEK: '/app/control/seek',
     ENQUEUE: '/app/enqueue',
     ENQUEUE_PLAYLIST: '/app/enqueue/playlist',
     QUEUE_TOP: '/app/queue/top',

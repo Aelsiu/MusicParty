@@ -112,6 +112,7 @@ class MultiRoomIsolationTest {
         try(var ignored=RoomContext.enter(a.id())) {
             context.getBean(QueuePersistenceService.class).ensureLoaded();
             var config=context.getBean(AppProperties.class);config.getQueue().setMaxSize(17);config.getNetease().setCookie("room-a-private-cookie");
+            config.getPlayer().setSeekPolicy("ALL");
             context.getBean(MusicQueueManager.class).add(new Music("songA","房间 A 歌曲",java.util.List.of("歌手"),10000,"netease",""),new UserSummary("userA","sessionA","甲",false),QueueItemStatus.READY);
             var user=context.getBean(UserService.class);user.handleConnect("sessionA","shared-user","用户甲");user.handleConnect("second-tab","shared-user","用户甲");user.disconnectUser("second-tab");assertEquals(1,user.getOnlineUserSummaries().size());
             context.getBean(QueuePersistenceService.class).saveNow();
@@ -121,10 +122,12 @@ class MultiRoomIsolationTest {
             context.getBean(QueuePersistenceService.class).ensureLoaded();
             assertTrue(context.getBean(MusicQueueManager.class).getQueueSnapshot().isEmpty());
             assertEquals(1000,context.getBean(AppProperties.class).getQueue().getMaxSize());assertEquals("",context.getBean(AppProperties.class).getNetease().getCookie());
+            assertEquals("DISABLED",context.getBean(AppProperties.class).getPlayer().getSeekPolicy());
             context.getBean(UserService.class).handleConnect("sessionB","shared-user","用户甲");assertEquals(1,context.getBean(UserService.class).getOnlineUserSummaries().size());
         }
         assertTrue(repository.payload(a.id(),"payload").contains("songA"));assertFalse(repository.payload(a.id(),"payload").contains("room-a-private-cookie"));
         assertTrue(repository.payload(a.id(),"config").contains("room-a-private-cookie"));
+        assertTrue(repository.payload(a.id(),"config").contains("\"seekPolicy\":\"ALL\""));
         repository.deleteRoom(a.id());scope.destroy(a.id());assertFalse(repository.exists(a.id()));
         try(var ignored=RoomContext.enter(a.id())) { assertThrows(RuntimeException.class,()->context.getBean(MusicQueueManager.class).getQueueSnapshot()); }
         try(var ignored=RoomContext.enter(b.id())) {assertEquals(1,context.getBean(UserService.class).getOnlineUserSummaries().size());}

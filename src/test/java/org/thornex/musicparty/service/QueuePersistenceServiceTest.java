@@ -39,6 +39,7 @@ class QueuePersistenceServiceTest {
         props.getNetease().setEnabled(true);
         props.getBilibili().setEnabled(false);
         props.getQueue().setMaxSize(500);
+        props.getPlayer().setSeekPolicy("ALL");
 
         MusicQueueManager qm = mock(MusicQueueManager.class);
         when(qm.getQueueSnapshot()).thenReturn(List.of());
@@ -71,6 +72,7 @@ class QueuePersistenceServiceTest {
         assertEquals(500, snap.systemConfig().maxQueueSize());
         assertTrue(snap.systemConfig().neteaseEnabled());
         assertFalse(snap.systemConfig().bilibiliEnabled());
+        assertEquals("ALL",snap.systemConfig().seekPolicy());
     }
 
     @Test
@@ -115,7 +117,7 @@ class QueuePersistenceServiceTest {
                 + "\"privateDj\":{\"mode\":\"DJ\",\"fillBlankEnabled\":true,\"joinQueueEnabled\":true,\"custodyEnabled\":true},"
                 + "\"systemConfig\":{\"maxQueueSize\":500,\"maxHistorySize\":100,\"maxUserSongs\":50,"
                 + "\"maxPlaylistImportSize\":200,\"maxChatHistorySize\":5000,\"minChatIntervalMs\":500,"
-                + "\"neteaseEnabled\":true,\"bilibiliEnabled\":false,\"bilibiliMaxDurationMinutes\":15}"
+                + "\"neteaseEnabled\":true,\"bilibiliEnabled\":false,\"bilibiliMaxDurationMinutes\":15,\"seekPolicy\":\"OWNER_AND_ENQUEUER\"}"
                 + "}";
         Files.writeString(tmp.toPath(), "{\"queue\":[],\"history\":[],\"chatHistory\":[],\"settings\":" + settings + "}");
 
@@ -150,6 +152,7 @@ class QueuePersistenceServiceTest {
         assertTrue(props.getNetease().isEnabled());
         assertFalse(props.getBilibili().isEnabled());
         assertEquals(15, props.getBilibili().getMaxDurationMinutes());
+        assertEquals("OWNER_AND_ENQUEUER",props.getPlayer().getSeekPolicy());
         assertEquals("DJ", props.getPrivateDj().getMode());
         assertTrue(props.getPrivateDj().isFillBlankEnabled());
     }

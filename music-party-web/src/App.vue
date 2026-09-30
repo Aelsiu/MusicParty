@@ -130,7 +130,7 @@ const maybeShowPwaHint = () => {
     if (window.matchMedia('(display-mode: standalone)').matches) return; // 已安装 PWA
     if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return;  // 仅移动端
     localStorage.setItem('mp_pwa_hint_shown', '1');
-    info('想稳定后台播放？点浏览器菜单 → 添加到主屏幕');
+    info('ⓘ 想稳定后台播放？点浏览器菜单 → 添加到主屏幕');
   } catch (e) { /* localStorage 不可用时忽略 */ }
 };
 

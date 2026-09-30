@@ -10,6 +10,20 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class NeteaseMusicApiServiceTest {
 
+    @Test void chorusTimesRemainMillisecondsAndMalformedRowsAreIgnored() throws Exception {
+        var mapper=new ObjectMapper();
+        var result=NeteaseMusicApiService.parseChorus(mapper.readTree("""
+                {"code":200,"chorus":[{"id":2058263032,"startTime":152916,"endTime":178690,"ugcLocked":0}]}
+                """),"2058263032");
+        assertEquals(java.util.List.of(152916L),result);
+        assertEquals(java.util.List.of(1000L,2000L),NeteaseMusicApiService.parseChorus(mapper.readTree("""
+                {"data":[{"id":1,"startTime":2000},{"id":1,"startTime":1000},{"id":1,"startTime":1000},
+                {"id":2,"startTime":3000},{"id":1,"startTime":-1},{"id":1},{"id":1,"startTime":"bad"}]}
+                """),"1"));
+        assertTrue(NeteaseMusicApiService.parseChorus(mapper.readTree("{\"data\":null}"),"1").isEmpty());
+        assertTrue(service.getChorus("voice-id").block().isEmpty());
+    }
+
     private AppProperties props;
     private NeteaseMusicApiService service;
 

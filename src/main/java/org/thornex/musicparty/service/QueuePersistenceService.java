@@ -158,6 +158,7 @@ public class QueuePersistenceService {
             if (cfg.bilibiliMaxDurationMinutes() != null) appProperties.getBilibili().setMaxDurationMinutes(cfg.bilibiliMaxDurationMinutes());
             if (cfg.maxChatMessageLength() != null) appProperties.getChat().setMaxMessageLength(cfg.maxChatMessageLength());
             if (cfg.neteaseQuality() != null) appProperties.getNetease().setQuality(cfg.neteaseQuality());
+            if (cfg.seekPolicy() != null && java.util.Set.of("DISABLED", "OWNER_AND_ENQUEUER", "ALL").contains(cfg.seekPolicy())) appProperties.getPlayer().setSeekPolicy(cfg.seekPolicy());
         }
 
         if (AuthController.isValidPin(s.roomPassword()) && s.roomName() != null && !s.roomName().isBlank()) {
@@ -194,7 +195,8 @@ public class QueuePersistenceService {
                         appProperties.getBilibili().isEnabled(),
                         appProperties.getBilibili().getMaxDurationMinutes(),
                         appProperties.getChat().getMaxMessageLength(),
-                        appProperties.getNetease().getQuality()));
+                        appProperties.getNetease().getQuality(),
+                        appProperties.getPlayer().getSeekPolicy()));
     }
 
     private File getPersistenceFile() {

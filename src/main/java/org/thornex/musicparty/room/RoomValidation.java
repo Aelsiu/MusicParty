@@ -7,11 +7,15 @@ public final class RoomValidation {
     private RoomValidation() {}
     public static boolean key(String key) { return key != null && key.matches("[\\x21-\\x7E]{8,16}"); }
     public static boolean name(String value) {
+        return visibleText(value, 2, 16);
+    }
+    public static boolean note(String value) { return value != null && (value.isEmpty() || visibleText(value, 1, 16)); }
+    private static boolean visibleText(String value, int min, int max) {
         if (value == null || value.codePoints().allMatch(c -> Character.isWhitespace(c) || Character.isSpaceChar(c))) return false;
         var matcher = GRAPHEME.matcher(value);
         int count = 0;
         while (matcher.find()) {
-            if (++count > 16) return false;
+            if (++count > max) return false;
             String cluster = matcher.group();
             int[] points=cluster.codePoints().toArray();
             boolean tagFlag=points.length>=3 && points[0]==0x1F3F4 && points[points.length-1]==0xE007F
@@ -29,7 +33,7 @@ public final class RoomValidation {
                 } else if(type==Character.CONTROL || type==Character.SURROGATE || type==Character.LINE_SEPARATOR || type==Character.PARAGRAPH_SEPARATOR) return false;
             }
         }
-        return count >= 2;
+        return count >= min;
     }
     private static boolean mark(int c) { int type=Character.getType(c);return type==Character.NON_SPACING_MARK || type==Character.ENCLOSING_MARK || type==Character.COMBINING_SPACING_MARK; }
 }

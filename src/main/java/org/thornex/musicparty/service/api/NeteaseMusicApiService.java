@@ -127,6 +127,27 @@ public class NeteaseMusicApiService implements IMusicApiService {
         return PLATFORM;
     }
 
+    @Override
+    public Mono<List<Long>> getChorus(String musicId) {
+        if (musicId == null || !musicId.matches("[0-9]+")) return Mono.just(List.of());
+        return webClient.get().uri(baseUrl + "/song/chorus?id={id}&cookie={cookie}", musicId, getCookie())
+                .retrieve().bodyToMono(JsonNode.class)
+                .map(json -> parseChorus(json, musicId))
+                .timeout(java.time.Duration.ofSeconds(3))
+                .onErrorReturn(List.of()).defaultIfEmpty(List.of());
+    }
+
+    static List<Long> parseChorus(JsonNode json, String musicId) {
+        JsonNode rows = json.path("chorus");
+        if (!rows.isArray()) rows = json.path("data");
+        if (!rows.isArray()) return List.of();
+        return StreamSupport.stream(rows.spliterator(), false)
+                .filter(row -> musicId.equals(row.path("id").asText()))
+                .map(row -> row.path("startTime"))
+                .filter(node -> node.isIntegralNumber() && node.canConvertToLong() && node.longValue() >= 0)
+                .map(JsonNode::longValue).distinct().sorted().toList();
+    }
+
     private Mono<ApiRequestException> handleApiError(String apiName, org.springframework.web.reactive.function.client.ClientResponse response) {
         return response.bodyToMono(String.class)
                 .flatMap(errorBody -> Mono.error(new ApiRequestException(

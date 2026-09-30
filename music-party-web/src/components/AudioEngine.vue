@@ -36,6 +36,7 @@ const {
   isBuffering,
   isErrorState,
   handleError,
+  applyServerPosition,
   checkAutoPlay,
   handleEnded,
   onWaiting,
@@ -107,6 +108,7 @@ const restorePosition = () => {
     audio.currentTime = Math.max(0, Math.min(position, Number.isFinite(audio.duration) ? audio.duration : position));
   }
   restoreUrl = null;
+  applyServerPosition();
 };
 const onPlaying = () => {
   audioSpectrum.resume();

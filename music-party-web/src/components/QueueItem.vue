@@ -34,13 +34,13 @@
 
     <!-- 操作遮罩 -->
     <div v-if="!userStore.isGuest && !isFmMarker" class="absolute inset-y-0 right-0 bg-surface/90 px-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-      <button @click="player.topSong(item.queueId)" title="Top" class="p-1 hover:text-accent"><ArrowUpToLine class="w-4 h-4"/></button>
-      <button @click="player.removeSong(item.queueId)" title="Remove" class="p-1 hover:text-red-500"><Trash2 class="w-4 h-4"/></button>
+      <button @click="player.topSong(item.queueId)" title="ⓘ Top" class="p-1 hover:text-accent"><ArrowUpToLine class="w-4 h-4"/></button>
+      <button @click="player.removeSong(item.queueId)" title="ⓘ Remove" class="p-1 hover:text-red-500"><Trash2 class="w-4 h-4"/></button>
     </div>
 
     <!-- 标记置顶的歌曲 -->
-    <div v-if="item.priority === 'GLOBAL_TOP'" class="absolute top-0 right-0 w-2 h-2 bg-accent" title="全局置顶"></div>
-    <div v-else-if="item.priority === 'USER_TOP'" class="absolute top-0 right-0 w-3 h-3 bg-accent [clip-path:polygon(100%_0,0_0,100%_100%)]" title="个人置顶"></div>
+    <div v-if="item.priority === 'GLOBAL_TOP'" class="absolute top-0 right-0 w-2 h-2 bg-accent" title="ⓘ 全局置顶"></div>
+    <div v-else-if="item.priority === 'USER_TOP'" class="absolute top-0 right-0 w-3 h-3 bg-accent [clip-path:polygon(100%_0,0_0,100%_100%)]" title="ⓘ 个人置顶"></div>
   </div>
 </template>
 

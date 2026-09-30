@@ -94,7 +94,7 @@
                 </button>
                 <button
                     @click="openLikedSource(song)"
-                    title="打开源页面"
+                    title="ⓘ 打开源页面"
                     class="ml-1 p-2 flex-shrink-0 text-medical-300 hover:text-accent transition-all duration-300"
                 >
                   <ExternalLink class="w-5 h-5" />
@@ -111,7 +111,7 @@
           <div class="flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
             <!-- 未绑定 -->
             <div v-if="!bindings[platform]" class="p-4 border border-dashed border-medical-300 bg-medical-50">
-              <div class="text-xs text-medical-500 mb-2 text-center font-sans">绑定用户以获取用户歌单</div>
+              <div class="info-tip text-xs text-medical-500 mb-2 text-center font-sans">绑定用户以获取用户歌单</div>
               <div class="flex gap-1">
                 <input v-model="searchUserKeyword" @keyup.enter="searchUser" placeholder="搜索用户名" class="flex-1 min-w-0 bg-surface border border-medical-200 p-1 text-sm outline-none focus:border-accent font-sans" />
                 <button @click="searchUser" class="bg-accent hover:bg-accent-hover p-1 transition-colors"><Search class="w-4 h-4 text-white"/></button>
@@ -131,7 +131,10 @@
             <template v-else>
               <div class="flex justify-between items-center px-2 py-1 bg-medical-50 border-b border-medical-100">
                 <span class="text-[10px] font-mono text-medical-400 truncate">{{ (platform === 'netease' ? userStore.neteaseUsername : userStore.bilibiliUsername) || `ID: ${bindings[platform]}` }}</span>
-                <button @click="playerStore.bindAccount(platform, '')" class="text-[10px] text-red-400 hover:underline">UNLINK</button>
+                <div class="flex items-center gap-2 shrink-0">
+                  <button @click="fetchPlaylists" :disabled="isPlaylistsLoading" aria-label="刷新用户歌单" class="p-1 text-medical-400 hover:text-accent disabled:opacity-40"><RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isPlaylistsLoading }" /></button>
+                  <button @click="playerStore.bindAccount(platform, '')" class="text-[10px] text-red-400 hover:underline">UNLINK</button>
+                </div>
               </div>
               
               <div v-if="isPlaylistsLoading" class="flex justify-center py-8">
@@ -240,7 +243,7 @@ import { useSearchLogic } from '../composables/useSearchLogic';
 import { usePlaylistLogic } from '../composables/usePlaylistLogic';
 import { useLikedSongs } from '../composables/useLikedSongs';
 import { matchesPlaylistSong } from '../utils/playlistFilter';
-import { X, Search, PlusCircle, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink } from 'lucide-vue-next';
+import { X, Search, PlusCircle, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink, RefreshCw } from 'lucide-vue-next';
 import CoverImage from './CoverImage.vue';
 import PlaylistImportIcon from './PlaylistImportIcon.vue';
 
@@ -299,7 +302,7 @@ const selectPlatform = async (p) => {
 const {
   playlists, currentPlaylistId, searchUserKeyword, userSearchResults,
   isSearchingUser, hasSearchedUser, isPlaylistsLoading, hasMore, isLoadingMore, bindings,
-  searchUser, bindUser, loadPlaylist, loadRemainingSongs, handleScroll
+  searchUser, bindUser, fetchPlaylists, loadPlaylist, loadRemainingSongs, handleScroll
 } = usePlaylistLogic(platform, songs, listMode, loading);
 
 // 3. UI 状态

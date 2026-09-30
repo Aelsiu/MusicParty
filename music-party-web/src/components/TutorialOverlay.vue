@@ -35,7 +35,7 @@
         <button @click="skipTutorial" class="text-xs text-medical-400 hover:text-medical-900 font-mono">[SKIP]</button>
       </div>
       
-      <div class="text-sm font-bold text-medical-900 leading-relaxed">
+      <div class="info-tip text-sm font-bold text-medical-900 leading-relaxed">
         {{ currentDisplayContent }}
       </div>
 

@@ -20,6 +20,14 @@ public class WebSocketBroadcaster {
     private final SimpMessagingTemplate messagingTemplate;
     private final UserService userService;
 
+    @EventListener
+    public void onSeekRejected(org.thornex.musicparty.event.SeekRejectedEvent event) {
+        var headers=org.springframework.messaging.simp.SimpMessageHeaderAccessor.create(org.springframework.messaging.simp.SimpMessageType.MESSAGE);
+        headers.setSessionId(event.sessionId());headers.setLeaveMutable(true);
+        messagingTemplate.convertAndSendToUser(event.sessionId(), "/queue/events",
+                new PlayerEvent("ERROR", "SYSTEM_MESSAGE", event.userToken(), event.message(), null), headers.getMessageHeaders());
+    }
+
     /**
      * 监听播放器完整状态变更事件
      */

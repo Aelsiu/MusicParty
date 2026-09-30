@@ -3,10 +3,10 @@
     <section class="w-full max-w-md bg-surface border border-medical-200 p-8 shadow-xl chamfer-br relative">
       <div class="absolute inset-y-0 left-0 w-1.5 bg-strong"></div>
       <button type="button" @click="secret" class="text-2xl font-black tracking-tight text-medical-900 text-left">SECURITY ACCESS</button>
-      <p class="text-xs text-medical-400 mt-2 mb-8">输入用户 ID 和四位配对码进入房间</p>
+      <p class="info-tip text-xs text-medical-400 mt-2 mb-8">输入用户 ID 和四位配对码进入房间</p>
       <label for="entry-name" class="block text-xs font-bold text-medical-500 mb-2">用户 ID</label>
       <input id="entry-name" v-model="name" autocomplete="nickname" maxlength="20" class="w-full bg-medical-50 border border-medical-200 p-3 text-base text-medical-900 focus:border-accent" placeholder="输入用户 ID" @keydown.enter="join">
-      <p class="text-[11px] text-medical-400 mt-2 mb-6">更换 ID 将以新用户进入，仅改名请用原 ID 入房后修改</p>
+      <p class="info-tip text-[11px] text-medical-400 mt-2 mb-6">更换 ID 将以新用户进入，仅改名请用原 ID 入房后修改</p>
       <label class="block text-xs font-bold text-medical-500 text-center mb-2">四位配对码</label>
       <PinInput v-model="code" @complete="join" />
       <div class="flex gap-2 mt-6">
@@ -15,7 +15,7 @@
           <Unlock v-if="roomSession.managerToken" class="w-4 h-4 manage-icon" /><Lock v-else class="w-4 h-4" /><span class="manage-text text-xs font-bold">MANAGE</span>
         </button>
       </div>
-      <p v-if="ready && roomCount===0" class="text-[11px] text-medical-400 mt-4">暂无房间，房主可通过许可验证后创建</p>
+      <p v-if="ready && roomCount===0" class="info-tip text-[11px] text-medical-400 mt-4">暂无房间，房主可通过许可验证后创建</p>
       <p v-if="error" role="alert" class="text-xs text-red-500 mt-4">{{ error }}</p>
       <button v-if="!ready" type="button" @click="initialize" class="text-xs text-accent mt-4">重试连接</button>
     </section>
@@ -25,7 +25,7 @@
         <form @submit.prevent="verify" class="p-6">
           <label for="entry-license" class="text-xs text-medical-500 block mb-2">许可密钥</label>
           <input id="entry-license" v-model="key" type="password" autocomplete="off" class="w-full p-3 border border-medical-200 bg-medical-50 text-base" placeholder="ENTER LICENSE KEY">
-          <p class="text-[11px] text-medical-400 mt-2">验证后可管理所属房间，无需配对码</p>
+          <p class="info-tip text-[11px] text-medical-400 mt-2">验证后可管理所属房间，无需配对码</p>
           <p v-if="licenseError" role="alert" class="text-xs text-red-500 mt-4">{{ licenseError }}</p>
           <button :disabled="busy" class="w-full bg-strong text-white py-3 mt-6 font-bold disabled:opacity-50">{{ busy?'VERIFYING...':'VERIFY LICENSE' }}</button>
         </form>

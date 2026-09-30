@@ -40,7 +40,8 @@ public record PlayerState(
             double voteSkipThreshold,
             int voteSkipWaitTime,
             boolean neteaseCookieConfigured,
-            PrivateDjConfigSummary privateDj
+            PrivateDjConfigSummary privateDj,
+            String seekPolicy
     ) {
         public record PrivateDjConfigSummary(
                 String mode,

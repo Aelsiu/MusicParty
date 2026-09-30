@@ -24,6 +24,10 @@ export const usePlayerStore = defineStore('player', () => {
     const isSkipLocked = ref(false);
     const isPlayModeLocked = ref(false);
     const lyricText = ref('');
+    const chorusMarkers = ref([]);
+    const seekDeadline = ref(0);
+    const seekRevision = ref(0);
+    let pendingSeek = 0;
     const connected = ref(false);
     const isLoading = ref(false);
     const streamListenerCount = ref(0);
@@ -57,6 +61,7 @@ export const usePlayerStore = defineStore('player', () => {
         voteSkipThreshold: 0.5,
         voteSkipWaitTime: 15,
         neteaseCookieConfigured: false,
+        seekPolicy: 'DISABLED',
         privateDj: {
             mode: 'OFF',
             fillBlankEnabled: false,
@@ -67,6 +72,10 @@ export const usePlayerStore = defineStore('player', () => {
 
     const userStore = useUserStore();
     const LOCAL_COOLDOWN = 500; // 稍微调低一点冷却时间提升手感
+    const canSeek = computed(() => connected.value && !userStore.isGuest && !isLoading.value
+        && nowPlaying.value?.playbackId && nowPlaying.value.music.duration > 0
+        && (config.value.seekPolicy === 'ALL' || (config.value.seekPolicy === 'OWNER_AND_ENQUEUER'
+            && (roomSession.ownerAccess || nowPlaying.value.enqueuedById === userStore.userToken))));
 
     // === 2. Logic ===
     const getCurrentProgress = () => {
@@ -100,6 +109,11 @@ export const usePlayerStore = defineStore('player', () => {
     // === 3. Actions ===
 
     const syncState = (state) => {
+        const changed = state.nowPlaying?.playbackId !== nowPlaying.value?.playbackId;
+        const jumped = changed || state.nowPlaying?.seekAvailableAt !== nowPlaying.value?.seekAvailableAt;
+        if (changed) pendingSeek = 0;
+        if (state.nowPlaying) seekDeadline.value = Date.now() + Math.max(0, state.nowPlaying.seekAvailableAt - state.nowPlaying.serverTime);
+        else seekDeadline.value = 0;
         nowPlaying.value = state.nowPlaying;
         queue.value = state.queue;
         isPaused.value = state.isPaused;
@@ -135,6 +149,7 @@ export const usePlayerStore = defineStore('player', () => {
         if (state.config) {
             config.value = { ...state.config };
         }
+        if (jumped) seekRevision.value++;
     };
 
     const connect = () => {
@@ -174,6 +189,15 @@ export const usePlayerStore = defineStore('player', () => {
     const playNext = () => requireAuth() && checkCooldown() && socketService.send(WS_DEST.PLAYER_NEXT);
     const togglePause = () => requireAuth() && checkCooldown() && socketService.send(WS_DEST.PLAYER_PAUSE);
     const cyclePlayMode = () => requireAuth() && checkCooldown() && socketService.send(WS_DEST.PLAYER_SHUFFLE);
+    const seek = position => {
+        if (!canSeek.value || Date.now() < Math.max(seekDeadline.value, pendingSeek) || !Number.isFinite(position)) return false;
+        const duration = nowPlaying.value.music.duration;
+        const target = Math.max(0, Math.min(duration - 1, Math.round(position)));
+        if (!socketService.send(WS_DEST.PLAYER_SEEK, { playbackId: nowPlaying.value.playbackId, position: target })) return false;
+        pendingSeek = Date.now() + 3000;
+        seekDeadline.value = pendingSeek;
+        return true;
+    };
 
     const enqueue = (platform, musicId) => requireAuth() && socketService.send(WS_DEST.ENQUEUE, { platform, musicId });
     const enqueuePlaylist = (platform, playlistId) => requireAuth() && socketService.send(WS_DEST.ENQUEUE_PLAYLIST, { platform, playlistId });
@@ -201,25 +225,27 @@ export const usePlayerStore = defineStore('player', () => {
     };
 
     // 歌词监听
-    watch(() => nowPlaying.value?.music?.id, async (newId) => {
+    let metadataRequest = 0;
+    watch([() => nowPlaying.value?.music?.platform, () => nowPlaying.value?.music?.id], async ([platform, newId]) => {
+        const request = ++metadataRequest;
         lyricText.value = '';
+        chorusMarkers.value = [];
         if (!newId) return;
-        try {
-            const platform = nowPlaying.value.music.platform;
-            const data = await musicApi.getLyric(platform, newId);
-            lyricText.value = data || '';
-        } catch (e) {
-            console.error("Lyrics Error", e);
-        }
+        await Promise.allSettled([
+            musicApi.getLyric(platform, newId).then(data => { if (request === metadataRequest) lyricText.value = data || ''; }),
+            platform === 'netease' && /^\d+$/.test(newId) ? musicApi.getChorus(platform, newId).then(data => {
+                if (request === metadataRequest) chorusMarkers.value = [...new Set((Array.isArray(data) ? data : []).filter(t => Number.isFinite(t) && t >= 0 && t < nowPlaying.value.music.duration))].sort((a,b) => a-b);
+            }) : Promise.resolve()
+        ]);
     });
 
     return {
         nowPlaying, queue, isPaused, playMode, isShuffle, isRepeatOne, isFairShuffle, allowOfflineShuffle, config,
         isPauseLocked, isSkipLocked, isPlayModeLocked, connected, isLoading, lyricText,
-        localProgress, isBuffering, isErrorState, streamListenerCount, streamActive,
+        localProgress, isBuffering, isErrorState, streamListenerCount, streamActive, chorusMarkers, canSeek, seekDeadline, seekRevision,
         isVoteSkipEnabled, voteSkipThreshold, voteSkipWaitTime, currentVotes, eligibleUsers,
         connect, tryReconnect, getCurrentProgress, syncState, // 导出 syncState
-        playNext, togglePause, cyclePlayMode,
+        playNext, togglePause, cyclePlayMode, seek,
         enqueue, enqueuePlaylist, topSong, removeSong,
         bindAccount, renameUser, sendChatMessage, sendLike
     };

@@ -72,9 +72,9 @@
                   <div class="text-[10px] text-medical-500">当前绑定 · {{ accountPlatform.label }}</div>
                   <div class="font-bold text-medical-900 truncate">{{ userStore[accountPlatform.nameField] || userStore.bindings[accountPlatform.id] }}</div>
                 </div>
-                <button @click="unbindUser(accountPlatform.id)" :aria-label="`解绑${accountPlatform.label}`" :title="`解绑${accountPlatform.label}`"
-                        class="flex-shrink-0 w-[54px] h-[34px] flex items-center justify-center border border-medical-300 text-accent hover:border-accent">
-                  <Unlink2 class="w-5 h-5" />
+                <button @click="unbindUser(accountPlatform.id)" :aria-label="`解绑${accountPlatform.label}`" :title="`ⓘ 解绑${accountPlatform.label}`"
+                        class="flex-shrink-0 w-9 h-9 flex items-center justify-center text-medical-500 hover:text-accent focus-visible:text-accent transition-colors">
+                  <UnbindIcon class="w-5 h-5" />
                 </button>
               </div>
               <div class="flex gap-2">
@@ -96,24 +96,26 @@
 
         <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
           <h3 class="font-bold text-medical-900">其他设置</h3>
-          <div class="flex items-center justify-between gap-4">
-            <div>
-              <p class="text-xs font-bold text-medical-500">可视化</p>
-              <p class="text-xs text-medical-400 mt-1">让丝带与环形频谱随音乐舞动</p>
+          <div class="flex flex-wrap items-start gap-x-10 gap-y-5">
+            <div class="space-y-2">
+              <div class="flex items-center gap-3 h-7">
+                <p class="text-xs font-bold text-medical-500">可视化</p>
+                <RoundSwitch v-model="uiStore.visualizationEnabled" label="可视化" />
+              </div>
+              <p class="info-tip text-xs text-medical-400">让丝带与环形频谱随音乐舞动</p>
             </div>
-            <RoundSwitch v-model="uiStore.visualizationEnabled" label="可视化" />
-          </div>
-          <div>
-            <p class="text-xs font-bold text-medical-500 mb-2">歌词提前显示</p>
-            <div class="lyric-slider relative inline-grid grid-cols-3 w-60 h-10 border border-medical-200 bg-medical-50 cursor-pointer" role="group" aria-label="歌词提前显示行数" @click="selectLyricSegment">
+            <div class="space-y-2">
+              <p class="text-xs font-bold text-medical-500 h-7 flex items-center">歌词提前显示</p>
+              <div class="lyric-slider relative inline-grid grid-cols-3 w-36 h-7 border border-medical-200 bg-medical-50 cursor-pointer" role="group" aria-label="歌词提前显示行数" @click="selectLyricSegment">
               <span class="lyric-thumb absolute top-0 bottom-0 left-0 w-1/3 bg-accent/15 border border-accent pointer-events-none"
                     :style="{ transform: `translateX(${uiStore.lyricPreviewLines * 100}%)` }"></span>
               <button v-for="count in [0, 1, 2]" :key="count" @click.stop="uiStore.setLyricPreviewLines(count)"
                       :aria-pressed="uiStore.lyricPreviewLines === count"
-                      class="relative z-10 text-sm font-mono transition-colors"
+                      class="relative z-10 text-[11px] font-mono transition-colors"
                       :class="uiStore.lyricPreviewLines === count ? 'text-accent font-bold' : 'text-medical-600 font-normal hover:text-accent'">
                 {{ count }}Line
               </button>
+            </div>
             </div>
           </div>
         </section>
@@ -124,7 +126,8 @@
 
 <script setup>
 import { computed, reactive, watch } from 'vue';
-import { Settings, Unlink2, X } from 'lucide-vue-next';
+import { Settings, X } from 'lucide-vue-next';
+import UnbindIcon from './UnbindIcon.vue';
 import RoundSwitch from './RoundSwitch.vue';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';

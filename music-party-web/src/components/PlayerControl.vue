@@ -5,7 +5,7 @@
         id="tutorial-source"
         @click="openSourcePage"
         class="w-16 h-16 md:w-20 md:h-20 -mt-6 md:mt-0 shadow-lg border-2 border-white chamfer-br flex-shrink-0 relative z-10 bg-strong cursor-pointer group overflow-hidden"
-        title="Open Source Page"
+        title="ⓘ Open Source Page"
     >
       <CoverImage :src="nowPlaying?.music.coverUrl" class="w-full h-full transition-transform duration-300 group-hover:scale-110 group-hover:opacity-50" />
 
@@ -51,7 +51,16 @@
       </div>
 
       <!-- 进度条 -->
-      <div class="h-1 bg-medical-200 w-full relative">
+      <div class="h-5 w-full relative flex items-center outline-none focus-visible:ring-1 focus-visible:ring-accent"
+           role="slider" aria-label="播放进度" :aria-disabled="!player.canSeek || coolingDown" :tabindex="player.canSeek?0:-1"
+           :aria-valuemin="0" :aria-valuemax="nowPlaying?.music.duration || 0" :aria-valuenow="Math.round(player.localProgress)"
+           :title="progressTitle" :class="player.canSeek&&!coolingDown?'cursor-pointer':'cursor-default'"
+           @pointerdown="rememberPlayback" @click="seekFromPointer" @keydown="seekFromKeyboard">
+        <div class="h-1 bg-medical-200 w-full relative">
+        <span v-for="marker in player.chorusMarkers" :key="`chorus-${marker}`" class="absolute z-30 -translate-x-1/2 -top-1.5 text-accent"
+              :style="{left:(marker/(nowPlaying?.music.duration||1))*100+'%'}" :title="`ⓘ 副歌 ${formatDuration(marker)}`" :aria-label="`副歌 ${formatDuration(marker)}`">
+          <span class="block w-0 h-0 border-x-[4px] border-x-transparent border-t-[5px] border-t-current"></span>
+        </span>
 
         <div
             v-for="(marker, index) in likeMarkers"
@@ -74,6 +83,7 @@
               v-if="!player.isErrorState"
               class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 rotate-45 transition-all duration-300 bg-accent"
           ></div>
+        </div>
         </div>
       </div>
       
@@ -119,11 +129,11 @@
       <!-- 播放控制 -->
       <div class="flex items-center gap-4 border-r border-medical-200 pr-6">
         <!-- 新增：下载按钮 (放在 Shuffle 旁边或者 Next 后面) -->
-        <button id="tutorial-download" @click="downloadCurrentMusic" class="text-medical-400 hover:text-accent transition-colors" title="Download">
+        <button id="tutorial-download" @click="downloadCurrentMusic" class="text-medical-400 hover:text-accent transition-colors" title="ⓘ Download">
           <Download class="w-5 h-5" />
         </button>
 
-        <button id="tutorial-random" @click="player.cyclePlayMode" :disabled="player.isPlayModeLocked" :class="['text-medical-400', player.isPlayModeLocked ? 'opacity-50 cursor-not-allowed' : '']" :title="modeTitle">
+        <button id="tutorial-random" @click="player.cyclePlayMode" :disabled="player.isPlayModeLocked" :class="['text-medical-400', player.isPlayModeLocked ? 'opacity-50 cursor-not-allowed' : '']" :title="`ⓘ ${modeTitle}`">
             <ListOrdered v-if="player.playMode === 'SEQUENTIAL'" class="w-5 h-5" />
             <Shuffle v-else-if="player.playMode === 'SHUFFLE'" class="w-5 h-5" />
             <Repeat1 v-else class="w-5 h-5" />
@@ -146,7 +156,7 @@
             @click="player.playNext" 
             :disabled="isSkipDisabled" 
             class="text-medical-800 hover:text-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed relative group/skip" 
-            :title="skipBtnTitle"
+            :title="`ⓘ ${skipBtnTitle}`"
         >
             <SkipForward class="w-6 h-6 fill-current" />
             <!-- Badge -->
@@ -155,70 +165,54 @@
             </div>
             <!-- Wait Timer Hint -->
             <div v-if="player.isVoteSkipEnabled && canVote && waitTimeLeft > 0" class="absolute -bottom-6 left-1/2 -translate-x-1/2 bg-strong text-white text-[8px] px-1 py-0.5 rounded-sm opacity-0 group-hover/skip:opacity-100 transition-opacity whitespace-nowrap">
-                {{ waitTimeLeft }}s 后可投票
+                ⓘ {{ waitTimeLeft }}s 后可投票
             </div>
         </button>
       </div>
 
       <!-- 音量控制 -->
-      <div class="flex items-center gap-2 group">
-        <button @click="toggleMute" class="text-medical-500 hover:text-medical-900 transition-colors">
-          <VolumeX v-if="ui.volume === 0" class="w-5 h-5" />
-          <Volume1 v-else-if="ui.volume < 0.5" class="w-5 h-5" />
-          <Volume2 v-else class="w-5 h-5" />
-        </button>
-
-        <!-- 滑块容器 -->
-        <div
-            ref="volumeTrackRef"
-            class="w-24 h-6 flex items-center relative cursor-pointer touch-none"
-            @mousedown="handleVolumeMouseDown"
-        >
-          <!-- 灰色轨道 -->
-          <div class="w-full h-1 bg-medical-200 relative">
-            <!-- 橙色填充层 -->
-            <div
-                class="h-full bg-medical-500 group-hover:bg-accent transition-colors relative"
-                :style="{ width: (ui.volume * 100) + '%' }"
-            >
-              <!-- 装饰滑块 (只在悬停时显示) -->
-              <div class="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-3 bg-strong group-hover:bg-accent transition-colors scale-0 group-hover:scale-100"></div>
-            </div>
-          </div>
-        </div>
-
-        <div class="w-10 flex-shrink-0 text-[10px] font-mono text-medical-400 text-right">
-          <span v-if="isEditingVolume" class="flex items-center justify-end">
-            <input ref="volumeInputRef" v-model="volumeInput" type="text" inputmode="numeric" maxlength="3" aria-label="音量百分比"
-                   @keydown.enter="commitVolumeEdit" @keydown.esc="cancelVolumeEdit" @blur="cancelVolumeEdit"
-                   class="w-7 min-w-0 border-b border-accent bg-transparent text-right text-medical-900 outline-none" />%
-          </span>
-          <button v-else @click="startVolumeEdit" aria-label="输入音量百分比" title="点击输入音量" class="hover:text-accent">
-            {{ Math.round(ui.volume * 100) }}%
-          </button>
-        </div>
-      </div>
+      <VolumeControl compact />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onUnmounted } from 'vue';
+import { computed, ref, onBeforeUnmount } from 'vue';
 import { usePlayerStore } from '../stores/player';
-import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
 import { formatDuration } from '../utils/format';
-import { Download, ListOrdered, Repeat1, Shuffle, SkipForward, Play, Pause, Volume2, Volume1, VolumeX, ExternalLink, Zap, Lock } from 'lucide-vue-next';
+import { Download, ListOrdered, Repeat1, Shuffle, SkipForward, Play, Pause, ExternalLink, Zap, Lock } from 'lucide-vue-next';
 import CoverImage from './CoverImage.vue';
+import VolumeControl from './VolumeControl.vue';
 import { useToast } from '../composables/useToast';
 
 const player = usePlayerStore();
-const ui = useUiStore();
-const volumeTrackRef = ref(null);
 const { info, error } = useToast();
 
 const nowPlaying = computed(() => player.nowPlaying);
 const likeMarkers = computed(() => nowPlaying.value?.likeMarkers || []);
+const clock = ref(Date.now());
+const seekClock = setInterval(() => { clock.value=Date.now(); },100);
+onBeforeUnmount(() => clearInterval(seekClock));
+const coolingDown = computed(() => clock.value < player.seekDeadline);
+const progressTitle = computed(() => !player.canSeek?'ⓘ 本房间当前不允许你跳转进度':coolingDown.value?'ⓘ 房间跳转冷却中':'ⓘ 点击跳转，房间共用三秒冷却');
+let pointedPlayback;
+const rememberPlayback = () => { pointedPlayback=nowPlaying.value?.playbackId; };
+const seekFromPointer = event => {
+    if (event.detail===0 || pointedPlayback!==nowPlaying.value?.playbackId || !player.canSeek || coolingDown.value) return;
+    const rect=event.currentTarget.getBoundingClientRect();
+    player.seek((event.clientX-rect.left)/rect.width*nowPlaying.value.music.duration);
+};
+const seekFromKeyboard = event => {
+    if (!player.canSeek || coolingDown.value) return;
+    let target;
+    if (event.key==='ArrowLeft') target=player.localProgress-5000;
+    else if (event.key==='ArrowRight') target=player.localProgress+5000;
+    else if (event.key==='Home') target=0;
+    else if (event.key==='End') target=nowPlaying.value.music.duration-1;
+    else return;
+    event.preventDefault();player.seek(target);
+};
 
 const modeTitle = computed(() => {
     switch (player.playMode) {
@@ -269,58 +263,6 @@ const progressPercent = computed(() => {
   return Math.min(100, (player.localProgress / nowPlaying.value.music.duration) * 100);
 });
 
-// --- 音量逻辑 ---
-const lastVolume = ref(0.5);
-const isDraggingVolume = ref(false);
-const isEditingVolume = ref(false);
-const volumeInput = ref('');
-const volumeInputRef = ref(null);
-
-const startVolumeEdit = async () => {
-  volumeInput.value = String(Math.round(ui.volume * 100));
-  isEditingVolume.value = true;
-  await nextTick();
-  volumeInputRef.value?.select();
-};
-
-const cancelVolumeEdit = () => { isEditingVolume.value = false; };
-const commitVolumeEdit = () => {
-  const value = volumeInput.value.trim();
-  if (/^\d{1,3}$/.test(value)) ui.setVolume(Math.min(100, Number(value)) / 100);
-  isEditingVolume.value = false;
-};
-
-const toggleMute = () => {
-  if (ui.volume > 0) {
-    lastVolume.value = ui.volume;
-    ui.setVolume(0);
-  } else {
-    ui.setVolume(lastVolume.value > 0 ? lastVolume.value : 0.5);
-  }
-};
-
-// 音量拖拽
-const updateVolumeByMouse = (e) => {
-  if (!volumeTrackRef.value) return;
-  const rect = volumeTrackRef.value.getBoundingClientRect();
-  const x = e.clientX - rect.left;
-  const percentage = Math.max(0, Math.min(1, x / rect.width));
-  ui.setVolume(parseFloat(percentage.toFixed(2)));
-};
-
-const handleVolumeMouseDown = (e) => {
-  isDraggingVolume.value = true;
-  updateVolumeByMouse(e);
-  window.addEventListener('mousemove', handleVolumeMouseMove);
-  window.addEventListener('mouseup', handleVolumeMouseUp);
-};
-const handleVolumeMouseMove = (e) => { if (isDraggingVolume.value) updateVolumeByMouse(e); };
-const handleVolumeMouseUp = () => {
-  isDraggingVolume.value = false;
-  window.removeEventListener('mousemove', handleVolumeMouseMove);
-  window.removeEventListener('mouseup', handleVolumeMouseUp);
-};
-
 // --- 下载逻辑 ---
 const downloadCurrentMusic = async () => {
   if (!nowPlaying.value) return;
@@ -352,8 +294,4 @@ const openSourcePage = () => {
   if (url) window.open(url, '_blank');
 };
 
-onUnmounted(() => {
-  window.removeEventListener('mousemove', handleVolumeMouseMove);
-  window.removeEventListener('mouseup', handleVolumeMouseUp);
-});
 </script>

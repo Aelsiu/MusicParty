@@ -41,6 +41,19 @@ class MultiRoomAccessTest {
         assertThrows(ResponseStatusException.class,()->repository.addLicense("NewOwner9"));
         assertEquals(List.of(room.id()),repository.removeLicense(license.id()));assertFalse(repository.exists(room.id()));
     }
+    @Test void licenseNotesPersistAndReplacementPreservesNoteWithoutRevokingNoteEdits() throws Exception {
+        var license=repository.addLicense("OwnerKey9","杭州🎵");var manager=access.login("OwnerKey9","one");
+        repository.updateLicenseNote(license.id(),"👨‍👩‍👧‍👦".repeat(16));
+        assertEquals(license.id(),access.manager(manager.token()).licenseId());
+        assertThrows(ResponseStatusException.class,()->repository.updateLicenseNote(license.id(),"🎵".repeat(17)));
+        assertThrows(ResponseStatusException.class,()->repository.updateLicenseNote(license.id(),"a\nb"));
+        assertThrows(ResponseStatusException.class,()->repository.updateLicenseNote(license.id(),"a\u200bb"));
+        repository.replaceLicense(license.id(),"NewOwner9");repository.close();
+        repository=new RoomRepository(config,new ObjectMapper());repository.initialize();
+        assertEquals("👨‍👩‍👧‍👦".repeat(16),repository.license(license.id()).orElseThrow().note());
+        assertEquals("NewOwner9",repository.license(license.id()).orElseThrow().key());
+        repository.updateLicenseNote(license.id(),"");assertEquals("",repository.license(license.id()).orElseThrow().note());
+    }
     @Test void ownRoomLimitAndIdempotentCreationApplyToRootAndOrdinaryLicenses() {
         for(String owner:List.of("ROOT",repository.addLicense("OwnerKey9").id())) {
             String request=UUID.randomUUID().toString();var first=repository.create(owner,"同名🎵",request);

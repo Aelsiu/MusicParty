@@ -90,8 +90,10 @@ class SocketService {
     send(destination, body = {}) {
         if (this.client && this.connected) {
             this.client.publish({ destination, body: JSON.stringify(body) });
+            return true;
         } else {
             console.warn('Socket not connected, cannot send:', destination);
+            return false;
         }
     }
 

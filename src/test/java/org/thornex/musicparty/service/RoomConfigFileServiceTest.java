@@ -21,12 +21,13 @@ class RoomConfigFileServiceTest {
 
         service.persist(new AdminConfigUpdateRequest(
                 250, null, null, null, null, null, null, "lossless",
-                null, null, null, null, null, null));
+                null, null, null, null, null, null, "OWNER_AND_ENQUEUER"));
 
         String saved = Files.readString(file);
         assertTrue(saved.contains("# local settings"));
         assertTrue(saved.contains("app.music-api.admin-password=private-value"));
         assertTrue(saved.contains("app.music-api.queue.max-size=250"));
         assertTrue(saved.contains("app.music-api.netease.quality=lossless"));
+        assertTrue(saved.contains("app.music-api.player.seek-policy=OWNER_AND_ENQUEUER"));
     }
 }

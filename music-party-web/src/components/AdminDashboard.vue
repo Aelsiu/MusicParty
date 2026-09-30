@@ -115,6 +115,12 @@
                   </div>
 
                   <!-- Permission Locks -->
+                  <div>
+                    <label for="admin-seek-policy" class="block text-[10px] font-bold text-medical-500 mb-2">进度条跳转权限</label>
+                    <select id="admin-seek-policy" :value="playerStore.config.seekPolicy || 'DISABLED'" @change="e => updateInstantConfig({ seekPolicy: e.target.value })" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs">
+                      <option value="DISABLED">禁止跳转</option><option value="OWNER_AND_ENQUEUER">仅管理和点歌者</option><option value="ALL">全部允许</option>
+                    </select>
+                  </div>
                   <div class="grid grid-cols-3 gap-2">
                     <button v-for="lock in locks" :key="lock.key" @click="toggleLock(lock.key, !lock.value)" class="flex items-center justify-center gap-2 py-2 px-1 border transition-all text-[9px] font-bold font-mono" :class="lock.value ? 'bg-red-50 border-red-200 text-red-500' : 'bg-surface border-medical-200 text-medical-400 hover:border-accent hover:text-accent'">
                       <Lock v-if="lock.value" class="w-3 h-3" />
@@ -143,7 +149,7 @@
                               class="py-1.5 text-[10px] font-bold transition-colors"
                               :class="privateDj.mode === 'DJ' ? 'bg-accent text-white' : 'text-medical-500 hover:bg-medical-200'">私人DJ</button>
                     </div>
-                    <p class="text-[8px] text-medical-400">点选即开启，再点已选中的模式即关闭，私人DJ模式=先播语音再播歌，加入队列功能固定为私人FM</p>
+                    <p class="info-tip text-[8px] text-medical-400">点选即开启，再点已选中的模式即关闭，私人DJ模式=先播语音再播歌，加入队列功能固定为私人FM</p>
                   </div>
 
                   <!-- 三个功能开关 -->
@@ -151,7 +157,7 @@
                     <div v-for="sw in privateDjSwitches" :key="sw.field" class="flex items-center justify-between p-2 bg-medical-50 border border-medical-100">
                       <div class="flex flex-col">
                         <span class="text-[10px] font-bold text-medical-800">{{ sw.label }}</span>
-                        <span class="text-[8px] text-medical-400 font-mono uppercase">{{ sw.hint }}</span>
+                        <span class="info-tip text-[8px] text-medical-400 font-mono uppercase">{{ sw.hint }}</span>
                       </div>
                       <RoundSwitch :model-value="privateDj[sw.field]" @update:model-value="togglePrivateDjSwitch(sw.field)"
                                    :disabled="privateDj.mode === 'OFF'" :label="sw.label" />

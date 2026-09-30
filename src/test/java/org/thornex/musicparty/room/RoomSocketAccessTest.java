@@ -42,4 +42,11 @@ class RoomSocketAccessTest {
         interceptor.afterMessageHandled(message,null,null,null);assertNull(RoomContext.current());
         assertThrows(MessageDeliveryException.class,()->interceptor.preSend(frame(StompCommand.SEND,"/app/rooms/"+other+"/chat"),null));
     }
+    @Test void seekingIsAdmittedThroughTheExistingAuthorizedConnection() {
+        var message=frame(StompCommand.SEND,"/app/control/seek");
+        assertNotNull(interceptor.preSend(message,null));
+        interceptor.beforeHandle(message,null,null);assertEquals(room,RoomContext.current());
+        interceptor.afterMessageHandled(message,null,null,null);assertNull(RoomContext.current());
+        assertThrows(MessageDeliveryException.class,()->interceptor.preSend(frame(StompCommand.SEND,"/app/rooms/"+other+"/control/seek"),null));
+    }
 }

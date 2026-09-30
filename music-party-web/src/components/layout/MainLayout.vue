@@ -6,6 +6,7 @@ import UserList from '../UserList.vue';
 import QueueList from '../QueueList.vue';
 import CoverImage from '../CoverImage.vue';
 import RoundSwitch from '../RoundSwitch.vue';
+import VolumeControl from '../VolumeControl.vue';
 import { useUserStore } from '../../stores/user';
 import { useUiStore } from '../../stores/ui';
 import { usePlayerStore } from '../../stores/player';
@@ -69,7 +70,7 @@ const handleSearchClick = () => {
         <button
             @click="uiStore.toggleLiteMode"
             class="flex items-center justify-center w-9 h-9 md:w-10 md:h-9 border border-medical-200 bg-medical-50 hover:bg-medical-100 text-medical-600 transition-all rounded-sm"
-            title="精简模式"
+            title="ⓘ 精简模式" aria-label="精简模式"
         >
           <Minimize2 class="w-4 h-4" />
         </button>
@@ -79,7 +80,7 @@ const handleSearchClick = () => {
           <Search class="w-4 h-4" />
           <span class="hidden md:inline">SEARCH</span>
         </button>
-        <button @click="emit('settings')" aria-label="设置" title="设置" class="flex items-center justify-center w-9 h-9 border border-medical-200 bg-medical-50 hover:bg-medical-100 text-medical-700 transition-colors rounded-sm">
+        <button @click="emit('settings')" aria-label="设置" title="ⓘ 设置" class="flex items-center justify-center w-9 h-9 border border-medical-200 bg-medical-50 hover:bg-medical-100 text-medical-700 transition-colors rounded-sm">
           <Settings class="w-4 h-4" />
         </button>
       </div>
@@ -179,20 +180,8 @@ const handleSearchClick = () => {
 
         <!-- 音量控制 -->
         <div class="w-full max-w-[320px] bg-surface/80 backdrop-blur-sm border border-medical-200 p-4 flex flex-col gap-3 shadow-sm">
-           <div class="flex justify-between items-center text-[10px] font-mono text-medical-400 uppercase tracking-wider">
-              <span>音量</span>
-              <span class="text-medical-900 font-bold">{{ Math.round(uiStore.volume * 100) }}%</span>
-           </div>
-           <div class="flex items-center gap-3">
-              <Volume2 class="w-4 h-4 text-medical-400 flex-shrink-0" />
-              <div class="flex-1 flex items-center h-4">
-                 <input
-                    type="range" min="0" max="1" step="0.01"
-                    v-model.number="uiStore.volume"
-                    class="w-full accent-medical-900 h-1 bg-medical-100 rounded-none appearance-none cursor-pointer"
-                 />
-              </div>
-           </div>
+           <span class="text-[10px] font-mono text-medical-400">音量</span>
+           <VolumeControl />
         </div>
 
         <!-- 后台自动精简开关 (变色优化) -->

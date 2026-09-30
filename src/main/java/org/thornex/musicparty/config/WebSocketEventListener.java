@@ -22,5 +22,9 @@ public class WebSocketEventListener {
     @EventListener public void disconnected(SessionDisconnectEvent event) {
         var c=access.disconnect(event.getSessionId());if(c==null || !repository.exists(c.roomId()))return;
         try(var ignored=RoomContext.enter(c.roomId())) { users.disconnectUser(event.getSessionId());player.broadcastOnlineUsers();lifecycle.departed(c.roomId()); }
+        catch(org.springframework.beans.factory.support.ScopeNotActiveException e) {
+            // Deletion can finish between the existence check and resolving a room-scoped service.
+            if(repository.exists(c.roomId())) throw e;
+        }
     }
 }

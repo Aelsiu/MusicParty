@@ -69,4 +69,9 @@ public class ApiController {
     public Mono<String> getLyric(@PathVariable String platform, @PathVariable String musicId) {
         return getService(platform).getLyric(musicId);
     }
+
+    @GetMapping("/music/chorus/{platform}/{musicId}")
+    public Mono<List<Long>> getChorus(@PathVariable String platform, @PathVariable String musicId) {
+        return getService(platform).getChorus(musicId);
+    }
 }

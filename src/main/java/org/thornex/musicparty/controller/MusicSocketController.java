@@ -25,12 +25,14 @@ public class MusicSocketController {
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatService chatService;
+    private final org.thornex.musicparty.room.RoomAccessService roomAccess;
 
-    public MusicSocketController(MusicPlayerService musicPlayerService, UserService userService, SimpMessagingTemplate messagingTemplate, ChatService chatService) {
+    public MusicSocketController(MusicPlayerService musicPlayerService, UserService userService, SimpMessagingTemplate messagingTemplate, ChatService chatService, org.thornex.musicparty.room.RoomAccessService roomAccess) {
         this.musicPlayerService = musicPlayerService;
         this.userService = userService;
         this.messagingTemplate = messagingTemplate;
         this.chatService = chatService;
+        this.roomAccess = roomAccess;
     }
 
     @MessageMapping("/player/resync")
@@ -60,6 +62,15 @@ public class MusicSocketController {
     public void cyclePlayMode(@Header("simpSessionId") String sessionId) {
         if (isGuest(sessionId)) return;
         musicPlayerService.cyclePlayMode(sessionId);
+    }
+
+    @MessageMapping("/control/seek")
+    public void seek(@Payload SeekRequest request, @Header("simpSessionId") String sessionId) {
+        if (isGuest(sessionId)) return;
+        var connection = roomAccess.connection(sessionId);
+        if (!org.thornex.musicparty.room.RoomContext.require().equals(connection.roomId())) return;
+        boolean manager = connection.managerToken() != null && !connection.managerToken().isBlank();
+        musicPlayerService.seek(request, sessionId, manager);
     }
 
     @MessageMapping("/control/toggle-pause")

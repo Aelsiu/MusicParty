@@ -6,6 +6,7 @@ export const musicApi = {
 
     // 获取歌词
     getLyric: (platform, songId) => client.get(`/api/music/lyric/${platform}/${songId}`),
+    getChorus: (platform, songId) => client.get(`/api/music/chorus/${platform}/${songId}`),
 
     // 获取用户歌单
     getUserPlaylists: (platform, userId) => client.get(`/api/user/playlists/${platform}/${userId}`),

@@ -22,6 +22,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         userSearchResults.value = [];
     });
     const isPlaylistsLoading = ref(false);
+    let playlistRequest = 0;
 
     // Pagination
     const offset = ref(0);
@@ -33,24 +34,27 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
     // 获取用户歌单
     const fetchPlaylists = async () => {
+        const request = ++playlistRequest;
         const platform = platformRef.value;
         const uid = bindings.value[platform];
         if (!uid) {
             playlists.value = [];
+            isPlaylistsLoading.value = false;
             return;
         }
         isPlaylistsLoading.value = true;
         try {
             const data = await musicApi.getUserPlaylists(platform, uid);
-            if (platformRef.value === platform && bindings.value[platform] === uid) playlists.value = data;
+            if (request === playlistRequest && platformRef.value === platform && bindings.value[platform] === uid) playlists.value = data;
         } catch (e) {
+            if (request !== playlistRequest) return;
             console.error(e);
             playlists.value = [];
             if (e.response?.data?.message) {
                 error(e.response.data.message);
             }
         } finally {
-            isPlaylistsLoading.value = false;
+            if (request === playlistRequest) isPlaylistsLoading.value = false;
         }
     };
 
@@ -194,6 +198,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         hasMore,
         isLoadingMore,
         bindings,
+        fetchPlaylists,
         searchUser,
         bindUser,
         loadPlaylist,

@@ -190,6 +190,7 @@ public class AdminController {
         if (!inRange(r.voteSkipWaitTime(), 0, 3600)) return "投票等待时间超出范围";
         if (r.voteSkipThreshold() != null && (!Double.isFinite(r.voteSkipThreshold()) || r.voteSkipThreshold() < 0.1 || r.voteSkipThreshold() > 1)) return "投票阈值超出范围";
         if (r.neteaseQuality() != null && !Set.of("standard", "higher", "exhigh", "lossless", "hires", "jyeffect").contains(r.neteaseQuality())) return "不支持该解析音质";
+        if (r.seekPolicy() != null && !Set.of("DISABLED", "OWNER_AND_ENQUEUER", "ALL").contains(r.seekPolicy())) return "不支持该进度跳转权限";
         return null;
     }
 

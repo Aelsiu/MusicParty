@@ -11,7 +11,7 @@ import java.util.*;
 public class WebSocketAuthInterceptor implements ExecutorChannelInterceptor {
     private final RoomAccessService access;
     private final ThreadLocal<RoomContext> context = new ThreadLocal<>();
-    private static final Set<String> SENDS=Set.of("/app/player/resync","/app/enqueue","/app/enqueue/playlist","/app/control/next","/app/control/toggle-shuffle","/app/control/toggle-pause","/app/queue/top","/app/queue/remove","/app/control/like","/app/user/rename","/app/user/bind","/app/chat","/app/chat/history/fetch");
+    private static final Set<String> SENDS=Set.of("/app/player/resync","/app/enqueue","/app/enqueue/playlist","/app/control/next","/app/control/toggle-shuffle","/app/control/toggle-pause","/app/control/seek","/app/queue/top","/app/queue/remove","/app/control/like","/app/user/rename","/app/user/bind","/app/chat","/app/chat/history/fetch");
     private static final Set<String> PRIVATE=Set.of("/app/user/me","/app/user/profile","/app/chat/history","/app/topic/player/state","/app/topic/users/online","/user/queue/me","/user/queue/profile","/user/queue/player/state","/user/queue/chat/history","/user/queue/events","/user/queue/chat/private");
     public WebSocketAuthInterceptor(RoomAccessService access) { this.access=access; }
     @Override public Message<?> preSend(Message<?> message,MessageChannel channel) {

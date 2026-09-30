@@ -12,7 +12,7 @@
           <p v-if="error" role="alert" class="text-xs text-red-500 mt-3">{{ error }}</p>
           <div class="relative mt-3 text-[11px] text-medical-400">
             <p class="flex items-center justify-center gap-1">
-              <span>使用网易云音乐App扫码并确认登录</span>
+              <span class="info-tip">使用网易云音乐App扫码并确认登录</span>
               <button type="button" class="shrink-0 p-1 hover:text-accent focus-visible:text-accent"
                       aria-label="Cookie 登录用途说明" :aria-describedby="helpVisible ? helpId : undefined" :aria-expanded="helpVisible"
                       @pointerenter="helpHovered=$event.pointerType==='mouse'" @pointerleave="helpHovered=false"
@@ -22,7 +22,7 @@
               </button>
             </p>
             <div v-if="helpVisible" :id="helpId" role="tooltip"
-                 class="absolute bottom-full left-0 right-0 mb-2 p-3 bg-strong text-white border border-medical-300 shadow-lg text-left text-xs leading-relaxed z-10">
+                 class="info-tip absolute bottom-full left-0 right-0 mb-2 p-3 bg-strong text-white border border-medical-300 shadow-lg text-left text-xs leading-relaxed z-10">
               本应用登录仅用于获取并保存Cookie，不会用作其他用途。如遇账号问题，可能是真的被攻击了，请立刻修改密码并加强自身账号保护！
             </div>
           </div>

@@ -22,6 +22,7 @@ export function useAudio(audioRef, playerStore) {
     let stallTimer = null;
     let lastPositionStateAt = 0;
     let lastShellNotifyAt = 0;
+    let pendingServerPosition = false;
 
     // 请求唤醒锁 (防止 WebSocket 断连)
     const requestWakeLock = async () => {
@@ -84,6 +85,28 @@ export function useAudio(audioRef, playerStore) {
         }));
     };
 
+    // Apply every acknowledged seek, even when the jump is below the normal drift threshold.
+    const applyServerPosition = () => {
+        const audio=audioRef.value;
+        if (!pendingServerPosition || !audio || audio.readyState<1 || !playerStore.nowPlaying) return;
+        const duration=Number.isFinite(audio.duration)?audio.duration:playerStore.nowPlaying.music.duration/1000;
+        const position=Math.max(0,Math.min(playerStore.getCurrentProgress()/1000,Math.max(0,duration-.001)));
+        try { audio.currentTime=position; } catch { return; }
+        pendingServerPosition=false;
+        localProgress.value=position*1000;
+        playerStore.localProgress=localProgress.value;
+        if (playerStore.isPaused) audio.pause();
+        if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && duration>0) {
+            try { navigator.mediaSession.setPositionState({duration,position,playbackRate:1}); } catch {}
+        }
+        lastPositionStateAt=Date.now();
+        notifyAndroidShell();
+    };
+    watch(() => playerStore.seekRevision, () => {
+        pendingServerPosition=true;
+        applyServerPosition();
+    }, {flush:'post'});
+
     // 尝试播放并处理浏览器拦截
     const safePlay = async () => {
         if (!audioRef.value || !playerStore.nowPlaying) return;
@@ -105,6 +128,7 @@ export function useAudio(audioRef, playerStore) {
     // === 1. 监听资源加载 (canplay) ===
     const checkAutoPlay = () => {
         if (!playerStore.nowPlaying) return;
+        applyServerPosition();
         isBuffering.value = false;
         clearTimeout(endedTimer);   // 新曲已到位，取消 ended 重同步等待
         clearTimeout(stallTimer);
@@ -121,17 +145,17 @@ export function useAudio(audioRef, playerStore) {
         if (!audioRef.value) return;
         if (newPaused) {
             audioRef.value.pause();
-            navigator.mediaSession.playbackState = 'paused';
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'paused';
             releaseWakeLock();
         } else {
             safePlay();
-            navigator.mediaSession.playbackState = 'playing';
+            if ('mediaSession' in navigator) navigator.mediaSession.playbackState = 'playing';
         }
         notifyAndroidShell();
     });
 
     // === 3. 监听切歌 ===
-    watch(() => playerStore.nowPlaying?.music?.id, () => {
+    watch(() => playerStore.nowPlaying?.playbackId, () => {
         // 服务器已推新曲（或清空），取消 ended 重同步等待
         clearTimeout(endedTimer);
         endedTrackId = null;
@@ -285,7 +309,7 @@ export function useAudio(audioRef, playerStore) {
                 try {
                     navigator.mediaSession.setPositionState({
                         duration: playerStore.nowPlaying.music.duration / 1000,
-                        playbackRate: playerStore.isPaused ? 0 : 1,
+                        playbackRate: 1,
                         position: playerStore.localProgress / 1000,
                     });
                 } catch (e) {
@@ -319,6 +343,7 @@ export function useAudio(audioRef, playerStore) {
         isErrorState,
         retryCount,
         handleError,
+        applyServerPosition,
         checkAutoPlay,
         handleEnded,
         onWaiting,

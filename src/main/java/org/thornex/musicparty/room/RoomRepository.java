@@ -15,7 +15,10 @@ import java.util.*;
 /** SQLite owns room data and pairing history, licenses.json owns ordinary keys. */
 @Service
 public class RoomRepository {
-    public record License(String id, String key) {}
+    public record License(String id, String key, String note) {
+        public License { note = note == null ? "" : note; }
+        public License(String id, String key) { this(id, key, ""); }
+    }
     public record Room(String id, String name, String ownerId, long createdAt, String pairingCode, long pairingEpoch, boolean autoOpen) {}
     private static final List<String> CODES=java.util.stream.IntStream.range(0,10000).mapToObj(i->String.format(Locale.ROOT,"%04d",i)).toList();
     private final MultiRoomProperties properties;
@@ -119,12 +122,19 @@ public class RoomRepository {
     public synchronized void save(String id, String payload, String config) { update("UPDATE rooms SET payload=?,config=? WHERE id=?",payload,config,id); }
     public synchronized boolean consumeAutoOpen(String id) { boolean first = room(id).autoOpen(); if (first) update("UPDATE rooms SET auto_open=0 WHERE id=?",id); return first; }
     public synchronized License addLicense(String key) {
-        License value = new License("LICENSE-"+UUID.randomUUID().toString().substring(0,8),key);
+        return addLicense(key, "");
+    }
+    public synchronized License addLicense(String key, String note) {
+        License value = new License("LICENSE-"+UUID.randomUUID().toString().substring(0,8),key,note);
         List<License> next = new ArrayList<>(licenses); next.add(value); commitLicenses(next); return value;
     }
     public synchronized void replaceLicense(String id, String key) {
         if (license(id).isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"许可不存在");
-        commitLicenses(licenses.stream().map(l -> l.id().equals(id) ? new License(id,key) : l).toList());
+        commitLicenses(licenses.stream().map(l -> l.id().equals(id) ? new License(id,key,l.note()) : l).toList());
+    }
+    public synchronized void updateLicenseNote(String id, String note) {
+        if (license(id).isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"许可不存在");
+        commitLicenses(licenses.stream().map(l -> l.id().equals(id) ? new License(id,l.key(),note) : l).toList());
     }
     public synchronized List<String> removeLicense(String id) {
         if (license(id).isEmpty()) throw new ResponseStatusException(HttpStatus.NOT_FOUND,"许可不存在");
@@ -137,7 +147,10 @@ public class RoomRepository {
     private void validateLicenses(List<License> list) {
         if (list == null) throw new IllegalStateException("License file must be a JSON list");
         Set<String> ids = new HashSet<>(), keys = new HashSet<>(Set.of(properties.getRootKey()));
-        for (License l : list) if (l == null || l.id() == null || !l.id().matches("[A-Za-z0-9_-]{1,64}") || "ROOT".equals(l.id()) || !ids.add(l.id()) || !RoomValidation.key(l.key()) || !keys.add(l.key())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"许可 ID 或密钥格式无效，ID 和密钥均不能重复");
+        for (License l : list) {
+            if (l == null || l.id() == null || !l.id().matches("[A-Za-z0-9_-]{1,64}") || "ROOT".equals(l.id()) || !ids.add(l.id()) || !RoomValidation.key(l.key()) || !keys.add(l.key())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"许可 ID 或密钥格式无效，ID 和密钥均不能重复");
+            if (!RoomValidation.note(l.note())) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"备注最多 16 个可见字符，不含换行或不可见控制字符");
+        }
     }
     private void writeLicenses(List<License> list) throws Exception {
         Path file = Path.of(properties.getLicenseFile()).toAbsolutePath(); Files.createDirectories(file.getParent());

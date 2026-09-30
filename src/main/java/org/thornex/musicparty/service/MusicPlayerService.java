@@ -59,6 +59,9 @@ public class MusicPlayerService {
     // 核心计时逻辑
     private final AtomicLong positionAnchor = new AtomicLong(0); // 上一次更新状态时的进度(ms)
     private final AtomicLong timestampAnchor = new AtomicLong(0); // 上一次更新状态时的系统时间(ms)
+    private String playbackId;
+    private long seekAvailableAt;
+    private static final long SEEK_COOLDOWN_MS = 3000;
 
 
     private final AtomicBoolean isShuffle = new AtomicBoolean(false);
@@ -132,7 +135,7 @@ public class MusicPlayerService {
         if (org.thornex.musicparty.room.RoomContext.current() != null) isPaused.set(true);
     }
 
-    public void playerLoop() {
+    public synchronized void playerLoop() {
         if (isPaused.get()) {
             return;
         }
@@ -151,6 +154,7 @@ public class MusicPlayerService {
                     // 前端 AudioEngine 通过 @seeked 事件检测进度跳变并自动重启播放
                     positionAnchor.set(0);
                     timestampAnchor.set(System.currentTimeMillis());
+                    resetSeekState();
                     log.info("Repeat-one mode: restarting {}", music.name());
                     broadcastFullPlayerState();
                     return;
@@ -247,18 +251,23 @@ public class MusicPlayerService {
                             playableMusic -> {
                                 // 检查版本号是否匹配
                                 // 如果在请求期间执行了 skip/stop，版本号会变，这里就应该丢弃结果
-                                if (playHeadVersion.get() == currentVersion) {
-                                    applyNewSong(playableMusic, nextItem);
-                                } else {
-                                    log.info("Discarded stale play result for {}", nextItem.music().name());
+                                synchronized (this) {
+                                    if (playHeadVersion.get() == currentVersion) {
+                                        applyNewSong(playableMusic, nextItem);
+                                    } else {
+                                        log.info("Discarded stale play result for {}", nextItem.music().name());
+                                    }
                                 }
                             },
                             error -> {
-                        log.error("Play failed for {}: {}", nextItem.music().name(), error.getMessage());
-                        eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.ERROR, PlayerAction.ERROR_LOAD, "SYSTEM", nextItem.music().name()));
-                        isLoading.set(false);
-                        broadcastFullPlayerState();
-                        playNextInQueue();
+                        synchronized (this) {
+                            if (playHeadVersion.get() != currentVersion) return;
+                            log.error("Play failed for {}: {}", nextItem.music().name(), error.getMessage());
+                            eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.ERROR, PlayerAction.ERROR_LOAD, "SYSTEM", nextItem.music().name()));
+                            isLoading.set(false);
+                            broadcastFullPlayerState();
+                            playNextInQueue();
+                        }
                     });
         } catch (Exception e) {
             log.error("Unexpected error in playNextInQueue", e);
@@ -356,13 +365,15 @@ public class MusicPlayerService {
         }
         playableMono.timeout(Duration.ofSeconds(10)).subscribe(
                 pm -> {
-                    if (playHeadVersion.get() != version) return;
-                    applyFmDjSegment(pm, segment, forceFm);
+                    synchronized (this) {
+                        if (playHeadVersion.get() != version) return;
+                        applyFmDjSegment(pm, segment, forceFm);
+                    }
                 },
                 error -> handleFmDjError(version, error));
     }
 
-    private void applyFmDjSegment(PlayableMusic music, PrivateDjSegment segment, boolean forceFm) {
+    private synchronized void applyFmDjSegment(PlayableMusic music, PrivateDjSegment segment, boolean forceFm) {
         currentLikedUserIds.clear();
         currentLikeMarkers.clear();
         skipVotes.clear();
@@ -373,6 +384,7 @@ public class MusicPlayerService {
         currentEnqueuerName.set(forceFm ? "私人FM" : (djMode ? "私人DJ" : "私人FM"));
         positionAnchor.set(0);
         timestampAnchor.set(System.currentTimeMillis());
+        resetSeekState();
         isPaused.set(false);
         isLoading.set(false);
         fmDjFailCount.set(0);
@@ -413,7 +425,7 @@ public class MusicPlayerService {
         }
     }
 
-    private void applyNewSong(PlayableMusic music, MusicQueueItem queueItem) {
+    private synchronized void applyNewSong(PlayableMusic music, MusicQueueItem queueItem) {
         currentLikedUserIds.clear();
         currentLikeMarkers.clear();
         skipVotes.clear(); // 切歌时清空投票
@@ -426,6 +438,7 @@ public class MusicPlayerService {
 
         positionAnchor.set(0);
         timestampAnchor.set(System.currentTimeMillis());
+        resetSeekState();
         isPaused.set(false);
 
         log.info("Now playing: {}", music.name());
@@ -437,7 +450,39 @@ public class MusicPlayerService {
         eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.INFO, PlayerAction.PLAY_START, queueItem.enqueuedBy().token(), queueItem.enqueuedBy().name(), music.name()));
     }
 
-    public PlayerState getCurrentPlayerState() {
+    private void resetSeekState() {
+        playbackId = UUID.randomUUID().toString();
+        seekAvailableAt = 0;
+    }
+
+    public synchronized boolean seek(SeekRequest request, String sessionId, boolean manager) {
+        var user = userService.getUser(sessionId).orElse(null);
+        if (user == null || user.isGuest()) return false;
+        String policy = appProperties.getPlayer().getSeekPolicy();
+        boolean allowed = "ALL".equals(policy) || ("OWNER_AND_ENQUEUER".equals(policy)
+                && (manager || user.getToken().equals(currentEnqueuerId.get())));
+        if (!allowed) return rejectSeek(sessionId, "本房间不允许你跳转播放进度");
+        PlayableMusic music = currentMusic.get();
+        if (request == null || music == null || isLoading.get() || music.duration() <= 0
+                || playbackId == null || !playbackId.equals(request.playbackId()))
+            return rejectSeek(sessionId, "歌曲已变化，请等待播放状态更新");
+        if (request.position() == null || request.position() < 0 || request.position() >= music.duration())
+            return rejectSeek(sessionId, "跳转位置超出歌曲时长");
+        long now = System.currentTimeMillis();
+        if (now < seekAvailableAt) return rejectSeek(sessionId, "房间跳转冷却中，请稍后再试");
+        positionAnchor.set(request.position());
+        timestampAnchor.set(now);
+        seekAvailableAt = now + SEEK_COOLDOWN_MS;
+        broadcastFullPlayerState();
+        return true;
+    }
+
+    private boolean rejectSeek(String sessionId, String message) {
+        eventPublisher.publishEvent(new SeekRejectedEvent(sessionId, getUserToken(sessionId), message));
+        return false;
+    }
+
+    public synchronized PlayerState getCurrentPlayerState() {
         PlayableMusic music = currentMusic.get();
         NowPlayingInfo infoToSend = null;
 
@@ -448,7 +493,10 @@ public class MusicPlayerService {
                     currentEnqueuerId.get(),
                     currentEnqueuerName.get(),
                     currentLikedUserIds,
-                    currentLikeMarkers
+                    currentLikeMarkers,
+                    playbackId,
+                    seekAvailableAt,
+                    System.currentTimeMillis()
             );
         }
 
@@ -498,7 +546,8 @@ public class MusicPlayerService {
                                 appProperties.getPrivateDj().isFillBlankEnabled(),
                                 appProperties.getPrivateDj().isJoinQueueEnabled(),
                                 appProperties.getPrivateDj().isCustodyEnabled()
-                        )
+                        ),
+                        appProperties.getPlayer().getSeekPolicy()
                 )
         );
     }
@@ -850,7 +899,7 @@ public class MusicPlayerService {
         }
     }
 
-    private void executeSkip(String sessionId) {
+    private synchronized void executeSkip(String sessionId) {
         if (isSkipLocked.get() && !"SYSTEM".equals(sessionId)) {
             eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.ERROR, PlayerAction.SYSTEM_MESSAGE, getUserToken(sessionId), "切歌功能已被锁定"));
             return;
@@ -869,8 +918,9 @@ public class MusicPlayerService {
         playNextInQueue();
     }
 
-    public void updateConfig(AdminConfigUpdateRequest request) {
+    public synchronized void updateConfig(AdminConfigUpdateRequest request) {
         StringBuilder logMsg = new StringBuilder("System configuration updated: ");
+        if (request.seekPolicy() != null) appProperties.getPlayer().setSeekPolicy(request.seekPolicy());
         
         if (request.maxSize() != null) {
             appProperties.getQueue().setMaxSize(request.maxSize());
@@ -940,7 +990,7 @@ public class MusicPlayerService {
         broadcastFullPlayerState();
     }
 
-    public void togglePause(String sessionId) {
+    public synchronized void togglePause(String sessionId) {
         if (currentMusic.get() == null) {
             if (org.thornex.musicparty.room.RoomContext.current() != null) { isPaused.set(false); timestampAnchor.set(System.currentTimeMillis()); }
             if (!queueManager.getQueueSnapshot().isEmpty()) {
@@ -1008,8 +1058,9 @@ public class MusicPlayerService {
                 PlayerAction.MODE_CHANGE, getUserToken(sessionId), modeName));
     }
 
-    public void resetSystem() {
+    public synchronized void resetSystem() {
         log.warn("!!!SYSTEM RESET INITIATED!!!");
+        playHeadVersion.incrementAndGet();
         currentMusic.set(null);
         positionAnchor.set(0);
         timestampAnchor.set(0);
@@ -1099,7 +1150,7 @@ public class MusicPlayerService {
     /**
      * 进入空闲模式，停止播放
      */
-    private void enterIdleMode() {
+    private synchronized void enterIdleMode() {
         log.info("Last user disconnected. Entering idle mode.");
         isLoading.set(false);
 
@@ -1131,7 +1182,7 @@ public class MusicPlayerService {
      * 定时清理长时间暂停的播放器状态
      */
 
-    public void cleanupIdlePlayer() {
+    public synchronized void cleanupIdlePlayer() {
         if (isPaused.get() && currentMusic.get() != null) {
             // 在暂停状态下，timestampAnchor 记录的是暂停开始的时间
             long pausedDuration = System.currentTimeMillis() - timestampAnchor.get();

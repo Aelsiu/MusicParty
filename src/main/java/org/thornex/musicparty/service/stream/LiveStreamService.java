@@ -86,6 +86,8 @@ public class LiveStreamService {
 
     // 最近一次 PlayerStateEvent 的时刻，用于估算播放器实时位置（事件稀疏时避免误判 seek）
     private volatile long lastPlayerEventTimeMs;
+    private volatile String playerPlaybackId;
+    private volatile long playerSeekAvailableAt;
 
     // FFmpeg 进程管理（volatile：读者线程在 readLoop 中会跨线程比较）
     private volatile Process transcoderProcess;
@@ -296,15 +298,24 @@ public class LiveStreamService {
             return;
         }
         var state = event.getState();
+        boolean explicitSeek = state.nowPlaying() != null
+                && java.util.Objects.equals(playerPlaybackId, state.nowPlaying().playbackId())
+                && state.nowPlaying().seekAvailableAt() > playerSeekAvailableAt;
         this.isPaused = state.isPaused();
         this.lastPlayerEventTimeMs = System.currentTimeMillis();
         if (state.nowPlaying() != null) {
             this.currentMusic = state.nowPlaying().music();
             this.currentPosition = state.nowPlaying().currentPosition();
+            this.playerPlaybackId = state.nowPlaying().playbackId();
+            this.playerSeekAvailableAt = state.nowPlaying().seekAvailableAt();
         } else {
             this.currentMusic = null;
             this.currentPosition = 0;
+            this.playerPlaybackId = null;
+            this.playerSeekAvailableAt = 0;
         }
+        // Explicit seeks have already passed the room's 3-second cooldown, including small jumps.
+        if (explicitSeek) stopTranscoding();
         checkState();
     }
 

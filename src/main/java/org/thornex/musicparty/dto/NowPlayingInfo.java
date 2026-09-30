@@ -9,5 +9,8 @@ public record NowPlayingInfo(
         String enqueuedById,
         String enqueuedByName,
         Set<String> likedUserIds,
-        List<Long> likeMarkers
+        List<Long> likeMarkers,
+        String playbackId,
+        long seekAvailableAt,
+        long serverTime
 ) {}

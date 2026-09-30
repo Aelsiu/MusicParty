@@ -34,6 +34,6 @@ public record SettingsSnapshot(
             Long minChatIntervalMs,
             Boolean neteaseEnabled, Boolean bilibiliEnabled,
             Integer bilibiliMaxDurationMinutes,
-            Integer maxChatMessageLength, String neteaseQuality
+            Integer maxChatMessageLength, String neteaseQuality, String seekPolicy
     ) {}
 }
