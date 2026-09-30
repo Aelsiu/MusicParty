@@ -5,7 +5,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.reactive.function.client.ExchangeStrategies;
+import org.springframework.web.reactive.function.client.ExchangeFunctions;
+import org.springframework.web.reactive.function.client.ClientResponse;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.thornex.musicparty.room.RoomContext;
+import org.reactivestreams.Subscription;
+import reactor.core.CoreSubscriber;
+import reactor.core.publisher.Mono;
+import reactor.util.context.Context;
 import reactor.netty.http.client.HttpClient;
 
 @Configuration
@@ -25,9 +32,32 @@ public class WebClientConfig {
         HttpClient httpClient = HttpClient.create()
                 .resolver(DefaultAddressResolverGroup.INSTANCE);
 
+        var exchange = ExchangeFunctions.create(new ReactorClientHttpConnector(httpClient), strategies);
         return WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient))
-                .exchangeStrategies(strategies) // 应用配置
+                // Shared transport and keep-alive cleanup must not inherit a room's lifetime.
+                // Application operators still carry their room context and cancel deleted-room responses.
+                .exchangeFunction(request -> new Mono<ClientResponse>() {
+                    @Override public void subscribe(CoreSubscriber<? super ClientResponse> subscriber) {
+                        try (var ignored = RoomContext.enter(null)) {
+                            exchange.exchange(request).subscribe(new CoreSubscriber<ClientResponse>() {
+                                @Override public Context currentContext() { return subscriber.currentContext(); }
+                                @Override public void onSubscribe(Subscription upstream) {
+                                    subscriber.onSubscribe(new Subscription() {
+                                        @Override public void request(long n) {
+                                            try (var ignored = RoomContext.enter(null)) { upstream.request(n); }
+                                        }
+                                        @Override public void cancel() {
+                                            try (var ignored = RoomContext.enter(null)) { upstream.cancel(); }
+                                        }
+                                    });
+                                }
+                                @Override public void onNext(ClientResponse response) { subscriber.onNext(response); }
+                                @Override public void onError(Throwable error) { subscriber.onError(error); }
+                                @Override public void onComplete() { subscriber.onComplete(); }
+                            });
+                        }
+                    }
+                })
                 .defaultHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
                 .build();
     }

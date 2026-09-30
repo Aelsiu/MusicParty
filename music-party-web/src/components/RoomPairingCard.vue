@@ -1,8 +1,10 @@
 <template>
   <div>
-    <label class="block text-[11px] font-bold text-medical-400 uppercase font-mono">PAIRING CODE</label>
+    <div class="flex items-center justify-between gap-2">
+      <label class="text-[11px] font-bold text-medical-400 uppercase font-mono whitespace-nowrap">PAIRING CODE</label>
+      <div class="flex items-center gap-1.5 shrink-0"><div class="pairing-ring" :style="{ '--progress': `${remaining/600*100}%` }" aria-hidden="true"></div><div><span class="font-mono text-xs">{{ countdown }}</span><span class="block text-[10px] text-medical-400">下一次整十分钟更新</span></div></div>
+    </div>
     <div class="flex items-center gap-3 mt-2"><span class="font-mono text-3xl tracking-[.25em] text-accent">{{ code || '----' }}</span><button @click="copy" class="p-2 text-medical-400" aria-label="复制配对码"><Copy class="w-4 h-4" /></button></div>
-    <div class="flex items-center gap-3 mt-3"><div class="pairing-ring" :style="{ '--progress': `${remaining/600*100}%` }" aria-hidden="true"></div><div><span class="font-mono text-sm">{{ countdown }}</span><span class="block text-[11px] text-medical-400">下一次整十分钟更新</span></div></div>
     <p class="text-[11px] text-medical-400 mt-3">更新不影响已连接的成员</p>
     <p v-if="error" role="alert" class="text-xs text-red-500 mt-2">{{ error }}</p>
   </div>
@@ -21,5 +23,5 @@ onMounted(()=>{refresh();timer=setInterval(()=>{now.value=Date.now();if(remainin
 onBeforeUnmount(()=>{alive=false;clearInterval(timer);window.removeEventListener('musicparty:pairing',refresh);});
 </script>
 <style scoped>
-.pairing-ring{width:32px;height:32px;border-radius:50%;background:conic-gradient(rgb(var(--accent)) var(--progress),rgb(var(--medical-200)) 0);position:relative}.pairing-ring:after{content:'';position:absolute;inset:4px;background:rgb(var(--surface));border-radius:50%}
+.pairing-ring{width:24px;height:24px;border-radius:50%;background:conic-gradient(rgb(var(--accent)) var(--progress),rgb(var(--medical-200)) 0);position:relative}.pairing-ring:after{content:'';position:absolute;inset:3px;background:rgb(var(--surface));border-radius:50%}
 </style>

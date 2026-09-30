@@ -20,7 +20,7 @@ class SettingsSnapshotTest {
                 "1234", "音乐房间", true,
                 new SettingsSnapshot.PrivateDjSettings("DJ", true, true, true),
                 new SettingsSnapshot.SystemConfigSettings(
-                        500, 100, 50, 200, 5000, 500L, true, false, 15, 300, "lossless", true, 30));
+                        500, 100, 50, 200, 5000, 500L, true, false, 15, 300, "lossless"));
 
         String json = mapper.writeValueAsString(original);
         SettingsSnapshot restored = mapper.readValue(json, SettingsSnapshot.class);
@@ -52,8 +52,6 @@ class SettingsSnapshotTest {
         assertEquals(15, restored.systemConfig().bilibiliMaxDurationMinutes());
         assertEquals(300, restored.systemConfig().maxChatMessageLength());
         assertEquals("lossless", restored.systemConfig().neteaseQuality());
-        assertTrue(restored.systemConfig().idleKickEnabled());
-        assertEquals(30, restored.systemConfig().idleKickMinutes());
     }
 
     @Test
@@ -79,5 +77,19 @@ class SettingsSnapshotTest {
         SettingsSnapshot restored = mapper.readValue(json, SettingsSnapshot.class);
         assertEquals("SHUFFLE", restored.player().playMode());
         assertNull(restored.player().voteSkipEnabled());
+    }
+
+    @Test
+    void removedSettingsAreIgnoredAndNotWrittenBack() throws Exception {
+        String json = """
+                {"systemConfig":{"maxQueueSize":250,"neteaseQuality":"lossless",
+                  "idleKickEnabled":true,"idleKickMinutes":1}}
+                """;
+        SettingsSnapshot restored = mapper.readValue(json, SettingsSnapshot.class);
+        assertEquals(250, restored.systemConfig().maxQueueSize());
+        assertEquals("lossless", restored.systemConfig().neteaseQuality());
+
+        String saved = mapper.writeValueAsString(restored);
+        assertFalse(saved.contains("idleKick"));
     }
 }

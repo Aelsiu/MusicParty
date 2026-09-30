@@ -31,7 +31,6 @@ public class RoomLifecycleService {
         RoomCacheCleanup.delete(id);
     }
     public void revokeInvalidManagers() { for(String id:scope.activeIds()) for(String s:access.sessions(id)) try { access.connection(s); } catch(RuntimeException e) { sockets.close(s); } }
-    public void kickRoom(String id) { for(String session:access.sessions(id)) sockets.close(session); }
     @jakarta.annotation.PreDestroy public void shutdown() { for(String id:scope.activeIds()) {for(String session:access.sessions(id)) sockets.close(session);scope.destroy(id);} }
     @Scheduled(fixedDelay=1000) public void tick() {
         long now=System.currentTimeMillis(); tick++;
@@ -55,7 +54,6 @@ public class RoomLifecycleService {
                         messaging.convertAndSendToUser(session,"/queue/profile",Map.of("name",user.getName(),"bindings",Map.copyOf(user.getBindings())),headers.getMessageHeaders());
                     });
                 }
-                if(tick%10==0) player.checkIdleKick();
                 if(tick%30==0) context.getBean(QueuePersistenceService.class).saveNow();
                 if(tick%600==0) player.cleanupIdlePlayer();
                 if(tick%3600==0) { context.getBean(UserService.class).cleanupExpiredUsers();context.getBean(StreamTokenService.class).cleanup(); }

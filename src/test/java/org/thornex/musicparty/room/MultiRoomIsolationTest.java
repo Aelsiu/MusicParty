@@ -27,6 +27,43 @@ class MultiRoomIsolationTest {
     @Autowired RoomAccessService access;
     @Autowired RoomLifecycleService lifecycle;
     @Autowired org.springframework.test.web.servlet.MockMvc http;
+    @Test void deletingOneRoomDoesNotBreakAnotherRoomsHttpRequests() throws Exception {
+        var first=repository.create("ROOT","请求甲",UUID.randomUUID().toString());
+        var second=repository.create("ROOT","请求乙",UUID.randomUUID().toString());
+        var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);
+        var executor=java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor();server.setExecutor(executor);
+        com.sun.net.httpserver.HttpHandler handler=exchange->{
+            byte[] body="{\"result\":{\"userprofiles\":[{\"userId\":1,\"nickname\":\"test\"}]}}".getBytes(java.nio.charset.StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type","application/json");
+            exchange.sendResponseHeaders(200,body.length);
+            try(var output=exchange.getResponseBody()) {output.write(body);}
+        };server.createContext("/search",handler);server.start();
+        String url="http://127.0.0.1:"+server.getAddress().getPort();
+        try {
+            try(var ignored=RoomContext.enter(first.id())) {
+                var config=context.getBean(AppProperties.class);
+                config.getNetease().setBaseUrl(url);config.getNetease().setCookie("fixture");
+                assertEquals(1,context.getBean(org.thornex.musicparty.service.api.NeteaseMusicApiService.class)
+                        .searchUsers("first").block(java.time.Duration.ofSeconds(5)).size());
+            }
+            repository.deleteRoom(first.id());lifecycle.deleted(first.id());
+            int port=server.getAddress().getPort();server.stop(0);
+            server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",port),0);
+            server.setExecutor(executor);server.createContext("/search",handler);server.start();
+            Thread.sleep(200); // The closed keep-alive connection must be observed before the next room acquires one.
+            reactor.core.publisher.Mono<java.util.List<UserSearchResult>> request;
+            try(var ignored=RoomContext.enter(second.id())) {
+                var config=context.getBean(AppProperties.class);
+                config.getNetease().setBaseUrl(url);config.getNetease().setCookie("fixture");
+                request=context.getBean(org.thornex.musicparty.service.api.NeteaseMusicApiService.class).searchUsers("second")
+                        .map(users->{assertEquals(second.id(),RoomContext.require());return users;});
+            }
+            assertEquals(1,request.block(java.time.Duration.ofSeconds(5)).size());
+        } finally {
+            server.stop(0);executor.shutdownNow();
+            for(String id:java.util.List.of(first.id(),second.id())) if(repository.exists(id)) {repository.deleteRoom(id);lifecycle.deleted(id);}
+        }
+    }
     @Test void deletingRoomCancelsAnInFlightDownloadAndRemovesItsPartialCache() throws Exception {
         var room=repository.create("ROOT","下载🎵",UUID.randomUUID().toString());
         var server=com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1",0),0);

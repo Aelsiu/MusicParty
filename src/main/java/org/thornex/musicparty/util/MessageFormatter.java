@@ -25,7 +25,6 @@ public class MessageFormatter {
             case IMPORT_PLAYLIST -> userName + " 导入了歌单 (" + payload + "首)";
             case MODE_CHANGE -> userName + " 切换到了" + payload;
             case RESET -> "系统已被重置";
-            case IDLE_KICK -> payload;
             case ERROR_LOAD -> "加载失败: " + payload;
             case SYSTEM_MESSAGE -> {
                 if (event.getUserId() != null && !"SYSTEM".equals(event.getUserId())) {

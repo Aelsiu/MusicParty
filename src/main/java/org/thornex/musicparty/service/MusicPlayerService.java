@@ -85,7 +85,6 @@ public class MusicPlayerService {
     private final AtomicLong lastControlTimestamp = new AtomicLong(0);
     private static final long GLOBAL_COOLDOWN_MS = 1000;
     private static final long IDLE_RESET_TIMEOUT_MS = Duration.ofMinutes(20).toMillis();
-    private final AtomicLong noMusicSince = new AtomicLong(0);
 
     private final AtomicLong playHeadVersion = new AtomicLong(0);
 
@@ -493,8 +492,6 @@ public class MusicPlayerService {
                         isVoteSkipEnabled.get(),
                         voteSkipThreshold.get(),
                         voteSkipWaitTime.get(),
-                        appProperties.getPlayer().isIdleKickEnabled(),
-                        appProperties.getPlayer().getIdleKickMinutes(),
                         neteaseMusicApiService.isCookieConfigured(),
                         new PlayerState.AppConfigSummary.PrivateDjConfigSummary(
                                 appProperties.getPrivateDj().getMode(),
@@ -932,13 +929,6 @@ public class MusicPlayerService {
             voteSkipWaitTime.set(request.voteSkipWaitTime());
             logMsg.append("VoteSkipWaitTime=").append(request.voteSkipWaitTime()).append("s ");
         }
-        if (request.idleKickEnabled() != null) {
-            appProperties.getPlayer().setIdleKickEnabled(request.idleKickEnabled());
-            noMusicSince.set(0);
-        }
-        if (request.idleKickMinutes() != null) {
-            appProperties.getPlayer().setIdleKickMinutes(request.idleKickMinutes());
-        }
 
         log.info(logMsg.toString().trim());
         
@@ -1156,29 +1146,6 @@ public class MusicPlayerService {
         }
     }
 
-    public void checkIdleKick() {
-        checkIdleKick(System.currentTimeMillis());
-    }
-
-    void checkIdleKick(long now) {
-        if (!appProperties.getPlayer().isIdleKickEnabled()
-                || isLoading.get()
-                || (currentMusic.get() != null && !isPaused.get())
-                || userService.getOnlineUserSummaries().isEmpty()) {
-            noMusicSince.set(0);
-            return;
-        }
-        long since = noMusicSince.updateAndGet(previous -> previous == 0 ? now : previous);
-        int minutes = Math.max(1, Math.min(60, appProperties.getPlayer().getIdleKickMinutes()));
-        if (now - since < Duration.ofMinutes(minutes).toMillis()) return;
-
-        noMusicSince.set(0);
-        eventPublisher.publishEvent(new SystemMessageEvent(this, SystemMessageEvent.Level.WARN,
-                PlayerAction.IDLE_KICK, "SYSTEM", "房间长时间没有音乐播放，请重新进入"));
-        userService.kickOnlineUsersForIdle();
-        broadcastFullPlayerState();
-    }
-
     /**
      * 周期状态广播（心跳）：让所有客户端周期性重锚播放进度，主动防漂移，
      * 同时让客户端能通过"长时间收不到广播"识别假连接。空闲（无曲且暂停）时跳过。
@@ -1198,7 +1165,6 @@ public class MusicPlayerService {
     }
 
     public void broadcastFullPlayerState() {
-        if (currentMusic.get() != null && !isPaused.get()) noMusicSince.set(0);
         eventPublisher.publishEvent(new PlayerStateEvent(this, getCurrentPlayerState()));
     }
 

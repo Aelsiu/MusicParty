@@ -22,7 +22,7 @@
       >
         CONNECT
       </button>
-      <button @click="returnEntry" class="font-mono text-xs text-medical-400 tracking-widest p-2 min-h-11">RETURN</button>
+      <button @click="returnEntry" class="font-mono text-xs text-accent tracking-widest p-2 min-h-11">RETURN</button>
       </div>
     </div>
 

@@ -39,8 +39,6 @@ public record PlayerState(
             boolean voteSkipEnabled,
             double voteSkipThreshold,
             int voteSkipWaitTime,
-            boolean idleKickEnabled,
-            int idleKickMinutes,
             boolean neteaseCookieConfigured,
             PrivateDjConfigSummary privateDj
     ) {

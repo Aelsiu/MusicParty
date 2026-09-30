@@ -20,7 +20,7 @@
             </div>
             <p v-if="!visibleRooms.length && !loading" class="py-7 text-center text-xs text-medical-400">暂无房间，创建后即可邀请成员加入</p>
             <button @click="view='create';error='';requestId=newRequestId()" :disabled="busy||ownCount>=9" class="mt-6 w-full bg-accent text-white font-bold py-3 flex items-center justify-center gap-2 disabled:opacity-40"><Plus class="w-4 h-4" /> CREATE ROOM</button>
-            <p class="text-[11px] text-medical-400 mt-4">删除需在三秒内连续点击同一房间的 DEL 三次</p>
+            <button @click="refresh" :disabled="loading" class="block mx-auto text-[11px] text-medical-400 mt-1 p-2">{{ loading?'LOADING...':'REFRESH' }}</button>
           </template>
           <template v-else>
             <div class="flex justify-between text-xs text-medical-400 mb-4"><span>普通许可清单</span><span class="font-mono">{{ licenses.length }} LICENSES</span></div>
@@ -29,9 +29,9 @@
               <button @click="editLicense('license-update',license)" class="border border-medical-200 px-4 h-11 text-xs font-bold">UPDATE</button><button @click="editLicense('license-delete',license)" class="border border-medical-200 px-5 h-11 text-accent font-mono text-xs">DEL</button>
             </div></div>
             <button @click="editLicense('license-add')" class="w-full bg-accent text-white font-bold py-3 mt-6 flex items-center justify-center gap-2"><Plus class="w-4 h-4" /> ADD LICENSE</button>
+            <button @click="refresh" :disabled="loading" class="block mx-auto text-[11px] text-medical-400 mt-1 p-2">{{ loading?'LOADING...':'REFRESH' }}</button>
             <p class="text-[11px] text-medical-400 mt-4">最高许可只能通过服务端配置文件更换，更换后需重启</p>
           </template>
-          <button @click="refresh" :disabled="loading" class="text-[11px] text-medical-400 mt-4">{{ loading?'LOADING...':'REFRESH' }}</button>
         </template>
         <form v-else-if="view==='create'" @submit.prevent="submitRoom">
           <label for="new-room-name" class="text-xs font-bold text-medical-500 block mb-2">房间名</label>

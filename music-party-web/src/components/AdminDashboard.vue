@@ -190,10 +190,6 @@
                       <input :id="`admin-${val.field}`" v-model.number="configProxy[val.field]" type="number" :min="val.min" :max="val.max" step="1" class="w-full bg-medical-50 border border-medical-200 px-2 py-1.5 text-xs outline-none focus:border-accent font-mono" />
                     </div>
                   </div>
-                  <label class="flex items-center gap-2 text-xs text-medical-700">
-                    <input v-model="configProxy.idleKickEnabled" type="checkbox" style="accent-color: rgb(var(--accent))" />
-                    无音乐播放时踢出在线成员（含暂停）
-                  </label>
 
                   <button @click="saveSystemConfig" :disabled="savingConfig" class="w-full bg-strong text-white py-2 text-xs font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
                     <Save class="w-4 h-4" /> {{ savingConfig ? '正在保存...' : '应用并保存所有更改' }}
@@ -235,7 +231,7 @@
 
               <!-- Section: Credentials -->
               <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
-                <div class="p-3 bg-medical-600 text-white flex items-center gap-2">
+                <div class="p-3 bg-strong text-white flex items-center gap-2">
                   <Database class="w-4 h-4" />
                   <span class="text-xs font-bold uppercase tracking-widest font-mono">平台凭据 / Credentials</span>
                 </div>
@@ -331,8 +327,7 @@ const systemFields = {
   '聊天记录容量': { field: 'maxChatHistorySize', min: 0, max: 100000 },
   '发言频率限制(ms)': { field: 'minChatIntervalMs', min: 0, max: 600000 },
   '消息最大长度': { field: 'maxChatMessageLength', min: 1, max: 10000 },
-  'B站时长上限(分钟)': { field: 'bilibiliMaxDurationMinutes', min: 1, max: 1440 },
-  '空闲踢出等待(分钟)': { field: 'idleKickMinutes', min: 1, max: 60 }
+  'B站时长上限(分钟)': { field: 'bilibiliMaxDurationMinutes', min: 1, max: 1440 }
 };
 
 // 打开时读取当前设置，避免周期广播覆盖正在编辑的内容。
@@ -342,7 +337,7 @@ watch(() => adminStore.showDashboard, (open) => {
 
 const saveSystemConfig = async () => {
   if (savingConfig.value) return;
-  const update = { neteaseQuality: configProxy.value.neteaseQuality, idleKickEnabled: configProxy.value.idleKickEnabled };
+  const update = { neteaseQuality: configProxy.value.neteaseQuality };
   for (const [label, { field, requestField = field, min, max }] of Object.entries(systemFields)) {
     const value = configProxy.value[field];
     if (!Number.isInteger(value) || value < min || value > max) {

@@ -55,6 +55,10 @@
         </div>
       </div>
 
+      <div v-if="mode !== 'likesong'" class="p-2 md:p-3 bg-medical-100 border-b border-medical-200 text-xs font-bold text-medical-500 font-sans flex-shrink-0">
+        用户歌单
+      </div>
+
       <!-- 内容区 -->
       <div class="flex-1 overflow-hidden flex flex-col md:flex-row relative">
 
@@ -108,10 +112,6 @@
         <div class="md:w-1/3 md:h-auto flex-shrink-0 border-b md:border-b-0 md:border-r border-medical-200 flex-col bg-surface transition-all"
              :class="mode === 'likesong' ? 'hidden' : (mobileView === 'playlists' ? 'flex w-full h-full' : 'hidden md:flex')"
         >
-          <div class="p-2 md:p-3 bg-medical-100 text-xs font-bold text-medical-500 flex justify-between items-center font-sans">
-            <span>用户歌单</span>
-          </div>
-
           <div class="flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
             <!-- 未绑定 -->
             <div v-if="!bindings[platform]" class="p-4 border border-dashed border-medical-300 bg-medical-50">
@@ -155,7 +155,7 @@
         </div>
 
         <!-- 右侧：歌曲列表 -->
-        <div class="md:flex-1 bg-medical-50 flex-col min-h-0" :class="mode === 'likesong' ? 'hidden' : (mobileView === 'songs' ? 'flex w-full h-full' : 'hidden md:flex')">
+        <div class="md:flex-1 bg-medical-50 flex-col min-h-0 min-w-0" :class="mode === 'likesong' ? 'hidden' : (mobileView === 'songs' ? 'flex w-full h-full' : 'hidden md:flex')">
           <!-- 移动端返回条 -->
           <div class="md:hidden flex items-center gap-2 p-3 bg-surface border-b border-medical-200 flex-shrink-0">
             <button @click="mobileView = 'playlists'" class="p-1 -ml-1 text-medical-500 hover:text-medical-900"><ArrowLeft class="w-5 h-5" /></button>
@@ -170,14 +170,16 @@
               <div class="text-[10px] text-medical-400 font-mono">{{ songs.length }} LOADED<span v-if="playlistFilterKeyword"> · {{ displayedSongs.length }} MATCHED</span></div>
             </div>
             <div class="flex gap-2 w-full sm:w-auto flex-shrink-0 justify-end">
-              <button @click="handleImportPlaylist" aria-label="导入全部" class="group flex-none w-6 hover:w-[60px] focus-visible:w-[60px] h-6 px-[3px] overflow-hidden bg-strong text-white text-[10px] font-bold hover:bg-accent transition-[width,background-color] duration-200 flex items-center gap-1 font-sans">
-                <PlaylistImportIcon variant="all" class="w-[18px] h-[18px] shrink-0" />
-                <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">ALL</span>
-              </button>
-              <button @click="handleImportSelected" :disabled="!importableSelectedSongs.length" :aria-label="`导入已选（${importableSelectedSongs.length} 首）`" class="group flex-none w-6 hover:w-[84px] focus-visible:w-[84px] h-6 px-[3px] overflow-hidden bg-strong text-white text-[10px] font-bold hover:bg-accent transition-[width,background-color] duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 font-sans">
-                <PlaylistImportIcon variant="selected" class="w-[18px] h-[18px] shrink-0" />
-                <span class="shrink-0 whitespace-nowrap opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">SELECTED</span>
-              </button>
+              <div class="playlist-import-actions flex flex-none gap-2">
+                <button @click="handleImportPlaylist" aria-label="导入全部" class="import-all flex-none h-6 px-[3px] overflow-hidden bg-strong text-white text-[10px] font-bold hover:bg-accent transition-[width,background-color] duration-200 flex items-center gap-1 font-sans">
+                  <PlaylistImportIcon variant="all" class="w-[18px] h-[18px] shrink-0" />
+                  <span class="shrink-0 whitespace-nowrap transition-opacity">ADD ALL</span>
+                </button>
+                <button @click="handleImportSelected" :disabled="!importableSelectedSongs.length" :aria-label="`导入已选（${importableSelectedSongs.length} 首）`" class="import-selected flex-none h-6 px-[3px] overflow-hidden bg-strong text-white text-[10px] font-bold hover:bg-accent transition-[width,background-color] duration-200 disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 font-sans">
+                  <PlaylistImportIcon variant="selected" class="w-[18px] h-[18px] shrink-0" />
+                  <span class="shrink-0 whitespace-nowrap transition-opacity">SELECTED</span>
+                </button>
+              </div>
               <input v-model="playlistFilterInput" type="search" aria-label="筛选歌单歌曲" placeholder="筛选歌曲" class="w-[102px] h-6 flex-none border border-medical-200 bg-medical-50 px-2 text-[10px] outline-none focus:border-accent" />
             </div>
           </div>
@@ -416,3 +418,14 @@ watch(() => props.isOpen, (val) => {
   if (val) mobileView.value = 'playlists';
 });
 </script>
+
+<style scoped>
+.playlist-import-actions { width: 116px; }
+.import-all { width: 84px; }
+.import-selected { width: 24px; }
+.import-selected span { opacity: 0; }
+.playlist-import-actions:has(.import-selected:hover, .import-selected:focus-visible) .import-all { width: 24px; }
+.playlist-import-actions:has(.import-selected:hover, .import-selected:focus-visible) .import-all span { opacity: 0; }
+.playlist-import-actions:has(.import-selected:hover, .import-selected:focus-visible) .import-selected { width: 84px; }
+.playlist-import-actions:has(.import-selected:hover, .import-selected:focus-visible) .import-selected span { opacity: 1; }
+</style>

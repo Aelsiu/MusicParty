@@ -26,7 +26,7 @@ document.documentElement.dataset.theme = initialTheme;
 
 export const useUiStore = defineStore('ui', () => {
     const isLiteMode = ref(false);
-    const volume = ref(parseFloat(localStorage.getItem(STORAGE_KEYS.VOLUME) || '0.5'));
+    const volume = ref(parseFloat(localStorage.getItem(STORAGE_KEYS.VOLUME) ?? '0.1'));
     const autoLiteMode = ref(localStorage.getItem('mp_auto_lite_mode') !== 'false'); // 默认 true
     const lyricPreviewLines = ref([0, 1, 2].includes(savedLyricPreviewLines) ? savedLyricPreviewLines : 0);
     const visualizationEnabled = ref(localStorage.getItem(STORAGE_KEYS.VISUALIZATION) === 'true');

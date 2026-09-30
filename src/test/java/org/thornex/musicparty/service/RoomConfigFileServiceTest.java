@@ -21,14 +21,12 @@ class RoomConfigFileServiceTest {
 
         service.persist(new AdminConfigUpdateRequest(
                 250, null, null, null, null, null, null, "lossless",
-                null, null, null, null, null, null, true, 30));
+                null, null, null, null, null, null));
 
         String saved = Files.readString(file);
         assertTrue(saved.contains("# local settings"));
         assertTrue(saved.contains("app.music-api.admin-password=private-value"));
         assertTrue(saved.contains("app.music-api.queue.max-size=250"));
         assertTrue(saved.contains("app.music-api.netease.quality=lossless"));
-        assertTrue(saved.contains("app.music-api.player.idle-kick-enabled=true"));
-        assertTrue(saved.contains("app.music-api.player.idle-kick-minutes=30"));
     }
 }

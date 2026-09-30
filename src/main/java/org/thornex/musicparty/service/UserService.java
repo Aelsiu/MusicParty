@@ -37,8 +37,6 @@ public class UserService {
 
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private org.thornex.musicparty.room.RoomRepository profiles;
-    @org.springframework.beans.factory.annotation.Autowired(required=false)
-    private org.thornex.musicparty.room.RoomLifecycleService lifecycle;
     private final com.fasterxml.jackson.databind.ObjectMapper profileMapper = new com.fasterxml.jackson.databind.ObjectMapper();
     private void saveProfile(User user) { if (profiles != null) try { profiles.saveProfile(user.getToken(), profileMapper.writeValueAsString(java.util.Map.of("name", user.getName(), "bindings", user.getBindings()))); } catch (java.io.IOException e) { throw new IllegalStateException(e); } }
     private void loadProfile(User user) { if (profiles != null) { String value = profiles.profile(user.getToken()); if (value != null) try { var data = profileMapper.readTree(value); user.setName(data.path("name").asText(user.getName())); user.setGuest(false); user.getBindings().clear(); data.path("bindings").fields().forEachRemaining(e -> user.getBindings().put(e.getKey(), e.getValue().asText())); } catch (java.io.IOException e) { throw new IllegalStateException(e); } } }
@@ -219,20 +217,6 @@ public class UserService {
                 .filter(u -> u.getSessionId() != null)
                 .map(user -> new UserSummary(user.getToken(), user.getSessionId(), user.getName(), user.isGuest()))
                 .toList();
-    }
-
-    /** 使空闲房间的现有会话失效；前端收到广播后主动断开并返回入口。 */
-    public void kickOnlineUsersForIdle() {
-        sessionToToken.clear();
-        usersByToken.values().forEach(user -> {
-            String sessionId = user.getSessionId();
-            if (sessionId != null) {
-                user.setSessionId(null);
-                user.setLastActiveTime(System.currentTimeMillis());
-            }
-        });
-        eventPublisher.publishEvent(new UserCountChangeEvent(this, getOnlineUserSummaries().size()));
-        if (lifecycle != null) lifecycle.kickRoom(org.thornex.musicparty.room.RoomContext.require());
     }
 
     /**
