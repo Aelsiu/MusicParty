@@ -29,6 +29,7 @@ export const useUiStore = defineStore('ui', () => {
     const volume = ref(parseFloat(localStorage.getItem(STORAGE_KEYS.VOLUME) || '0.5'));
     const autoLiteMode = ref(localStorage.getItem('mp_auto_lite_mode') !== 'false'); // 默认 true
     const lyricPreviewLines = ref([0, 1, 2].includes(savedLyricPreviewLines) ? savedLyricPreviewLines : 0);
+    const visualizationEnabled = ref(localStorage.getItem(STORAGE_KEYS.VISUALIZATION) === 'true');
     const authorName = ref('ThorNex X Aelsiu');
     const backWords = ref('THORNEX');
     const theme = ref(initialTheme);
@@ -117,6 +118,10 @@ export const useUiStore = defineStore('ui', () => {
         localStorage.setItem(STORAGE_KEYS.LYRIC_PREVIEW_LINES, String(count));
     });
 
+    watch(visualizationEnabled, (enabled) => {
+        localStorage.setItem(STORAGE_KEYS.VISUALIZATION, String(enabled));
+    });
+
     return {
         isLiteMode,
         toggleLiteMode,
@@ -124,6 +129,7 @@ export const useUiStore = defineStore('ui', () => {
         setVolume,
         lyricPreviewLines,
         setLyricPreviewLines,
+        visualizationEnabled,
         autoLiteMode,
         authorName,
         backWords,

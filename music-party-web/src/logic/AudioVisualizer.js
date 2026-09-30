@@ -1,3 +1,5 @@
+import { audioSpectrum } from './AudioSpectrum.js';
+
 export class AudioVisualizer {
     constructor() {
         this.canvas = null;
@@ -17,6 +19,8 @@ export class AudioVisualizer {
 
         // 状态标记
         this.isPlaying = false;
+        this.spectrumEnabled = false;
+        this.smoothBands = new Float32Array(3);
         this.accentRgb = '249, 115, 22';
         this.mutedRgb = '209, 213, 219';
         this.updateColors = this.updateColors.bind(this);
@@ -83,6 +87,11 @@ export class AudioVisualizer {
         this.isPlaying = isPlaying;
     }
 
+    setSpectrumEnabled(enabled) {
+        this.spectrumEnabled = enabled;
+        if (!enabled) this.smoothBands.fill(0);
+    }
+
     /**
      * 获取当前引擎状态指标
      */
@@ -107,16 +116,23 @@ export class AudioVisualizer {
     }
 
     startLoop() {
-        const loop = () => {
+        let lastDrawAt = 0;
+        const loop = (now = performance.now()) => {
             if (!this.canvas || !this.ctx) return;
 
-            this.draw();
+            // 频谱模式限制为 30 FPS；关闭时保留原动画的绘制节奏。
+            const elapsed = now - lastDrawAt;
+            if (!this.spectrumEnabled || elapsed >= 1000 / 30 - 0.5) {
+                const step = this.spectrumEnabled && lastDrawAt ? Math.min(elapsed / (1000 / 60), 3) : 1;
+                this.draw(step, now);
+                lastDrawAt = now;
+            }
             this.animationId = requestAnimationFrame(loop);
         };
         loop();
     }
 
-    draw() {
+    draw(step = 1, now = performance.now()) {
         const { ctx, width, height, center } = this;
         ctx.clearRect(0, 0, width, height);
 
@@ -124,7 +140,7 @@ export class AudioVisualizer {
         
         // 爆发平滑：attack 缓入到峰值，逼近后再缓慢回落（release）。
         // 相比原"瞬间拉高"，这里用 lerp 让点赞波动平滑展开而不是突然跳变。
-        const followFactor = this.impulseActive ? 0.20 : 0.005;
+        const followFactor = 1 - (1 - (this.impulseActive ? 0.20 : 0.005)) ** step;
 
         this.speedMultiplier += (this.speedTarget - this.speedMultiplier) * followFactor;
         this.widthMultiplier += (this.widthTarget - this.widthMultiplier) * followFactor;
@@ -142,17 +158,22 @@ export class AudioVisualizer {
         }
 
         // --- 1. 状态计算与平滑过渡 (Lerp) ---
+        const bands = this.spectrumEnabled && this.isPlaying ? audioSpectrum.readBands(now) : null;
+        const bandFollow = 1 - 0.84 ** step;
+        for (let i = 0; i < 3; i++) {
+            this.smoothBands[i] += ((bands?.[i] || 0) - this.smoothBands[i]) * bandFollow;
+        }
         // 时间流速
         const baseSpeed = this.isPlaying ? 0.5 : 0.1;
-        this.rippleTime += baseSpeed * this.speedMultiplier;
+        this.rippleTime += baseSpeed * this.speedMultiplier * step * (1 + this.smoothBands[0] * 0.6);
 
         // 目标透明度与宽度
         const targetAlpha = this.isPlaying ? 0.25 : 0.05;
         const targetWidthScale = this.isPlaying ? 1.0 : 0.3;
 
         // 线性插值
-        this.smoothAlpha += (targetAlpha - this.smoothAlpha) * 0.03;
-        this.smoothWidthScale += (targetWidthScale - this.smoothWidthScale) * 0.05;
+        this.smoothAlpha += (targetAlpha - this.smoothAlpha) * (1 - 0.97 ** step);
+        this.smoothWidthScale += (targetWidthScale - this.smoothWidthScale) * (1 - 0.95 ** step);
 
         // 优化：透明度极低时不渲染复杂图形
         if (this.smoothAlpha < 0.01) return;
@@ -163,10 +184,11 @@ export class AudioVisualizer {
         ctx.shadowBlur = 50;
         ctx.shadowColor = `rgb(${this.accentRgb})`;
 
-        this.rings.forEach((ring) => {
+        this.rings.forEach((ring, index) => {
             ctx.beginPath();
             const count = 120; // Reduced from 240
-            const currentMaxWidth = ring.maxWidth * this.smoothWidthScale * this.roughnessMultiplier;
+            const energy = this.smoothBands[index];
+            const currentMaxWidth = ring.maxWidth * this.smoothWidthScale * this.roughnessMultiplier * (1 + energy * 0.7);
 
             // 外圈
             for (let i = 0; i <= count; i++) {
@@ -175,7 +197,8 @@ export class AudioVisualizer {
                 const normalizedWave = (wave + 1) / 2;
                 const currentWidth = ring.baseWidth + normalizedWave * currentMaxWidth;
 
-                const r = ring.radius + currentWidth / 2;
+                const displacement = energy > 0.001 ? energy * 28 * Math.sin(angle * (6 + index * 2) + this.rippleTime * ring.speed * 2 + ring.offset) : 0;
+                const r = ring.radius + displacement + currentWidth / 2;
                 const x = center + Math.cos(angle) * r;
                 const y = center + Math.sin(angle) * r;
 
@@ -190,7 +213,8 @@ export class AudioVisualizer {
                 const normalizedWave = (wave + 1) / 2;
                 const currentWidth = ring.baseWidth + normalizedWave * currentMaxWidth;
 
-                const r = ring.radius - currentWidth / 2;
+                const displacement = energy > 0.001 ? energy * 28 * Math.sin(angle * (6 + index * 2) + this.rippleTime * ring.speed * 2 + ring.offset) : 0;
+                const r = ring.radius + displacement - currentWidth / 2;
                 const x = center + Math.cos(angle) * r;
                 const y = center + Math.sin(angle) * r;
 
@@ -205,7 +229,7 @@ export class AudioVisualizer {
 
         // --- 3. 绘制呼吸态频谱 (前景灰色) ---
         ctx.globalCompositeOperation = 'source-over';
-        this.breatheOffset += 0.05;
+        this.breatheOffset += 0.05 * step;
 
         for (let i = 0; i < this.breatheBars; i++) {
             const angle = (Math.PI * 2 * i) / this.breatheBars;

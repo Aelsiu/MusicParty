@@ -383,6 +383,7 @@ let logInterval;
 let updateInterval;
 
 const visualizer = new AudioVisualizer();
+watch(() => uiStore.visualizationEnabled, (enabled) => visualizer.setSpectrumEnabled(enabled), { immediate: true });
 const isVisualizerActive = computed(() => !!player.nowPlaying && !player.isPaused);
 
 // 监听状态变化以控制 Visualizer

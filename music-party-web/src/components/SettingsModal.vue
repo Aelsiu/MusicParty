@@ -96,6 +96,19 @@
 
         <section class="bg-surface border border-medical-200 p-4 md:p-5 space-y-4">
           <h3 class="font-bold text-medical-900">其他设置</h3>
+          <div class="flex items-center justify-between gap-4">
+            <div>
+              <p class="text-xs font-bold text-medical-500">可视化</p>
+              <p class="text-xs text-medical-400 mt-1">让背景丝带随音乐舞动</p>
+            </div>
+            <button @click="uiStore.visualizationEnabled = !uiStore.visualizationEnabled"
+                    role="switch" :aria-checked="uiStore.visualizationEnabled" aria-label="可视化"
+                    class="relative flex-shrink-0 w-12 h-6 border transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+                    :class="uiStore.visualizationEnabled ? 'border-accent bg-accent/15' : 'border-medical-300 bg-medical-100'">
+              <span class="absolute top-0.5 left-0.5 w-4 h-4 transition-transform duration-200"
+                    :class="uiStore.visualizationEnabled ? 'translate-x-6 bg-accent' : 'bg-medical-400'"></span>
+            </button>
+          </div>
           <div>
             <p class="text-xs font-bold text-medical-500 mb-2">歌词提前显示</p>
             <div class="lyric-slider relative inline-grid grid-cols-3 w-60 h-10 border border-medical-200 bg-medical-50 cursor-pointer" role="group" aria-label="歌词提前显示行数" @click="selectLyricSegment">
