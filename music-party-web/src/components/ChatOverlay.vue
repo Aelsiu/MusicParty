@@ -115,6 +115,7 @@
             >
               <Terminal class="w-3 h-3 mt-0.5 flex-shrink-0 opacity-50"/>
               <span class="font-sans text-[10px] leading-relaxed break-all select-text cursor-text">
+                <span v-if="item.msg.private" class="text-accent">[仅自己可见] </span>
                 {{ item.msg.content }}
               </span>
             </div>
@@ -145,17 +146,26 @@
         </div>
 
         <!-- 4. Input Area (仅在 Chat Tab 显示) -->
-        <div v-if="activeTab === 'CHAT'" class="p-2 bg-surface border-t border-medical-200 flex gap-2 flex-shrink-0">
+        <div v-if="activeTab === 'CHAT'" ref="inputAreaRef" class="relative p-2 bg-surface border-t border-medical-200 flex gap-2 flex-shrink-0">
+          <div v-if="showCommands" id="chat-command-menu" role="menu" aria-label="快捷指令" class="absolute bottom-full left-2 right-2 mb-1 max-h-64 overflow-y-auto bg-surface border border-medical-200 shadow-xl z-10 p-1">
+            <button v-for="command in availableCommands" :key="command.text" type="button" role="menuitem" @click="chooseCommand(command.text)" class="w-full px-2 py-2 flex items-center justify-between gap-2 text-left hover:bg-medical-50 focus-visible:bg-medical-50">
+              <span class="font-mono text-xs text-accent whitespace-nowrap">{{ command.text }}</span><span class="text-[10px] text-medical-500">{{ command.label }}</span>
+            </button>
+          </div>
+          <button type="button" @click="showCommands=!showCommands" aria-label="快捷指令" aria-haspopup="menu" aria-controls="chat-command-menu" :aria-expanded="showCommands" class="px-1 text-medical-500 hover:text-accent"><MoreVertical class="w-4 h-4" /></button>
           <input
+              ref="inputRef"
               v-model="inputContent"
               @keyup.enter="send"
+              @keydown.tab="completeInput"
+              @keydown.esc="showCommands=false"
               @mousedown.stop
               @touchstart.stop
               placeholder="TYPE MESSAGE..."
-              class="flex-1 bg-medical-50 border border-medical-200 px-2 py-1.5 text-xs outline-none focus:border-accent font-sans transition-colors rounded-sm text-medical-900"
+              class="min-w-0 flex-1 bg-medical-50 border border-medical-200 px-2 py-1.5 text-xs outline-none focus:border-accent font-sans transition-colors rounded-sm text-medical-900"
           />
           <button
-              @click="send"
+              @click="send" aria-label="发送消息"
               class="bg-accent hover:bg-accent-hover text-white px-3 py-1.5 transition-colors rounded-sm flex items-center justify-center shadow-sm shadow-accent/20"
           >
             <Send class="w-4 h-4" />
@@ -203,9 +213,11 @@ import { useChatStore } from '../stores/chat';
 import { usePlayerStore } from '../stores/player';
 import { useUserStore } from '../stores/user';
 import { useToast } from '../composables/useToast';
-import { useDraggable, useWindowSize, useEventListener, clamp } from '@vueuse/core';
-import { MessageSquare, X, Send, Terminal, Zap, Loader2 } from 'lucide-vue-next';
+import { useDraggable, useWindowSize, useEventListener, onClickOutside, clamp } from '@vueuse/core';
+import { MessageSquare, X, Send, Terminal, Zap, Loader2, MoreVertical } from 'lucide-vue-next';
 import dayjs from 'dayjs';
+import { commandChoices, completeCommand, parseChatCommand } from '../utils/chatCommands.js';
+import { roomSession } from '../services/roomSession';
 
 const chatStore = useChatStore();
 const playerStore = usePlayerStore();
@@ -217,6 +229,20 @@ const { width: windowWidth, height: windowHeight } = useWindowSize();
 const isMobile = computed(() => windowWidth.value < 768);
 
 const inputContent = ref('');
+const inputRef = ref(null), inputAreaRef = ref(null), showCommands = ref(false);
+const availableCommands = computed(() => commandChoices(roomSession.ownerAccess));
+onClickOutside(inputAreaRef, () => { showCommands.value = false; });
+async function chooseCommand(text) {
+  inputContent.value = text; showCommands.value = false;
+  await nextTick(); inputRef.value?.focus();
+}
+function completeInput(event) {
+  if (event.shiftKey || event.isComposing || inputRef.value?.selectionStart !== inputContent.value.length
+      || inputRef.value?.selectionEnd !== inputContent.value.length) return;
+  const completed = completeCommand(inputContent.value, roomSession.ownerAccess);
+  if (!completed || completed === inputContent.value) return;
+  event.preventDefault(); inputContent.value = completed;
+}
 const msgListRef = ref(null);
 const dragHandle = ref(null);
 const windowHeaderRef = ref(null);
@@ -326,11 +352,11 @@ const processedMessages = computed(() => {
   const filtered = chatStore.messages.filter(msg => {
     // CHAT Tab: 聊天 + 点赞 + 开始播放
     if (activeTab.value === 'CHAT') {
-      return msg.type === 'CHAT' || msg.type === 'LIKE' || msg.type === 'PLAY_START';
+      return msg.type === 'CHAT' || msg.type === 'LIKE' || msg.type === 'PLAY_START' || (msg.type === 'SYSTEM' && msg.private);
     }
     // SYSTEM Tab: 系统 + 点赞 + 开始播放
     if (activeTab.value === 'SYSTEM') {
-      return msg.type === 'SYSTEM' || msg.type === 'LIKE' || msg.type === 'PLAY_START';
+      return (msg.type === 'SYSTEM' && !msg.private) || msg.type === 'LIKE' || msg.type === 'PLAY_START';
     }
     return false;
   });
@@ -400,7 +426,8 @@ const handleScroll = (e) => {
 // 避免固定 100ms 提前滚动导致停在旧位置
 let pendingScrollToBottom = false;
 
-const send = () => {
+const send = (event) => {
+  if (event?.isComposing) return;
   const text = inputContent.value.trim();
   if (!text) return;
 
@@ -410,13 +437,17 @@ const send = () => {
     return;
   }
 
-  playerStore.sendChatMessage(text);
-  inputContent.value = '';
   pendingScrollToBottom = true;
+  // Start clipboard access in this click/Enter gesture, before awaiting the API.
+  const command = parseChatCommand(text);
+  if (command?.name === 'code' && command.valid && command.parameter === 'copy') chatStore.copyPairingCode();
+  else playerStore.sendChatMessage(text);
+  inputContent.value = '';
 };
 
 // 监听：打开窗口或切换 Tab 时滚到底部
 watch([() => chatStore.isOpen, activeTab], async ([isOpen]) => {
+  showCommands.value = false;
   if (isOpen) {
     chatStore.unreadCount = 0; // 只要打开就清空未读
     await scrollToBottom(true);

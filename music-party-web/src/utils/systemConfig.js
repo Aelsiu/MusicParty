@@ -6,11 +6,12 @@ export const systemFields = {
     '聊天记录容量': { field: 'maxChatHistorySize', min: 0, max: 100000 },
     '发言频率限制(ms)': { field: 'minChatIntervalMs', min: 0, max: 600000 },
     '消息最大长度': { field: 'maxChatMessageLength', min: 1, max: 10000 },
-    'B站时长上限(分钟)': { field: 'bilibiliMaxDurationMinutes', min: 1, max: 1440 }
+    'B站时长上限(分钟)': { field: 'bilibiliMaxDurationMinutes', min: 1, max: 1440 },
+    '配对码更新周期(分钟)': { field: 'pairingIntervalMinutes', min: 1, max: 60 }
 };
 
 export function systemConfigDraft(snapshot) {
-    return Object.fromEntries(Object.values(systemFields).map(({ field }) => [field, snapshot[field]]));
+    return Object.fromEntries(Object.values(systemFields).map(({ field }) => [field, snapshot[field] ?? (field === 'pairingIntervalMinutes' ? 10 : undefined)]));
 }
 
 export function systemConfigUpdate(config) {

@@ -17,6 +17,7 @@ public class ClearCommand implements ChatCommand {
     private final MusicQueueManager queueManager;
     private final MusicPlayerService musicPlayerService;
     private final ApplicationEventPublisher eventPublisher;
+    private final CommandSupport commands;
 
     @Override
     public String getCommand() {
@@ -25,6 +26,16 @@ public class ClearCommand implements ChatCommand {
 
     @Override
     public void execute(String args, User user) {
+        String parameter = CommandSupport.parameter(args, "self");
+        if (java.util.Set.of("all", "dead", "chat").contains(parameter)) {
+            if (commands.requireManager(user)) commands.event(user, "CLEAR_CONFIRM", "CONFIRM_CLEAR",
+                    switch (parameter) { case "all" -> "QUEUE"; case "dead" -> "OFFLINE"; default -> "CHAT"; });
+            return;
+        }
+        if (!"self".equals(parameter)) {
+            commands.reply(user, "用法：//clear [self|all|dead|chat]，不带参数默认 self");
+            return;
+        }
         int count = queueManager.removeByUser(user.getToken());
         
         if (count > 0) {

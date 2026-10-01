@@ -7,7 +7,7 @@ import { roomSession, saveManager } from '../services/roomSession';
  */
 export const adminApi = {
     // 验证密码
-    verify: async (password) => { const result = await roomsApi.login(password); saveManager(result); await roomsApi.manage(roomSession.roomId); roomSession.ownerAccess = true; return result; },
+    verify: async (password) => { const result = await roomsApi.login(password); saveManager(result); await roomsApi.manage(roomSession.roomId); return result; },
 
     // 锁定控制 (PAUSE/SKIP/SHUFFLE/ALL)
     setLock: (adminPwd, type, locked) => client.post('/api/admin/lock', { type, locked }, {

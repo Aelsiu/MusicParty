@@ -128,4 +128,64 @@ class MultiRoomAccessTest {
             assertEquals(9,succeeded);assertEquals(9,repository.rooms().size());
         }
     }
+
+    @Test void intervalChangeRotatesEveryRoomInvalidatesAdmissionsButKeepsConnectedMembersAndRestartsClock() throws Exception {
+        var first=repository.create("ROOT","周期🎵",UUID.randomUUID().toString());
+        var dormant=repository.create("ROOT","休眠🎵",UUID.randomUUID().toString());
+        var guest=access.join(first.pairingCode(),"guest");
+        access.connect("existing",first.id(),guest.token(),"");
+        long before=System.currentTimeMillis();
+        repository.saveSystemConfig("{}",1);
+        long after=System.currentTimeMillis();
+        long next=repository.nextPairingUpdateAt(after);
+        assertEquals(1,repository.pairingIntervalMinutes());
+        assertTrue(next>=before+60000 && next<=after+60000);
+        assertNotEquals(first.pairingCode(),repository.room(first.id()).pairingCode());
+        assertNotEquals(dormant.pairingCode(),repository.room(dormant.id()).pairingCode());
+        assertThrows(ResponseStatusException.class,()->access.admission(guest.token(),first.id()));
+        access.connection("existing");access.member(guest.token(),"",first.id());
+        assertThrows(ResponseStatusException.class,()->access.connect("another",first.id(),guest.token(),""));
+        var fresh=access.join(repository.room(first.id()).pairingCode(),"fresh");
+        assertEquals(next,fresh.expiresAt());
+        var saved=repository.rooms();repository.close();
+        repository=new RoomRepository(config,new ObjectMapper());repository.initialize();
+        assertEquals(1,repository.pairingIntervalMinutes());
+        assertEquals(next,repository.nextPairingUpdateAt(System.currentTimeMillis()));
+        assertEquals(saved,repository.rooms());
+        repository.rotate(next);
+        for(var old:saved) assertNotEquals(old.pairingCode(),repository.room(old.id()).pairingCode());
+    }
+
+    @Test void publicPairingDefaultsClosedAndItsVisibilitySettingSurvivesRestart() throws Exception {
+        var room=repository.create("ROOT","展示🎵",UUID.randomUUID().toString());
+        assertFalse(room.pairingOpen());
+        repository.setPairingOpen(room.id(),true);
+        repository.close();repository=new RoomRepository(config,new ObjectMapper());repository.initialize();
+        assertTrue(repository.room(room.id()).pairingOpen());
+        repository.setPairingOpen(room.id(),false);
+        assertFalse(repository.room(room.id()).pairingOpen());
+    }
+
+    @Test void managerCommandsUseConnectionIdentityAndRecheckLicenseOwnership() {
+        var license=repository.addLicense("OwnerKey9");
+        var room=repository.create(license.id(),"权限🎵",UUID.randomUUID().toString());
+        var guest=access.join(room.pairingCode(),"guest");
+        var owner=access.login("OwnerKey9","owner");
+        var root=access.login("TestRoot9","root");
+        access.connect("user",room.id(),guest.token(),"");
+        access.connect("owner",room.id(),"owner-profile",owner.token());
+        access.connect("root",room.id(),"root-profile",root.token());
+        var support=new org.thornex.musicparty.service.command.CommandSupport(access,
+                org.mockito.Mockito.mock(org.springframework.messaging.simp.SimpMessagingTemplate.class));
+        try(var ignored=RoomContext.enter(room.id())) {
+            assertFalse(support.requireManager(new org.thornex.musicparty.dto.User("guest-profile","user","User")));
+            // Logging in for //admin does not alter a User connection's permissions.
+            access.login("OwnerKey9","user-admin");
+            assertFalse(support.requireManager(new org.thornex.musicparty.dto.User("guest-profile","user","User")));
+            assertTrue(support.requireManager(new org.thornex.musicparty.dto.User("owner-profile","owner","Owner")));
+            assertTrue(support.requireManager(new org.thornex.musicparty.dto.User("root-profile","root","Root")));
+            repository.replaceLicense(license.id(),"NewOwner9");
+            assertFalse(support.requireManager(new org.thornex.musicparty.dto.User("owner-profile","owner","Owner")));
+        }
+    }
 }

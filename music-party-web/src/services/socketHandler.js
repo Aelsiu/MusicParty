@@ -8,6 +8,7 @@ import { useAdminStore } from '../stores/admin';
 import { adminApi } from '../api/admin';
 import { WS_DEST } from '../constants/api';
 import { socketService } from './socket';
+import { useCleanupStore } from '../stores/cleanup';
 
 /**
  * 处理游戏/播放器事件通知 (Toast)
@@ -21,8 +22,16 @@ function handleGameEvent(event) {
     const userName = event.userId === 'SYSTEM' ? '系统' : userStore.resolveName(event.userId);
 
     // 1. 处理特殊业务逻辑 (非 UI 展示)
-    if (event.action === 'PAIRING_TRIGGER' || event.action === 'ROOMS_TRIGGER') {
-        window.dispatchEvent(new Event(event.action === 'PAIRING_TRIGGER' ? 'musicparty:show-pairing' : 'musicparty:show-rooms'));
+    if (event.action === 'CLEAR_CONFIRM') {
+        useCleanupStore().request(event.payload);
+        return;
+    }
+    if (event.action === 'PAIRING_TRIGGER') {
+        chatStore.copyPairingCode();
+        return;
+    }
+    if (event.action === 'ROOMS_TRIGGER') {
+        window.dispatchEvent(new Event('musicparty:show-rooms'));
         return;
     }
     if (event.action === 'LIKE') {
@@ -31,7 +40,7 @@ function handleGameEvent(event) {
 
     if (event.action === 'ADMIN_TRIGGER') {
         const id = roomSession.roomId;
-        if (roomSession.managerToken) roomsApi.manage(id).then(() => {
+        if (roomSession.ownerAccess && roomSession.managerToken) roomsApi.manage(id).then(() => {
             if (!userStore.isAuthPassed || roomSession.roomId !== id) return;
             adminStore.isVerified = true; adminStore.showDashboard = true;
         }).catch(() => { if (userStore.isAuthPassed && roomSession.roomId === id) adminStore.showAuthModal = true; });
@@ -97,7 +106,7 @@ export const createSocketSubscriptions = () => {
         '/app/user/profile': profile => userStore.syncProfile(profile),
         '/user/queue/profile': profile => userStore.syncProfile(profile),
         '/topic/lifecycle': () => { window.dispatchEvent(new Event('musicparty:return-entry')); },
-        '/topic/pairing': () => { window.dispatchEvent(new Event('musicparty:pairing')); },
+        '/topic/pairing': status => { window.dispatchEvent(new CustomEvent('musicparty:pairing', { detail: status })); },
         // 1. 状态同步
         [WS_DEST.TOPIC_STATE]: (state) => playerStore.syncState(state),
         [WS_DEST.USER_STATE]: (state) => playerStore.syncState(state),
@@ -114,7 +123,7 @@ export const createSocketSubscriptions = () => {
 
         // 5. 聊天相关
         [WS_DEST.TOPIC_CHAT]: (msg) => chatStore.addMessage(msg),
-        [WS_DEST.USER_PRIVATE_CHAT]: (msg) => chatStore.addMessage(msg),
+        [WS_DEST.USER_PRIVATE_CHAT]: (msg) => chatStore.addMessage({ ...msg, private: true }),
 
         // 初始历史记录
         [WS_DEST.APP_CHAT_HISTORY]: (history) => chatStore.setHistory(history),

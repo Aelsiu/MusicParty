@@ -35,7 +35,7 @@
     <!-- 操作遮罩 -->
     <div v-if="!userStore.isGuest && !isFmMarker" class="absolute inset-y-0 right-0 bg-surface/90 px-2 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
       <button @click="player.topSong(item.queueId)" title="Top" class="p-1 hover:text-accent"><ArrowUpToLine class="w-4 h-4"/></button>
-      <button @click="player.removeSong(item.queueId)" title="Remove" class="p-1 hover:text-red-500"><Trash2 class="w-4 h-4"/></button>
+      <button v-if="canRemove" @click="player.removeSong(item.queueId)" title="Remove" aria-label="删除待播歌曲" class="p-1 hover:text-red-500"><Trash2 class="w-4 h-4"/></button>
     </div>
 
     <!-- 标记置顶的歌曲 -->
@@ -49,6 +49,7 @@ import { computed } from 'vue';
 import { usePlayerStore } from '../stores/player';
 import { useUserStore } from '../stores/user';
 import { Trash2, ArrowUpToLine, Loader2 } from 'lucide-vue-next';
+import { roomSession } from '../services/roomSession';
 
 const props = defineProps({
   item: {
@@ -64,4 +65,5 @@ const props = defineProps({
 const player = usePlayerStore();
 const userStore = useUserStore();
 const isFmMarker = computed(() => props.item.music.platform === 'netease-fm');
+const canRemove = computed(() => roomSession.ownerAccess || props.item.enqueuedBy.token === userStore.userToken);
 </script>

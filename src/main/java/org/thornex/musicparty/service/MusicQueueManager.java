@@ -139,6 +139,13 @@ public class MusicQueueManager {
         return itemOpt;
     }
 
+    public synchronized Optional<MusicQueueItem> removeAuthorized(String queueId, String token, boolean manager) {
+        Optional<MusicQueueItem> item = findByQueueId(queueId);
+        if (item.isEmpty() || (!manager && !item.get().enqueuedBy().token().equals(token))) return Optional.empty();
+        item.ifPresent(queue::remove);
+        return item;
+    }
+
     /**
      * 从队列中取出下一首可播放的歌曲
      * @param playMode 当前播放模式

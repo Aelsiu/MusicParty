@@ -15,6 +15,7 @@ import org.thornex.musicparty.enums.PlayerAction;
 public class RoomsCommand implements ChatCommand {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final CommandSupport commands;
 
     @Override
     public String getCommand() {
@@ -23,6 +24,8 @@ public class RoomsCommand implements ChatCommand {
 
     @Override
     public void execute(String args, User user) {
+        if (!args.isBlank()) { commands.reply(user,"用法：//rooms，不需要参数");return; }
+        if (!commands.requireManager(user)) return;
         PlayerEvent event = new PlayerEvent(
                 "INFO",
                 PlayerAction.ROOMS_TRIGGER.name(),

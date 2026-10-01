@@ -19,6 +19,8 @@
                 <input :id="`system-${setting.field}`" v-model.number="systemConfig[setting.field]" type="number" :min="setting.min" :max="setting.max" step="1" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs outline-none focus:border-accent font-mono" />
               </div>
             </fieldset>
+            <label for="system-watch-together" class="block text-[10px] font-bold text-medical-500 mt-4 mb-1">一起看</label>
+            <input id="system-watch-together" disabled placeholder="功能开发中" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs disabled:opacity-50" />
             <button type="submit" :disabled="busy||systemConfigLoading||!systemConfigLoaded" class="mt-6 w-full bg-strong text-white py-3 text-xs font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50"><Save class="w-4 h-4" /> {{ working?'正在保存...':'应用并保存所有更改' }}</button>
             <button type="button" @click="loadSystemConfig" :disabled="busy||systemConfigLoading" class="block mx-auto text-[11px] text-accent mt-1 p-2 disabled:opacity-50">{{ systemConfigLoading?'LOADING...':'REFRESH' }}</button>
           </form>
@@ -26,7 +28,8 @@
             <div class="room-manager-list border-t border-medical-200">
               <div v-for="room in visibleRooms" :key="room.id" class="flex items-center gap-2 sm:gap-3 py-4 border-b border-medical-200">
                 <button @click="chooseRoom(room)" :disabled="busy" class="text-left flex-1 min-w-0"><span class="block text-base font-bold break-words">{{ room.name }}</span><span class="block text-[11px] text-medical-400 font-mono mt-1">ID {{ room.id }}<template v-if="roomSession.root && tab==='all'"> / {{ room.ownerId }}</template></span></button>
-                <PairingCode :code="room.pairingCode" compact :copy-label="`复制 ${room.name} 的配对码`" />
+                <PairingCode :code="room.pairingCode" :next-update-at="room.nextUpdateAt" :server-time="room.serverTime"
+                             :interval-minutes="room.pairingIntervalMinutes" compact :copy-label="`复制 ${room.name} 的配对码`" />
                 <button @click="deleteRoom(room.id)" :disabled="busy" :aria-label="`删除房间 ${room.name}，三秒内连续点击三次`" class="room-manager-action">
                   <Trash2 :key="actionEffect.key===`room-delete:${room.id}`?actionEffect.sequence:0" class="w-4 h-4" :class="{ 'action-pulse': actionEffect.key===`room-delete:${room.id}` }" />
                   <span v-if="actionEffect.key===`room-delete:${room.id}`" :key="actionEffect.sequence" role="status" class="action-feedback absolute bottom-full left-1/2 whitespace-nowrap text-[11px] text-accent pointer-events-none">{{ actionEffect.count }}</span>
@@ -73,7 +76,10 @@
           </template>
           <template v-else>
             <label for="license-key" class="text-xs font-bold text-medical-500 block mb-2">{{ view==='license-update'?'新的许可密钥':'许可密钥' }}</label>
-            <div class="flex gap-2"><input id="license-key" v-model="licenseKey" :type="showKey?'text':'password'" autocomplete="off" class="min-w-0 flex-1 bg-medical-50 border border-medical-200 px-3 py-3 text-base"><button type="button" @click="showKey=!showKey" class="border border-medical-200 px-3 text-xs" :aria-label="showKey?'隐藏密钥':'显示密钥'"><Eye v-if="!showKey" class="w-4 h-4"/><EyeOff v-else class="w-4 h-4"/></button></div>
+            <div class="relative">
+              <input id="license-key" v-model="licenseKey" :type="showKey?'text':'password'" autocomplete="off" class="license-key-input w-full min-w-0 bg-medical-50 border border-medical-200 pl-3 pr-12 py-3 text-base">
+              <button type="button" @mousedown.prevent @click="showKey=!showKey" class="absolute inset-y-0 right-0 px-3 text-medical-400 hover:text-accent" aria-controls="license-key" :aria-label="showKey?'隐藏密钥':'显示密钥'" :aria-pressed="showKey"><Eye v-if="!showKey" class="w-4 h-4"/><EyeOff v-else class="w-4 h-4"/></button>
+            </div>
             <button type="button" @click="licenseKey=randomLicenseKey();showKey=true" class="text-accent text-xs mt-3 flex items-center gap-2"><Shuffle class="w-4 h-4"/> RANDOM</button>
             <p class="info-tip text-[11px] text-medical-400 mt-3">8–16 位大小写英文字母、数字或符号，不含空白</p>
             <p v-if="view==='license-update'" class="info-tip text-[11px] text-medical-400 mt-3">所属房间和备注保留，旧密钥和旧管理会话立即失效</p>
@@ -163,6 +169,7 @@ onBeforeUnmount(()=>{alive=false;refreshGeneration++;systemConfigGeneration++;cl
 </script>
 
 <style scoped>
+.license-key-input::-ms-reveal,.license-key-input::-ms-clear{display:none}
 .room-manager-panel{display:flex;flex-direction:column;max-height:calc(100dvh - 2rem);overflow:hidden}
 .room-manager-panel>header,.room-manager-panel>footer{flex-shrink:0}
 .room-manager-body{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}

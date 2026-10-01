@@ -23,7 +23,7 @@ class RoomNavigationCommandTest {
 
     @ParameterizedTest
     @CsvSource({
-            "code, PAIRING_TRIGGER, OPEN_PAIRING_MODAL",
+            "code, PAIRING_TRIGGER, COPY_PAIRING_CODE",
             "rooms, ROOMS_TRIGGER, OPEN_ROOM_MANAGER"
     })
     void navigationCommandsArePrivateToTheSendingTabAndExcludedFromChatHistory(
@@ -32,8 +32,10 @@ class RoomNavigationCommandTest {
         UserService users = mock(UserService.class);
         User sharedProfile = new User("shared-token", "newer-tab", "Manager");
         when(users.getUser("sending-tab")).thenReturn(Optional.of(sharedProfile));
+        CommandSupport commands=mock(CommandSupport.class);
+        when(commands.requireManager(any())).thenReturn(true);
         ChatService chat = new ChatService(template, users, new AppProperties(),
-                List.of(new PairingCodeCommand(template), new RoomsCommand(template)));
+                List.of(new PairingCodeCommand(template, commands, mock(org.thornex.musicparty.room.RoomRepository.class)), new RoomsCommand(template, commands)));
 
         assertTrue(chat.processIncomingMessage("sending-tab", "//" + command.toUpperCase()));
 

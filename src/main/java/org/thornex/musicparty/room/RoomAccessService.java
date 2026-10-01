@@ -45,12 +45,12 @@ public class RoomAccessService {
         limit(address); long now=System.currentTimeMillis(); repository.rotate(now);
         var room=repository.rooms().stream().filter(r -> Objects.equals(r.pairingCode(),code)).findFirst().orElseThrow(() -> denied("配对码无效或已更新"));
         attempts.remove(address); cleanup();
-        Admission value=new Admission(token(),room.id(),RoomRepository.epoch(now),(RoomRepository.epoch(now)+1)*600000);
+        Admission value=new Admission(token(),room.id(),repository.pairingEpoch(now),repository.nextPairingUpdateAt(now));
         repository.saveAdmission(value); admissions.put(value.token(),value); return value;
     }
     public void admission(String token,String roomId) {
         Admission a=token==null?null:admissions.computeIfAbsent(token,repository::admission);
-        if (a==null || !a.roomId().equals(roomId) || a.epoch()!=RoomRepository.epoch(System.currentTimeMillis()) || !repository.exists(roomId)) throw denied("配对码已更新，请重新进入房间");
+        if (a==null || !a.roomId().equals(roomId) || a.epoch()!=repository.pairingEpoch(System.currentTimeMillis()) || !repository.exists(roomId)) throw denied("配对码已更新，请重新进入房间");
     }
     public void member(String token,String managerToken,String roomId) {
         if (managerToken!=null && !managerToken.isBlank()) { own(managerToken,roomId); return; }

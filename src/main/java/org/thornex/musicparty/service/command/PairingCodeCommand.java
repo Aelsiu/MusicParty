@@ -15,6 +15,8 @@ import org.thornex.musicparty.enums.PlayerAction;
 public class PairingCodeCommand implements ChatCommand {
 
     private final SimpMessagingTemplate messagingTemplate;
+    private final CommandSupport commands;
+    private final org.thornex.musicparty.room.RoomRepository repository;
 
     @Override
     public String getCommand() {
@@ -23,11 +25,24 @@ public class PairingCodeCommand implements ChatCommand {
 
     @Override
     public void execute(String args, User user) {
+        String parameter=CommandSupport.parameter(args,"copy");
+        if (!java.util.Set.of("copy","open").contains(parameter)) {
+            commands.reply(user,"用法：//code [copy|open]，不带参数默认 copy");
+            return;
+        }
+        if (!commands.requireManager(user)) return;
+        if ("open".equals(parameter)) {
+            String room=org.thornex.musicparty.room.RoomContext.require();
+            repository.setPairingOpen(room,true);
+            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/pairing"), java.util.Map.of("open",true));
+            commands.reply(user,"已开启房内配对码展示");
+            return;
+        }
         PlayerEvent event = new PlayerEvent(
                 "INFO",
                 PlayerAction.PAIRING_TRIGGER.name(),
                 user.getToken(),
-                "OPEN_PAIRING_MODAL",
+                "COPY_PAIRING_CODE",
                 null
         );
         SimpMessageHeaderAccessor headers = SimpMessageHeaderAccessor.create(SimpMessageType.MESSAGE);

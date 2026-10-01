@@ -71,7 +71,7 @@ public class QueuePersistenceService {
                 Object config = appProperties instanceof org.springframework.aop.scope.ScopedObject scoped ? scoped.getTargetObject() : appProperties;
                 ObjectNode roomConfig = objectMapper.valueToTree(config);
                 ((ObjectNode) roomConfig.get("queue")).remove(List.of("maxSize", "historySize", "maxUserSongs"));
-                ((ObjectNode) roomConfig.get("player")).remove("maxPlaylistImportSize");
+                ((ObjectNode) roomConfig.get("player")).remove(List.of("maxPlaylistImportSize", "pairingIntervalMinutes"));
                 ((ObjectNode) roomConfig.get("chat")).remove(List.of("maxHistorySize", "minIntervalMs", "maxMessageLength"));
                 ((ObjectNode) roomConfig.get("bilibili")).remove("maxDurationMinutes");
                 roomRepository.save(org.thornex.musicparty.room.RoomContext.require(), objectMapper.writeValueAsString(data), objectMapper.writeValueAsString(roomConfig));

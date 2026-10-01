@@ -3,6 +3,9 @@ import { ref } from 'vue';
 import { useUserStore } from './user';
 import { socketService } from '../services/socket';
 import { WS_DEST } from '../constants/api';
+import { roomSession } from '../services/roomSession';
+import { roomsApi } from '../api/rooms';
+import { copyRoomPairingCode } from '../services/pairingCode.js';
 
 export const useChatStore = defineStore('chat', () => {
     // 状态
@@ -46,7 +49,7 @@ export const useChatStore = defineStore('chat', () => {
         if (!hasMore.value || isLoadingMore.value) return;
 
         isLoadingMore.value = true;
-        const currentCount = messages.value.length;
+        const currentCount = messages.value.filter(msg => !msg.private).length;
 
         // 发送 WebSocket 请求
         socketService.send(WS_DEST.CHAT_HISTORY_FETCH, {
@@ -76,6 +79,33 @@ export const useChatStore = defineStore('chat', () => {
         }
     };
 
+    let copyingPairingCode = false;
+    const copyPairingCode = async () => {
+        if (copyingPairingCode || !userStore.isAuthPassed || userStore.isGuest) return;
+        if (!roomSession.ownerAccess) {
+            addMessage({ id: `private-${Date.now()}-${Math.random()}`, userId: 'SYSTEM', userName: 'SYSTEM',
+                content: '此指令仅限本房间 Owner 或 Root 使用，请通过管理入口进入房间',
+                timestamp: Date.now(), type: 'SYSTEM', private: true });
+            return;
+        }
+        const { roomId, managerToken } = roomSession;
+        const isCurrent = () => userStore.isAuthPassed && roomSession.roomId === roomId
+            && roomSession.managerToken === managerToken;
+        copyingPairingCode = true;
+        try {
+            await copyRoomPairingCode({
+                roomId, managerToken, manage: roomsApi.manage, isCurrent,
+                // Local-only feedback: never send it to the room or its history.
+                notify: content => addMessage({
+                    id: `private-${Date.now()}-${Math.random()}`, userId: 'SYSTEM', userName: 'SYSTEM',
+                    content, timestamp: Date.now(), type: 'SYSTEM', private: true
+                })
+            });
+        } finally {
+            copyingPairingCode = false;
+        }
+    };
+
     return {
         messages,
         unreadCount,
@@ -86,6 +116,7 @@ export const useChatStore = defineStore('chat', () => {
         toggleChat,
         setHistory,
         loadMoreHistory,
-        prependHistory
+        prependHistory,
+        copyPairingCode
     };
 });

@@ -19,12 +19,14 @@ public class RoomRepository {
         public License { note = note == null ? "" : note; }
         public License(String id, String key) { this(id, key, ""); }
     }
-    public record Room(String id, String name, String ownerId, long createdAt, String pairingCode, long pairingEpoch, boolean autoOpen) {}
+    public record Room(String id, String name, String ownerId, long createdAt, String pairingCode, long pairingEpoch, boolean autoOpen, boolean pairingOpen) {}
     private static final List<String> CODES=java.util.stream.IntStream.range(0,10000).mapToObj(i->String.format(Locale.ROOT,"%04d",i)).toList();
     private final MultiRoomProperties properties;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
     private Connection db;
+    private int pairingIntervalMinutes = 10;
+    private long pairingStartMs, pairingBaseEpoch;
     private List<License> licenses = new ArrayList<>();
     public RoomRepository(MultiRoomProperties properties, ObjectMapper mapper) { this.properties = properties; this.mapper = mapper; }
     @PostConstruct public synchronized void initialize() throws Exception {
@@ -40,6 +42,15 @@ public class RoomRepository {
             s.execute("CREATE TABLE IF NOT EXISTS creations(request_key TEXT PRIMARY KEY,room_id TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS admissions(token TEXT PRIMARY KEY,room_id TEXT NOT NULL,epoch INTEGER NOT NULL,expires_at INTEGER NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS system_config(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS pairing_clock(id INTEGER PRIMARY KEY CHECK(id=1),interval_minutes INTEGER NOT NULL,start_ms INTEGER NOT NULL,base_epoch INTEGER NOT NULL)");
+        }
+        boolean hasPairingOpen=false;
+        try (Statement s=db.createStatement(); ResultSet columns=s.executeQuery("PRAGMA table_info(rooms)")) {
+            while(columns.next()) if("pairing_open".equals(columns.getString("name"))) hasPairingOpen=true;
+        }
+        if(!hasPairingOpen) try(Statement s=db.createStatement()) { s.execute("ALTER TABLE rooms ADD COLUMN pairing_open INTEGER NOT NULL DEFAULT 0"); }
+        try (Statement s = db.createStatement(); ResultSet clock = s.executeQuery("SELECT * FROM pairing_clock WHERE id=1")) {
+            if (clock.next()) { pairingIntervalMinutes=clock.getInt("interval_minutes");pairingStartMs=clock.getLong("start_ms");pairingBaseEpoch=clock.getLong("base_epoch"); }
         }
         Path list = Path.of(properties.getLicenseFile());
         if (Files.exists(list)) licenses = mapper.readValue(Files.readString(list), new TypeReference<List<License>>() {});
@@ -62,7 +73,7 @@ public class RoomRepository {
     }
     public synchronized Room room(String id) { return rooms().stream().filter(r -> r.id().equals(id)).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "房间已删除")); }
     public synchronized boolean exists(String id) { return rooms().stream().anyMatch(r -> r.id().equals(id)); }
-    private Room readRoom(ResultSet r) throws SQLException { return new Room(r.getString("id"),r.getString("name"),r.getString("owner_id"),r.getLong("created_at"),r.getString("pair_code"),r.getLong("pair_epoch"),r.getInt("auto_open") != 0); }
+    private Room readRoom(ResultSet r) throws SQLException { return new Room(r.getString("id"),r.getString("name"),r.getString("owner_id"),r.getLong("created_at"),r.getString("pair_code"),r.getLong("pair_epoch"),r.getInt("auto_open") != 0,r.getInt("pairing_open") != 0); }
     public synchronized Room create(String owner, String name, String requestId) {
         if (!RoomValidation.name(name)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "房间名须为 2–16 个可见字符，不含换行或不可见控制字符");
         if (requestId == null || !requestId.matches("[a-zA-Z0-9-]{16,64}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少有效的创建请求标识");
@@ -77,7 +88,7 @@ public class RoomRepository {
         long now = System.currentTimeMillis(); rotate(now);
         String createdId=id;
         transaction(() -> {
-            update("INSERT INTO rooms(id,name,owner_id,created_at,pair_code,pair_epoch) VALUES(?,?,?,?,?,?)",createdId,name,owner,now,newCode(now,new HashSet<>()),epoch(now));
+            update("INSERT INTO rooms(id,name,owner_id,created_at,pair_code,pair_epoch) VALUES(?,?,?,?,?,?)",createdId,name,owner,now,newCode(now,new HashSet<>()),pairingEpoch(now));
             update("INSERT INTO creations(request_key,room_id) VALUES(?,?)",requestKey,createdId);
         });
         return room(id);
@@ -92,20 +103,23 @@ public class RoomRepository {
         });
     }
     public synchronized void rotate(long now) {
-        long period = epoch(now);
-        List<Room> stale = rooms().stream().filter(r -> r.pairingEpoch() != period).toList();
+        long period = pairingEpoch(now);
+        if(rooms().stream().noneMatch(room -> room.pairingEpoch()!=period)) return;
+        transaction(() -> rotateCodes(now, period, false));
+    }
+    private void rotateCodes(long now, long period, boolean force) {
+        List<Room> stale = rooms().stream().filter(r -> force || r.pairingEpoch() != period).toList();
         if (stale.isEmpty()) return;
-        try {
-            db.setAutoCommit(false);
             Set<String> reserved = new HashSet<>();
             for (Room room : stale) if (room.pairingCode() != null) update("INSERT INTO pairing_cooldown(code,until_ms) VALUES(?,?) ON CONFLICT(code) DO UPDATE SET until_ms=MAX(until_ms,excluded.until_ms)",room.pairingCode(),now+1800000);
             for (Room room : stale) { String code = newCode(now,reserved); reserved.add(code); update("UPDATE rooms SET pair_code=?,pair_epoch=? WHERE id=?",code,period,room.id()); }
             update("DELETE FROM pairing_cooldown WHERE until_ms<=?",now);
-            db.commit();
-        } catch (RuntimeException | SQLException e) { try { db.rollback(); } catch (SQLException ignored) {} if(e instanceof RuntimeException runtime) throw runtime; throw storage(e); }
-        finally { try { db.setAutoCommit(true); } catch (SQLException e) { throw storage(e); } }
     }
     public static long epoch(long now) { return Math.floorDiv(now,600000); }
+    public synchronized long pairingEpoch(long now) { return pairingBaseEpoch+Math.floorDiv(now-pairingStartMs,pairingIntervalMinutes*60000L); }
+    public synchronized long nextPairingUpdateAt(long now) { return pairingStartMs+(Math.floorDiv(now-pairingStartMs,pairingIntervalMinutes*60000L)+1)*pairingIntervalMinutes*60000L; }
+    public synchronized int pairingIntervalMinutes() { return pairingIntervalMinutes; }
+    public synchronized void setPairingOpen(String id, boolean open) { room(id);update("UPDATE rooms SET pairing_open=? WHERE id=?",open?1:0,id); }
     private String newCode(long now, Set<String> extra) {
         Set<String> unavailable = new HashSet<>(extra);
         for (Room r : rooms()) if (r.pairingCode() != null) unavailable.add(r.pairingCode());
@@ -128,6 +142,18 @@ public class RoomRepository {
     }
     public synchronized void saveSystemConfig(String payload) {
         update("INSERT INTO system_config(id,payload) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",payload);
+    }
+    public synchronized void saveSystemConfig(String payload, int intervalMinutes) {
+        if (intervalMinutes<1 || intervalMinutes>60) throw new IllegalArgumentException("Invalid pairing interval");
+        if (pairingIntervalMinutes==intervalMinutes) { saveSystemConfig(payload); return; }
+        long now=System.currentTimeMillis();
+        long resetEpoch=Math.max(pairingEpoch(now),rooms().stream().mapToLong(Room::pairingEpoch).max().orElse(0))+1;
+        transaction(() -> {
+            saveSystemConfig(payload);
+            update("INSERT INTO pairing_clock(id,interval_minutes,start_ms,base_epoch) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET interval_minutes=excluded.interval_minutes,start_ms=excluded.start_ms,base_epoch=excluded.base_epoch",intervalMinutes,now,resetEpoch);
+            rotateCodes(now,resetEpoch,true);
+        });
+        pairingIntervalMinutes=intervalMinutes;pairingStartMs=now;pairingBaseEpoch=resetEpoch;
     }
     public synchronized boolean consumeAutoOpen(String id) { boolean first = room(id).autoOpen(); if (first) update("UPDATE rooms SET auto_open=0 WHERE id=?",id); return first; }
     public synchronized License addLicense(String key) {

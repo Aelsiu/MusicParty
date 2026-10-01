@@ -49,8 +49,8 @@
     <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode && !adminStore.showDashboard && !adminStore.showAuthModal" />
     <AdminAuthModal />
     <AdminDashboard />
+    <RoomCleanupDialog />
     <RoomManager :open="showRoomManager" :selecting="switchingRoom" :current-room-id="userStore.isAuthPassed ? roomSession.roomId : ''" @close="showRoomManager = false" @select="switchManagedRoom" />
-    <PairingCodeModal :open="showPairingCode" @close="showPairingCode = false" />
   </div>
 </template>
 
@@ -83,8 +83,8 @@ import ToastNotification from './components/ToastNotification.vue';
 import TutorialOverlay from './components/TutorialOverlay.vue';
 import AdminAuthModal from './components/AdminAuthModal.vue';
 import AdminDashboard from './components/AdminDashboard.vue';
+import RoomCleanupDialog from './components/RoomCleanupDialog.vue';
 import RoomManager from './components/RoomManager.vue';
-import PairingCodeModal from './components/PairingCodeModal.vue';
 
 const player = usePlayerStore();
 const userStore = useUserStore();
@@ -96,7 +96,6 @@ const chat = useChatStore();
 const showSearch = ref(false);
 const showSettings = ref(false);
 const showRoomManager = ref(false);
-const showPairingCode = ref(false);
 const switchingRoom = ref(false);
 const toastInstance = ref(null);
 const { register, info, error } = useToast();
@@ -116,23 +115,16 @@ const returnEntry = () => {
   chat.messages = []; chat.unreadCount = 0; chat.isOpen = false;
   chat.isLoadingMore = false; chat.hasMore = true;
   hasStarted.value = false; connecting.value = false; showSearch.value = false; showSettings.value = false;
-  showRoomManager.value = false; showPairingCode.value = false;
+  showRoomManager.value = false;
   adminStore.showDashboard = false; adminStore.showAuthModal = false; adminStore.isVerified = false;
   userStore.resetAuthentication();
   window.AndroidBridge?.updateMedia?.(JSON.stringify({ title: 'Music Party', artist: '', paused: true, position: 0, duration: 0, roomId: '' }));
 };
 useEventListener(window, 'musicparty:return-entry', returnEntry);
 useEventListener(window, 'musicparty:connected', () => { connecting.value = false; hasStarted.value = true; });
-useEventListener(window, 'musicparty:show-pairing', () => {
-  if (!userStore.isAuthPassed) return;
-  if (!roomSession.managerToken) { error('请先使用 //admin 验证许可密钥'); return; }
-  showRoomManager.value = false;
-  showPairingCode.value = true;
-});
 useEventListener(window, 'musicparty:show-rooms', () => {
   if (!userStore.isAuthPassed) return;
   if (!roomSession.managerToken) { error('请先使用 //admin 验证许可密钥'); return; }
-  showPairingCode.value = false;
   showRoomManager.value = true;
 });
 const switchManagedRoom = async room => {

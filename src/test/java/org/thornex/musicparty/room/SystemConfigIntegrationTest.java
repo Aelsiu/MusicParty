@@ -66,10 +66,10 @@ class SystemConfigIntegrationTest {
         return new AdminConfigUpdateRequest(snapshot.maxQueueSize(), snapshot.maxHistorySize(), snapshot.maxUserSongs(),
                 snapshot.maxPlaylistImportSize(), snapshot.maxChatHistorySize(), snapshot.minChatIntervalMs(),
                 snapshot.maxChatMessageLength(), null, null, null, snapshot.bilibiliMaxDurationMinutes(),
-                null, null, null, null);
+                null, null, null, null, snapshot.pairingIntervalMinutes());
     }
 
-    @Test void onlyRootCanReadAndUpdateGlobalSettingsAndRoomEndpointsRejectAllEightFields() throws Exception {
+    @Test void onlyRootCanReadAndUpdateGlobalSettingsAndRoomEndpointsRejectAllNineFields() throws Exception {
         var license = repository.addLicense("Owner" + UUID.randomUUID().toString().substring(0, 8));
         String ownerToken = access.login(license.key(), "owner-test").token();
         var room = room(license.id());
@@ -85,7 +85,7 @@ class SystemConfigIntegrationTest {
         }
         http.perform(get("/api/rooms/system-config")).andExpect(status().isForbidden());
         for (String field : List.of("maxSize", "historySize", "maxUserSongs", "maxPlaylistImportSize",
-                "maxChatHistorySize", "minChatIntervalMs", "maxChatMessageLength", "bilibiliMaxDurationMinutes")) {
+                "maxChatHistorySize", "minChatIntervalMs", "maxChatMessageLength", "bilibiliMaxDurationMinutes", "pairingIntervalMinutes")) {
             for (String token : List.of(rootToken, ownerToken)) {
                 http.perform(post("/api/admin/config/update").header("Authorization", "Bearer " + token)
                                 .header("X-Room-ID", room.id()).contentType("application/json")
@@ -141,6 +141,7 @@ class SystemConfigIntegrationTest {
             var savedConfig = mapper.readTree(repository.payload(room.id(), "config"));
             assertFalse(savedConfig.get("queue").has("maxSize"));
             assertFalse(savedConfig.get("player").has("maxPlaylistImportSize"));
+            assertFalse(savedConfig.get("player").has("pairingIntervalMinutes"));
             assertFalse(savedConfig.get("chat").has("maxMessageLength"));
             assertFalse(savedConfig.get("bilibili").has("maxDurationMinutes"));
             assertTrue(mapper.readTree(repository.payload(room.id(), "payload")).at("/settings/systemConfig/maxQueueSize").isNull());
@@ -183,6 +184,69 @@ class SystemConfigIntegrationTest {
             assertEquals(original, systemConfig.snapshot());
             assertEquals(persisted, repository.systemConfig());
         }
+    }
+
+    @Test void pairingIntervalIsRootOnlyStrictIntegerAndImmediatelyRotatesActiveAndDormantRooms() throws Exception {
+        var active=room("ROOT");var dormant=room("ROOT");
+        try(var ignored=RoomContext.enter(active.id())) { context.getBean(QueuePersistenceService.class).ensureLoaded(); }
+        for(String value:List.of("0","61","1.5","10.0","\"5\"","true")) {
+            http.perform(post("/api/rooms/system-config").header("Authorization","Bearer "+rootToken)
+                    .contentType("application/json").content("{\"pairingIntervalMinutes\":"+value+"}"))
+                    .andExpect(status().isBadRequest());
+            assertEquals(original,systemConfig.snapshot());
+            assertEquals(active.pairingCode(),repository.room(active.id()).pairingCode());
+        }
+        for(int minutes:List.of(1,60)) {
+            var oldCodes=repository.rooms().stream().map(RoomRepository.Room::pairingCode).toList();
+            long before=System.currentTimeMillis();
+            http.perform(post("/api/rooms/system-config").header("Authorization","Bearer "+rootToken)
+                    .contentType("application/json").content("{\"pairingIntervalMinutes\":"+minutes+"}"))
+                    .andExpect(status().isOk());
+            long after=System.currentTimeMillis();
+            assertEquals(minutes,systemConfig.snapshot().pairingIntervalMinutes());
+            assertEquals(minutes,repository.pairingIntervalMinutes());
+            for(var room:repository.rooms()) assertFalse(oldCodes.contains(room.pairingCode()));
+            long next=repository.nextPairingUpdateAt(after);
+            assertTrue(next>=before+minutes*60000L && next<=after+minutes*60000L);
+        }
+    }
+
+    @Test void pairingDisplayOnlyExposesCodeToRoomMembersWhileOpenAndOnlyOwnersCanChangeIt() throws Exception {
+        var license=repository.addLicense("Owner"+UUID.randomUUID().toString().substring(0,8));
+        var other=repository.addLicense("Other"+UUID.randomUUID().toString().substring(0,8));
+        var room=room(license.id());
+        String ownerToken=access.login(license.key(),"owner-test").token();
+        String otherToken=access.login(other.key(),"other-test").token();
+        String guestToken=access.join(room.pairingCode(),"guest-test").token();
+        String endpoint="/api/rooms/"+room.id()+"/pairing";
+        http.perform(get(endpoint).header("X-Room-Token",guestToken))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(content().json("{\"open\":false}",true));
+        http.perform(get("/api/rooms/"+room.id()+"/admission").header("X-Room-Token",guestToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.room.pairingCode").doesNotExist());
+        http.perform(post("/api/rooms/join").contentType("application/json").content("{\"code\":\""+room.pairingCode()+"\"}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.room.pairingCode").doesNotExist());
+        http.perform(get("/api/rooms/"+room.id()+"/manage").header("X-Room-Token",guestToken))
+                .andExpect(status().isForbidden());
+        http.perform(patch(endpoint).header("Authorization","Bearer "+otherToken)
+                .contentType("application/json").content("{\"open\":true}")).andExpect(status().isForbidden());
+        http.perform(patch(endpoint).header("X-Room-Token",guestToken)
+                .contentType("application/json").content("{\"open\":true}")).andExpect(status().isForbidden());
+        http.perform(patch(endpoint).header("Authorization","Bearer "+ownerToken)
+                .contentType("application/json").content("{\"open\":true}"))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(jsonPath("$.pairingOpen").value(true));
+        http.perform(get(endpoint)).andExpect(status().isForbidden());
+        http.perform(get(endpoint).header("X-Room-Token",guestToken))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(jsonPath("$.pairingCode").value(room.pairingCode()));
+        http.perform(patch(endpoint).header("Authorization","Bearer "+rootToken)
+                .contentType("application/json").content("{\"open\":false}")).andExpect(status().isOk());
+        http.perform(get(endpoint).header("X-Room-Token",guestToken))
+                .andExpect(status().isOk()).andExpect(content().json("{\"open\":false}",true));
+        http.perform(get("/api/rooms/"+room.id()+"/manage").header("Authorization","Bearer "+ownerToken))
+                .andExpect(status().isOk()).andExpect(header().string("Cache-Control","no-store"))
+                .andExpect(jsonPath("$.pairingCode").value(room.pairingCode()));
     }
 
     private Music music(int id) { return new Music("song" + id, "歌曲", List.of("歌手"), 10000, "netease", ""); }

@@ -832,7 +832,13 @@ public class MusicPlayerService {
     }
 
     public void removeSongFromQueue(String queueId, String sessionId) {
-        Optional<MusicQueueItem> removedItem = queueManager.remove(queueId);
+        removeSongFromQueue(queueId, sessionId, false);
+    }
+
+    public void removeSongFromQueue(String queueId, String sessionId, boolean manager) {
+        var user = userService.getUser(sessionId).orElse(null);
+        if (user == null || user.isGuest()) return;
+        Optional<MusicQueueItem> removedItem = queueManager.removeAuthorized(queueId, user.getToken(), manager);
         if (removedItem.isPresent()) {
             log.info("Removed song from queue by {}", getUserName(sessionId));
             broadcastQueueUpdate();

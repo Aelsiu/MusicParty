@@ -13,7 +13,7 @@
           <h3 class="text-sm font-bold font-mono text-medical-900 flex items-center gap-2">
             <Lock class="w-4 h-4 text-accent" /> ADMIN LOGIN
           </h3>
-          <button @click="adminStore.showAuthModal = false" class="text-medical-400 hover:text-medical-900">
+          <button @click="adminStore.showAuthModal = false" aria-label="关闭管理验证" class="text-medical-400 hover:text-medical-900">
             <X class="w-4 h-4" />
           </button>
         </div>

@@ -88,7 +88,10 @@ public class MusicSocketController {
     @MessageMapping("/queue/remove")
     public void removeSong(@Payload QueueActionRequest request, @Header("simpSessionId") String sessionId) {
         if (isGuest(sessionId)) return;
-        musicPlayerService.removeSongFromQueue(request.queueId(), sessionId);
+        var connection = roomAccess.connection(sessionId);
+        if (!org.thornex.musicparty.room.RoomContext.require().equals(connection.roomId())) return;
+        boolean manager = connection.managerToken() != null && !connection.managerToken().isBlank();
+        musicPlayerService.removeSongFromQueue(request.queueId(), sessionId, manager);
     }
 
     // 点赞接口（可携带客户端上报的播放位置，用于播放条打点；为空则服务器自己算）

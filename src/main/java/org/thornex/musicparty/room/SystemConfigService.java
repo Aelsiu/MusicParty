@@ -41,7 +41,7 @@ public class SystemConfigService {
         String saved = repository.systemConfig();
         // Conflicting legacy room overrides cannot define one global value. Seed from deployment defaults.
         current = saved == null ? SystemConfigSnapshot.from(defaults) : mapper.readValue(saved, SystemConfigSnapshot.class);
-        if (saved == null) repository.saveSystemConfig(mapper.writeValueAsString(current));
+        repository.saveSystemConfig(mapper.writeValueAsString(current), current.pairingIntervalMinutes());
     }
 
     public SystemConfigSnapshot snapshot() { return current; }
@@ -54,7 +54,7 @@ public class SystemConfigService {
         String invalid = next.validationError();
         if (invalid != null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, invalid);
         try {
-            repository.saveSystemConfig(mapper.writeValueAsString(next));
+            repository.saveSystemConfig(mapper.writeValueAsString(next), next.pairingIntervalMinutes());
         } catch (Exception e) {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "全局系统参数保存失败", e);
         }
@@ -65,6 +65,8 @@ public class SystemConfigService {
                 context.getBean(MusicQueueManager.class).trimHistoryToLimit();
                 context.getBean(ChatService.class).trimHistoryToLimit();
                 context.getBean(MusicPlayerService.class).broadcastFullPlayerState();
+                context.getBean(org.springframework.messaging.simp.SimpMessagingTemplate.class)
+                        .convertAndSend(RoomContext.topic("/pairing"), java.util.Map.of("nextUpdateAt", repository.nextPairingUpdateAt(System.currentTimeMillis())));
             } catch (RuntimeException e) {
                 if (repository.exists(id) && scope.active(id)) log.warn("Could not refresh room {} after global limits changed", id, e);
             }
@@ -86,6 +88,7 @@ public class SystemConfigService {
         AppProperties.PlayerConfig oldPlayer = properties.getPlayer();
         AppProperties.PlayerConfig player = new AppProperties.PlayerConfig() {
             @Override public int getMaxPlaylistImportSize() { return current.maxPlaylistImportSize(); }
+            @Override public int getPairingIntervalMinutes() { return current.pairingIntervalMinutes(); }
         };
         player.setVoteSkipEnabled(oldPlayer.isVoteSkipEnabled());
         player.setVoteSkipThreshold(oldPlayer.getVoteSkipThreshold());

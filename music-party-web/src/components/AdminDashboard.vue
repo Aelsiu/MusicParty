@@ -19,7 +19,7 @@
             <p class="text-[10px] font-mono text-medical-400 mt-1 uppercase tracking-[0.2em]">> 系统控制接口 / SYSTEM_CONTROL_INTERFACE</p>
           </div>
           <div class="flex items-center gap-4">
-            <button @click="adminStore.showDashboard = false" class="p-2 bg-medical-100 hover:bg-medical-200 text-medical-900 transition-colors">
+            <button @click="adminStore.showDashboard = false" aria-label="关闭管理终端" class="p-2 bg-medical-100 hover:bg-medical-200 text-medical-900 transition-colors">
               <X class="w-6 h-6" />
             </button>
           </div>
@@ -269,16 +269,6 @@
       </div>
     </div>
   </Transition>
-  <ConfirmDialog
-    :open="Boolean(pendingCleanup)"
-    title="数据清理 / DATA_CLEANUP"
-    :message="pendingCleanup?.message || ''"
-    confirm-label="确认清理"
-    :busy="cleanupBusy"
-    :error-message="cleanupError"
-    @cancel="cancelCleanup"
-    @confirm="confirmCleanup"
-  />
 </template>
 
 <script setup>
@@ -290,7 +280,7 @@ import { adminApi } from '../api/admin';
 import { useToast } from '../composables/useToast';
 import RoomPairingCard from './RoomPairingCard.vue';
 import NeteaseQrLogin from './NeteaseQrLogin.vue';
-import ConfirmDialog from './ConfirmDialog.vue';
+import { useCleanupStore } from '../stores/cleanup';
 import { roomSession } from '../services/roomSession';
 import {
   Settings, X, Pause, Play, SkipForward, ListOrdered, Repeat1, Shuffle,
@@ -336,14 +326,8 @@ const cleanupTargets = [
   { id: 'OFFLINE', label: '清理不在线成员歌曲', code: 'OFFLINE_MEMBER_SONGS', icon: UserMinus, message: '确定要清理本房间中不在线成员的点播歌曲吗？' },
   { id: 'CHAT', label: '清理聊天记录', code: 'CHAT_HISTORY', icon: MessageSquare, message: '确定要清空本房间的聊天记录吗？' }
 ];
-const pendingCleanup = ref(null);
-const cleanupBusy = ref(false);
-const cleanupError = ref('');
-
-watch(() => [adminStore.showDashboard, roomSession.roomId], () => {
-  pendingCleanup.value = null;
-  cleanupError.value = '';
-}, { flush: 'sync' });
+const cleanup = useCleanupStore();
+const cleanupBusy = computed(() => cleanup.busy);
 
 // 私人电台/私人DJ 状态（来自 config.privateDj，服务端广播；mode 即开关：OFF=关闭/FM=私人FM/DJ=私人DJ）
 const privateDj = computed(() => playerStore.config.privateDj || {
@@ -409,33 +393,7 @@ const toggleStream = async () => {
 };
 
 const requestCleanup = (target) => {
-  if (cleanupBusy.value) return;
-  pendingCleanup.value = { ...target, roomId: roomSession.roomId };
-  cleanupError.value = '';
-};
-
-const cancelCleanup = () => {
-  if (cleanupBusy.value) return;
-  pendingCleanup.value = null;
-  cleanupError.value = '';
-};
-
-const confirmCleanup = async () => {
-  const target = pendingCleanup.value;
-  if (!target || cleanupBusy.value || !adminStore.showDashboard || target.roomId !== roomSession.roomId) return;
-  cleanupBusy.value = true;
-  cleanupError.value = '';
-  try {
-    const data = await adminApi.clearData(adminStore.adminPassword, target.id);
-    if (pendingCleanup.value === target) {
-      pendingCleanup.value = null;
-      warning(data.message);
-    }
-  } catch (e) {
-    if (pendingCleanup.value === target) cleanupError.value = e.response?.data?.message || '清理操作失败，请重试';
-  } finally {
-    cleanupBusy.value = false;
-  }
+  cleanup.request(target.id, 'dashboard');
 };
 
 const updateCookie = async (platform, value) => {

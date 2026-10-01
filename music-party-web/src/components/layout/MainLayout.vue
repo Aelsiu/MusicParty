@@ -7,6 +7,7 @@ import QueueList from '../QueueList.vue';
 import CoverImage from '../CoverImage.vue';
 import RoundSwitch from '../RoundSwitch.vue';
 import VolumeControl from '../VolumeControl.vue';
+import RoomPublicPairing from '../RoomPublicPairing.vue';
 import { useUserStore } from '../../stores/user';
 import { useUiStore } from '../../stores/ui';
 import { usePlayerStore } from '../../stores/player';
@@ -86,7 +87,11 @@ const handleSearchClick = () => {
       </div>
     </header>
     <nav class="flex items-center justify-between gap-3 px-4 py-1.5 border-b border-medical-200 bg-surface text-[11px] text-medical-400 shrink-0" aria-label="房间导航">
-      <div class="flex items-center gap-3 min-w-0"><span class="truncate text-accent font-bold">{{ userStore.roomName }}</span><span class="font-mono whitespace-nowrap">ID {{ userStore.roomId }}</span></div>
+      <div class="flex items-center gap-2 sm:gap-3 min-w-0">
+        <span class="min-w-0 truncate text-accent font-bold">{{ userStore.roomName }}</span>
+        <span class="font-mono whitespace-nowrap shrink-0">ID {{ userStore.roomId }}</span>
+        <RoomPublicPairing />
+      </div>
       <button @click="emit('return')" class="font-mono text-accent py-2 px-1 shrink-0" aria-label="返回房间入口">RETURN</button>
     </nav>
 

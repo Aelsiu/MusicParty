@@ -14,6 +14,16 @@ import java.util.Map;
 @ControllerAdvice
 @Slf4j
 public class GlobalExceptionHandler {
+    @ExceptionHandler(org.springframework.http.converter.HttpMessageNotReadableException.class)
+    public ResponseEntity<Object> handleInvalidJson(org.springframework.http.converter.HttpMessageNotReadableException ex) {
+        String message = "请求参数格式无效，请检查字段类型";
+        if (ex.getCause() instanceof com.fasterxml.jackson.databind.JsonMappingException mapping
+                && mapping.getPath().stream().anyMatch(field -> "pairingIntervalMinutes".equals(field.getFieldName()))) {
+            message = "配对码更新周期应为 1–60 分钟的整数";
+        }
+        return ResponseEntity.badRequest().body(Map.of("message", message));
+    }
+
     @ExceptionHandler(org.springframework.web.server.ResponseStatusException.class)
     public ResponseEntity<Object> handleRoomAccess(org.springframework.web.server.ResponseStatusException ex) {
         return ResponseEntity.status(ex.getStatusCode()).body(Map.of("message", ex.getReason() != null ? ex.getReason() : "请求失败"));
