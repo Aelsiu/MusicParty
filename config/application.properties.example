@@ -20,6 +20,9 @@ app.music-api.netease.quality=exhigh
 app.music-api.netease.enabled=true
 app.music-api.bilibili.base-url=https://api.bilibili.com
 app.music-api.bilibili.enabled=true
+# Eight system limits seed the global SQLite configuration only on first use.
+# Later edits belong to ROOT's ROOM MANAGER > System Parameters and apply to all rooms.
+# Saved global values override these startup defaults and legacy per-room values.
 app.music-api.bilibili.max-duration-minutes=10
 
 app.music-api.queue.max-size=1000

@@ -30,7 +30,7 @@
 
           <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
 
-            <!-- Left Column: Playback & Parameters (7 cols) -->
+            <!-- Left Column: Playback (7 cols) -->
             <div class="lg:col-span-7 space-y-6">
 
               <!-- Section: Playback Mastery -->
@@ -59,6 +59,15 @@
                       <Shuffle v-else-if="playerStore.playMode === 'SHUFFLE'" class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
                       <Repeat1 v-else class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
                       <span class="text-[10px] font-bold font-mono">{{ playerStore.playMode === 'SEQUENTIAL' ? '顺序' : playerStore.playMode === 'SHUFFLE' ? '随机' : '单曲循环' }}</span>
+                    </button>
+                  </div>
+
+                  <!-- Permission Locks -->
+                  <div class="grid grid-cols-3 gap-2">
+                    <button v-for="lock in locks" :key="lock.key" @click="toggleLock(lock.key, !lock.value)" class="flex items-center justify-center gap-2 py-2 px-1 border transition-all text-[9px] font-bold font-mono" :class="lock.value ? 'bg-red-50 border-red-200 text-red-500' : 'bg-surface border-medical-200 text-medical-400 hover:border-accent hover:text-accent'">
+                      <Lock v-if="lock.value" class="w-3 h-3" />
+                      <Unlock v-else class="w-3 h-3" />
+                      {{ lock.cnLabel }}
                     </button>
                   </div>
 
@@ -123,19 +132,17 @@
                     </div>
                   </div>
 
-                  <!-- Permission Locks -->
+                  <div>
+                    <label for="admin-netease-quality" class="block text-[10px] font-bold text-medical-500 mb-2">解析音质上限</label>
+                    <select id="admin-netease-quality" :value="playerStore.config.neteaseQuality" @change="e => updateInstantConfig({ neteaseQuality: e.target.value })" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs text-medical-900">
+                      <option v-for="option in qualities" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </div>
                   <div>
                     <label for="admin-seek-policy" class="block text-[10px] font-bold text-medical-500 mb-2">进度条跳转权限</label>
                     <select id="admin-seek-policy" :value="playerStore.config.seekPolicy || 'DISABLED'" @change="e => updateInstantConfig({ seekPolicy: e.target.value })" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs">
                       <option value="DISABLED">禁止跳转</option><option value="OWNER_AND_ENQUEUER">仅管理和点歌者</option><option value="ALL">全部允许</option>
                     </select>
-                  </div>
-                  <div class="grid grid-cols-3 gap-2">
-                    <button v-for="lock in locks" :key="lock.key" @click="toggleLock(lock.key, !lock.value)" class="flex items-center justify-center gap-2 py-2 px-1 border transition-all text-[9px] font-bold font-mono" :class="lock.value ? 'bg-red-50 border-red-200 text-red-500' : 'bg-surface border-medical-200 text-medical-400 hover:border-accent hover:text-accent'">
-                      <Lock v-if="lock.value" class="w-3 h-3" />
-                      <Unlock v-else class="w-3 h-3" />
-                      {{ lock.cnLabel }}
-                    </button>
                   </div>
                 </div>
               </div>
@@ -175,31 +182,6 @@
                 </div>
               </div>
 
-              <!-- Section: System Parameters -->
-              <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
-                <div class="p-3 bg-strong text-white flex items-center gap-2">
-                  <Sliders class="w-4 h-4" />
-                  <span class="text-xs font-bold uppercase tracking-widest font-mono">系统参数 / System_Parameters</span>
-                </div>
-                <div class="p-4 space-y-4">
-                  <label class="block text-[10px] font-bold text-medical-500">
-                    解析音质上限
-                    <select v-model="configProxy.neteaseQuality" class="block w-full mt-1 bg-medical-50 border border-medical-200 px-2 py-1.5 text-xs text-medical-900">
-                      <option v-for="option in qualities" :key="option.value" :value="option.value">{{ option.label }}</option>
-                    </select>
-                  </label>
-                  <div class="grid grid-cols-2 gap-x-4 gap-y-3">
-                  <div v-for="(val, key) in systemFields" :key="key" class="space-y-1">
-                      <label :for="`admin-${val.field}`" class="block text-[9px] font-bold text-medical-400 font-mono uppercase">{{ key }}</label>
-                      <input :id="`admin-${val.field}`" v-model.number="configProxy[val.field]" type="number" :min="val.min" :max="val.max" step="1" class="w-full bg-medical-50 border border-medical-200 px-2 py-1.5 text-xs outline-none focus:border-accent font-mono" />
-                    </div>
-                  </div>
-
-                  <button @click="saveSystemConfig" :disabled="savingConfig" class="w-full bg-strong text-white py-2 text-xs font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50">
-                    <Save class="w-4 h-4" /> {{ savingConfig ? '正在保存...' : '应用并保存所有更改' }}
-                  </button>
-                </div>
-              </div>
             </div>
 
             <!-- Right Column: Pairing & Danger Zone (5 cols) -->
@@ -312,20 +294,14 @@ import ConfirmDialog from './ConfirmDialog.vue';
 import { roomSession } from '../services/roomSession';
 import {
   Settings, X, Pause, Play, SkipForward, ListOrdered, Repeat1, Shuffle,
-  Lock, Unlock, ShieldAlert, Save, AlertTriangle,
-  PlayCircle, Database, Globe, Sliders, ShieldCheck, Radio,
+  Lock, Unlock, ShieldAlert, AlertTriangle,
+  PlayCircle, Database, Globe, ShieldCheck, Radio,
   Trash2, ListMusic, UserMinus, MessageSquare
 } from 'lucide-vue-next';
 
 const adminStore = useAdminStore();
 const playerStore = usePlayerStore();
 const { success, error, warning } = useToast();
-
-
-
-// Config Proxy for editing
-const configProxy = ref({ ...playerStore.config });
-const savingConfig = ref(false);
 const qualities = [
   { value: 'standard', label: '标准' },
   { value: 'higher', label: '较高' },
@@ -335,50 +311,12 @@ const qualities = [
   { value: 'jyeffect', label: '高清臻音' }
 ];
 
-const systemFields = {
-  '队列最大长度': { field: 'maxQueueSize', requestField: 'maxSize', min: 1, max: 10000 },
-  '历史记录容量': { field: 'maxHistorySize', requestField: 'historySize', min: 0, max: 10000 },
-  '用户点歌上限': { field: 'maxUserSongs', min: 1, max: 10000 },
-  '导入单次上限': { field: 'maxPlaylistImportSize', min: 1, max: 10000 },
-  '聊天记录容量': { field: 'maxChatHistorySize', min: 0, max: 100000 },
-  '发言频率限制(ms)': { field: 'minChatIntervalMs', min: 0, max: 600000 },
-  '消息最大长度': { field: 'maxChatMessageLength', min: 1, max: 10000 },
-  'B站时长上限(分钟)': { field: 'bilibiliMaxDurationMinutes', min: 1, max: 1440 }
-};
-
-// 打开时读取当前设置，避免周期广播覆盖正在编辑的内容。
-watch(() => adminStore.showDashboard, (open) => {
-  if (open) configProxy.value = { ...playerStore.config };
-});
-
-const saveSystemConfig = async () => {
-  if (savingConfig.value) return;
-  const update = { neteaseQuality: configProxy.value.neteaseQuality };
-  for (const [label, { field, requestField = field, min, max }] of Object.entries(systemFields)) {
-    const value = configProxy.value[field];
-    if (!Number.isInteger(value) || value < min || value > max) {
-      error(`${label}应在 ${min} 到 ${max} 之间`);
-      return;
-    }
-    update[requestField] = value;
-  }
-  savingConfig.value = true;
-  try {
-    const data = await adminApi.updateConfig(adminStore.adminPassword, update);
-    success(data.message);
-  } catch (e) {
-    error(e.response?.data?.message || '配置同步失败');
-  } finally {
-    savingConfig.value = false;
-  }
-};
-
 const updateInstantConfig = async (update) => {
   try {
     const data = await adminApi.updateConfig(adminStore.adminPassword, update);
     success(data.message);
   } catch (e) {
-    error('配置同步失败');
+    error(e.response?.data?.message || '配置同步失败');
   }
 };
 

@@ -323,9 +323,14 @@ public class MusicQueueManager {
         synchronized (playHistory) {
             playHistory.removeIf(m -> m.id().equals(music.id()) && m.platform().equals(music.platform()));
             playHistory.add(0, music); // 加到最前面
-            if (playHistory.size() > appProperties.getQueue().getHistorySize()) {
-                playHistory.removeLast();
-            }
+            trimHistoryToLimit();
+        }
+    }
+
+    public void trimHistoryToLimit() {
+        synchronized (playHistory) {
+            int limit = Math.max(0, appProperties.getQueue().getHistorySize());
+            while (playHistory.size() > limit) playHistory.removeLast();
         }
     }
 
@@ -374,6 +379,7 @@ public class MusicQueueManager {
 
     public List<Music> getHistorySnapshot() {
         synchronized (playHistory) {
+            trimHistoryToLimit();
             return new ArrayList<>(playHistory);
         }
     }
@@ -396,6 +402,7 @@ public class MusicQueueManager {
         if (loadedHistory != null) {
             playHistory.addAll(loadedHistory);
         }
+        trimHistoryToLimit();
     }
 
     private boolean isMusicInQueue(String musicId) {
@@ -411,10 +418,12 @@ public class MusicQueueManager {
      * 当队列为空时，从历史记录随机取一首作为 AutoDJ
      */
     private MusicQueueItem pollFromHistory() {
-        if (playHistory.isEmpty()) {
-            return null;
+        Music randomSong;
+        synchronized (playHistory) {
+            trimHistoryToLimit();
+            if (playHistory.isEmpty()) return null;
+            randomSong = playHistory.get(new Random().nextInt(playHistory.size()));
         }
-        Music randomSong = playHistory.get(new Random().nextInt(playHistory.size()));
 
         // 历史记录自动播放：REQ_BY 展示名显示"历史记录"而非 AutoDJ
         UserSummary systemUser = new UserSummary("SYSTEM", "SYSTEM", "历史记录", false);

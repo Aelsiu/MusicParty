@@ -167,6 +167,8 @@ public class AdminController {
     @PostMapping("/config/update")
     public ResponseEntity<?> updateConfig(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminConfigUpdateRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+        if (request.hasGlobalSystemConfig()) return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                .body(Map.of("message", "系统参数仅允许 ROOT 在 ROOM MANAGER 中全局设置"));
         String invalid = validateConfig(request);
         if (invalid != null) return ResponseEntity.badRequest().body(Map.of("message", invalid));
         try {
@@ -179,14 +181,6 @@ public class AdminController {
     }
 
     private String validateConfig(AdminConfigUpdateRequest r) {
-        if (!inRange(r.maxSize(), 1, 10000)) return "队列最大歌曲上限超出范围";
-        if (!inRange(r.historySize(), 0, 10000)) return "历史记录歌曲上限超出范围";
-        if (!inRange(r.maxUserSongs(), 1, 10000)) return "单人歌曲上限超出范围";
-        if (!inRange(r.maxPlaylistImportSize(), 1, 10000)) return "歌单导入上限超出范围";
-        if (!inRange(r.maxChatHistorySize(), 0, 100000)) return "消息历史条数超出范围";
-        if (!inRange(r.minChatIntervalMs(), 0, 600000)) return "发言间隔超出范围";
-        if (!inRange(r.maxChatMessageLength(), 1, 10000)) return "消息最大长度超出范围";
-        if (!inRange(r.bilibiliMaxDurationMinutes(), 1, 1440)) return "B站时长上限超出范围";
         if (!inRange(r.voteSkipWaitTime(), 0, 3600)) return "投票等待时间超出范围";
         if (r.voteSkipThreshold() != null && (!Double.isFinite(r.voteSkipThreshold()) || r.voteSkipThreshold() < 0.1 || r.voteSkipThreshold() > 1)) return "投票阈值超出范围";
         if (r.neteaseQuality() != null && !Set.of("standard", "higher", "exhigh", "lossless", "hires", "jyeffect").contains(r.neteaseQuality())) return "不支持该解析音质";

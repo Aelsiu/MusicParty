@@ -39,6 +39,7 @@ public class RoomRepository {
             s.execute("CREATE TABLE IF NOT EXISTS profiles(token TEXT PRIMARY KEY,payload TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS creations(request_key TEXT PRIMARY KEY,room_id TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS admissions(token TEXT PRIMARY KEY,room_id TEXT NOT NULL,epoch INTEGER NOT NULL,expires_at INTEGER NOT NULL)");
+            s.execute("CREATE TABLE IF NOT EXISTS system_config(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL)");
         }
         Path list = Path.of(properties.getLicenseFile());
         if (Files.exists(list)) licenses = mapper.readValue(Files.readString(list), new TypeReference<List<License>>() {});
@@ -120,6 +121,14 @@ public class RoomRepository {
         try (PreparedStatement s = db.prepareStatement("SELECT " + column + " FROM rooms WHERE id=?")) { s.setString(1,id); try (ResultSet r = s.executeQuery()) { return r.next() ? r.getString(1) : null; } } catch (SQLException e) { throw storage(e); }
     }
     public synchronized void save(String id, String payload, String config) { update("UPDATE rooms SET payload=?,config=? WHERE id=?",payload,config,id); }
+    public synchronized String systemConfig() {
+        try (Statement s = db.createStatement(); ResultSet r = s.executeQuery("SELECT payload FROM system_config WHERE id=1")) {
+            return r.next() ? r.getString(1) : null;
+        } catch (SQLException e) { throw storage(e); }
+    }
+    public synchronized void saveSystemConfig(String payload) {
+        update("INSERT INTO system_config(id,payload) VALUES(1,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload",payload);
+    }
     public synchronized boolean consumeAutoOpen(String id) { boolean first = room(id).autoOpen(); if (first) update("UPDATE rooms SET auto_open=0 WHERE id=?",id); return first; }
     public synchronized License addLicense(String key) {
         return addLicense(key, "");

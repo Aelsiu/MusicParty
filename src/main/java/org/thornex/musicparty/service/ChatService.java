@@ -97,9 +97,17 @@ public class ChatService {
     }
 
     public void addMessage(ChatMessage message) {
-        history.addLast(message);
-        if (history.size() > appProperties.getChat().getMaxHistorySize()) {
-            history.removeFirst();
+        synchronized (history) {
+            history.addLast(message);
+            trimHistoryToLimit();
+        }
+    }
+
+    public void trimHistoryToLimit() {
+        synchronized (history) {
+            int limit = Math.max(0, appProperties.getChat().getMaxHistorySize());
+            int excess = history.size() - limit;
+            for (int i = 0; i < excess; i++) history.pollFirst();
         }
     }
 // ... existing code ...
@@ -109,6 +117,7 @@ public class ChatService {
      * @param limit 取多少条
      */
     public List<ChatMessage> getHistory(int offset, int limit) {
+        trimHistoryToLimit();
         // 我们将其转为 List 进行倒序切片处理
         List<ChatMessage> snapshot = new ArrayList<>(history);
         Collections.reverse(snapshot);
@@ -128,6 +137,7 @@ public class ChatService {
      * 获取全部聊天记录用于持久化
      */
     public List<ChatMessage> getHistoryFull() {
+        trimHistoryToLimit();
         return new ArrayList<>(history);
     }
 
@@ -135,15 +145,18 @@ public class ChatService {
      * 恢复聊天记录
      */
     public void restore(List<ChatMessage> loadedHistory) {
-        history.clear();
-        if (loadedHistory != null) {
-            history.addAll(loadedHistory);
+        synchronized (history) {
+            history.clear();
+            if (loadedHistory != null) {
+                history.addAll(loadedHistory);
+            }
+            trimHistoryToLimit();
         }
     }
 
 
     public void clearHistory() {
-        history.clear();
+        synchronized (history) { history.clear(); }
     }
 
     public void clearHistoryAndNotify() {

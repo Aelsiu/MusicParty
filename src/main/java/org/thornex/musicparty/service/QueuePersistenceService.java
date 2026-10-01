@@ -2,6 +2,7 @@ package org.thornex.musicparty.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.Data;
@@ -68,7 +69,12 @@ public class QueuePersistenceService {
 
             if (roomRepository != null && org.thornex.musicparty.room.RoomContext.current() != null) {
                 Object config = appProperties instanceof org.springframework.aop.scope.ScopedObject scoped ? scoped.getTargetObject() : appProperties;
-                roomRepository.save(org.thornex.musicparty.room.RoomContext.require(), objectMapper.writeValueAsString(data), objectMapper.writeValueAsString(config));
+                ObjectNode roomConfig = objectMapper.valueToTree(config);
+                ((ObjectNode) roomConfig.get("queue")).remove(List.of("maxSize", "historySize", "maxUserSongs"));
+                ((ObjectNode) roomConfig.get("player")).remove("maxPlaylistImportSize");
+                ((ObjectNode) roomConfig.get("chat")).remove(List.of("maxHistorySize", "minIntervalMs", "maxMessageLength"));
+                ((ObjectNode) roomConfig.get("bilibili")).remove("maxDurationMinutes");
+                roomRepository.save(org.thornex.musicparty.room.RoomContext.require(), objectMapper.writeValueAsString(data), objectMapper.writeValueAsString(roomConfig));
             } else objectMapper.writeValue(file, data);
             log.debug("Queue, music history and chat history saved to {}", file.getAbsolutePath());
         } catch (Exception e) {
@@ -147,16 +153,19 @@ public class QueuePersistenceService {
         // Docker 的外部配置文件为房间参数的唯一来源，避免旧快照在重启后覆盖它。
         if (s.systemConfig() != null && !hasExternalConfig) {
             SettingsSnapshot.SystemConfigSettings cfg = s.systemConfig();
-            if (cfg.maxQueueSize() != null) appProperties.getQueue().setMaxSize(cfg.maxQueueSize());
-            if (cfg.maxHistorySize() != null) appProperties.getQueue().setHistorySize(cfg.maxHistorySize());
-            if (cfg.maxUserSongs() != null) appProperties.getQueue().setMaxUserSongs(cfg.maxUserSongs());
-            if (cfg.maxPlaylistImportSize() != null) appProperties.getPlayer().setMaxPlaylistImportSize(cfg.maxPlaylistImportSize());
-            if (cfg.maxChatHistorySize() != null) appProperties.getChat().setMaxHistorySize(cfg.maxChatHistorySize());
-            if (cfg.minChatIntervalMs() != null) appProperties.getChat().setMinIntervalMs(cfg.minChatIntervalMs());
+            // Legacy standalone snapshots are still readable. Room snapshots cannot override global limits.
+            if (org.thornex.musicparty.room.RoomContext.current() == null) {
+                if (cfg.maxQueueSize() != null) appProperties.getQueue().setMaxSize(cfg.maxQueueSize());
+                if (cfg.maxHistorySize() != null) appProperties.getQueue().setHistorySize(cfg.maxHistorySize());
+                if (cfg.maxUserSongs() != null) appProperties.getQueue().setMaxUserSongs(cfg.maxUserSongs());
+                if (cfg.maxPlaylistImportSize() != null) appProperties.getPlayer().setMaxPlaylistImportSize(cfg.maxPlaylistImportSize());
+                if (cfg.maxChatHistorySize() != null) appProperties.getChat().setMaxHistorySize(cfg.maxChatHistorySize());
+                if (cfg.minChatIntervalMs() != null) appProperties.getChat().setMinIntervalMs(cfg.minChatIntervalMs());
+                if (cfg.bilibiliMaxDurationMinutes() != null) appProperties.getBilibili().setMaxDurationMinutes(cfg.bilibiliMaxDurationMinutes());
+                if (cfg.maxChatMessageLength() != null) appProperties.getChat().setMaxMessageLength(cfg.maxChatMessageLength());
+            }
             if (cfg.neteaseEnabled() != null) appProperties.getNetease().setEnabled(cfg.neteaseEnabled());
             if (cfg.bilibiliEnabled() != null) appProperties.getBilibili().setEnabled(cfg.bilibiliEnabled());
-            if (cfg.bilibiliMaxDurationMinutes() != null) appProperties.getBilibili().setMaxDurationMinutes(cfg.bilibiliMaxDurationMinutes());
-            if (cfg.maxChatMessageLength() != null) appProperties.getChat().setMaxMessageLength(cfg.maxChatMessageLength());
             if (cfg.neteaseQuality() != null) appProperties.getNetease().setQuality(cfg.neteaseQuality());
             if (cfg.seekPolicy() != null && java.util.Set.of("DISABLED", "OWNER_AND_ENQUEUER", "ALL").contains(cfg.seekPolicy())) appProperties.getPlayer().setSeekPolicy(cfg.seekPolicy());
         }
@@ -174,6 +183,7 @@ public class QueuePersistenceService {
     }
 
     private SettingsSnapshot buildSettingsSnapshot() {
+        boolean roomScoped = org.thornex.musicparty.room.RoomContext.current() != null;
         return new SettingsSnapshot(
                 musicPlayerService.getPlayerSettings(),
                 authController.getRawPassword(),
@@ -185,16 +195,16 @@ public class QueuePersistenceService {
                         appProperties.getPrivateDj().isJoinQueueEnabled(),
                         appProperties.getPrivateDj().isCustodyEnabled()),
                 new SettingsSnapshot.SystemConfigSettings(
-                        appProperties.getQueue().getMaxSize(),
-                        appProperties.getQueue().getHistorySize(),
-                        appProperties.getQueue().getMaxUserSongs(),
-                        appProperties.getPlayer().getMaxPlaylistImportSize(),
-                        appProperties.getChat().getMaxHistorySize(),
-                        appProperties.getChat().getMinIntervalMs(),
+                        roomScoped ? null : appProperties.getQueue().getMaxSize(),
+                        roomScoped ? null : appProperties.getQueue().getHistorySize(),
+                        roomScoped ? null : appProperties.getQueue().getMaxUserSongs(),
+                        roomScoped ? null : appProperties.getPlayer().getMaxPlaylistImportSize(),
+                        roomScoped ? null : appProperties.getChat().getMaxHistorySize(),
+                        roomScoped ? null : appProperties.getChat().getMinIntervalMs(),
                         appProperties.getNetease().isEnabled(),
                         appProperties.getBilibili().isEnabled(),
-                        appProperties.getBilibili().getMaxDurationMinutes(),
-                        appProperties.getChat().getMaxMessageLength(),
+                        roomScoped ? null : appProperties.getBilibili().getMaxDurationMinutes(),
+                        roomScoped ? null : appProperties.getChat().getMaxMessageLength(),
                         appProperties.getNetease().getQuality(),
                         appProperties.getPlayer().getSeekPolicy()));
     }

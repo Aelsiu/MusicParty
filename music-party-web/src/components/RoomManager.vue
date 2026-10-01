@@ -11,7 +11,18 @@
           <div v-if="roomSession.root" class="flex gap-2 flex-wrap mb-5">
             <button v-for="item in tabs" :key="item.id" @click="switchTab(item.id)" :disabled="busy" :class="tab===item.id?'bg-strong text-white':'text-medical-500'" class="border border-medical-200 px-3 py-2 text-xs">{{ item.label }}</button>
           </div>
-          <template v-if="tab!=='licenses'">
+          <form v-if="tab==='system' && roomSession.root" @submit.prevent="saveSystemConfig" novalidate class="room-manager-system">
+            <p class="info-tip text-xs text-medical-500 mb-4">以下设置由 ROOT 统一管理，保存后立即对所有房间生效，无需重启</p>
+            <fieldset :disabled="busy||systemConfigLoading||!systemConfigLoaded" class="grid grid-cols-2 gap-x-4 gap-y-4 disabled:opacity-50">
+              <div v-for="(setting,label) in systemFields" :key="setting.field" class="space-y-1">
+                <label :for="`system-${setting.field}`" class="block text-[10px] font-bold text-medical-500">{{ label }}</label>
+                <input :id="`system-${setting.field}`" v-model.number="systemConfig[setting.field]" type="number" :min="setting.min" :max="setting.max" step="1" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs outline-none focus:border-accent font-mono" />
+              </div>
+            </fieldset>
+            <button type="submit" :disabled="busy||systemConfigLoading||!systemConfigLoaded" class="mt-6 w-full bg-strong text-white py-3 text-xs font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50"><Save class="w-4 h-4" /> {{ working?'正在保存...':'应用并保存所有更改' }}</button>
+            <button type="button" @click="loadSystemConfig" :disabled="busy||systemConfigLoading" class="block mx-auto text-[11px] text-accent mt-1 p-2 disabled:opacity-50">{{ systemConfigLoading?'LOADING...':'REFRESH' }}</button>
+          </form>
+          <template v-else-if="tab!=='licenses'">
             <div class="room-manager-list border-t border-medical-200">
               <div v-for="room in visibleRooms" :key="room.id" class="flex items-center gap-2 sm:gap-3 py-4 border-b border-medical-200">
                 <button @click="chooseRoom(room)" :disabled="busy" class="text-left flex-1 min-w-0"><span class="block text-base font-bold break-words">{{ room.name }}</span><span class="block text-[11px] text-medical-400 font-mono mt-1">ID {{ room.id }}<template v-if="roomSession.root && tab==='all'"> / {{ room.ownerId }}</template></span></button>
@@ -80,19 +91,21 @@
 
 <script setup>
 import { ref, reactive, computed, watch, onBeforeUnmount } from 'vue';
-import { ShieldCheck, X, Plus, Shuffle, Eye, EyeOff, Pencil, Trash2, ArrowUpToLine } from 'lucide-vue-next';
+import { ShieldCheck, X, Plus, Shuffle, Eye, EyeOff, Pencil, Trash2, ArrowUpToLine, Save } from 'lucide-vue-next';
 import PairingCode from './PairingCode.vue';
 import { roomsApi } from '../api/rooms';
 import { roomSession, clearManager } from '../services/roomSession';
 import { registerBackHandler } from '../services/backNavigation';
 import { graphemes, validRoomName, validLicenseKey, validLicenseNote, randomLicenseKey } from '../utils/roomValidation';
+import { systemFields, systemConfigDraft, systemConfigUpdate } from '../utils/systemConfig';
 const props=defineProps({open:Boolean,selecting:Boolean,currentRoomId:{type:String,default:''}});const emit=defineEmits(['close','select']);
 const rooms=ref([]),licenses=ref([]),tab=ref('mine'),view=ref('rooms'),working=ref(false),loading=ref(false),error=ref(''),notice=ref(''),roomName=ref(''),licenseKey=ref(''),showKey=ref(false),selectedLicense=ref(null),composing=ref(false);
 const busy=computed(()=>working.value||props.selecting);
 function chooseRoom(room){if(busy.value)return;error.value='';if(room.id===props.currentRoomId){notice.value='已在该房间中';return;}notice.value='';emit('select',room);}
 const licenseNote=ref(''),revealedKeys=ref(new Set());
 const toggleKey=id=>{const next=new Set(revealedKeys.value);next.has(id)?next.delete(id):next.add(id);revealedKeys.value=next;};
-const tabs=[{id:'all',label:'全部房间'},{id:'mine',label:'我的房间'},{id:'licenses',label:'许可清单'}];
+const tabs=[{id:'all',label:'全部房间'},{id:'mine',label:'我的房间'},{id:'licenses',label:'许可清单'},{id:'system',label:'系统参数'}];
+const systemConfig=ref({}),systemConfigLoading=ref(false),systemConfigLoaded=ref(false);let systemConfigGeneration=0;
 const ownCount=computed(()=>rooms.value.filter(r=>r.ownerId===roomSession.licenseId).length),visibleRooms=computed(()=>tab.value==='all'?rooms.value:rooms.value.filter(r=>r.ownerId===roomSession.licenseId));
 const deleting=reactive({id:null,count:0}),actionEffect=reactive({key:'',count:null,sequence:0}),actionPending=ref(false);let deleteTimer,actionEffectTimer,licenseActionTimer,requestId,alive=true;
 const newRequestId=()=>[...crypto.getRandomValues(new Uint8Array(16))].map(n=>n.toString(16).padStart(2,'0')).join('');
@@ -104,8 +117,37 @@ const cancelEdit=()=>{view.value='rooms';error.value='';licenseKey.value='';lice
 const unregisterBack=registerBackHandler(115,()=>{if(!props.open)return false;if(busy.value)return true;if(view.value!=='rooms')cancelEdit();else close();return true;});
 const editLicense=(mode,license=null)=>{resetDelete();selectedLicense.value=license;licenseKey.value='';licenseNote.value=license?.note||'';showKey.value=false;error.value='';view.value=mode;};
 const licenseAction=(mode,license)=>{if(busy.value||actionPending.value)return;resetDelete();pulseAction(`${mode}:${license.id}`);actionPending.value=true;licenseActionTimer=setTimeout(()=>{actionPending.value=false;editLicense(mode,license);},500);};
-const switchTab=async id=>{if(busy.value)return;resetDelete();resetAction();tab.value=id;error.value='';if(id==='licenses')await refresh();};
+const switchTab=async id=>{if(busy.value)return;resetDelete();resetAction();systemConfigGeneration++;systemConfigLoading.value=false;tab.value=id;error.value='';notice.value='';if(id==='licenses')await refresh();else if(id==='system'&&roomSession.root)await loadSystemConfig();};
 const fail=e=>{error.value=e.response?.data?.message||e.response?.data?.detail||'操作失败，请重试';if(e.response?.status===403 && /会话|许可已/.test(error.value)){clearManager();emit('close');}};
+async function loadSystemConfig(){
+  if(!roomSession.root||!props.open||tab.value!=='system'||busy.value)return;
+  const generation=++systemConfigGeneration;
+  systemConfigLoading.value=true;systemConfigLoaded.value=false;error.value='';notice.value='';
+  try{
+    const data=await roomsApi.getSystemConfig();
+    if(!alive||!props.open||tab.value!=='system'||generation!==systemConfigGeneration)return;
+    systemConfig.value=systemConfigDraft(data);systemConfigLoaded.value=true;
+  }catch(e){
+    if(alive&&props.open&&tab.value==='system'&&generation===systemConfigGeneration)fail(e);
+  }finally{
+    if(generation===systemConfigGeneration)systemConfigLoading.value=false;
+  }
+}
+async function saveSystemConfig(){
+  if(!roomSession.root||!props.open||tab.value!=='system'||busy.value||systemConfigLoading.value||!systemConfigLoaded.value)return;
+  let update;error.value='';notice.value='';
+  try{update=systemConfigUpdate(systemConfig.value);}catch(e){error.value=e.message;return;}
+  const generation=systemConfigGeneration;
+  working.value=true;
+  try{
+    const data=await roomsApi.updateSystemConfig(update);
+    if(alive&&props.open&&generation===systemConfigGeneration)notice.value=data.message||'系统参数已保存，所有房间立即生效';
+  }catch(e){
+    if(alive&&props.open&&generation===systemConfigGeneration)fail(e);
+  }finally{
+    working.value=false;
+  }
+}
 let refreshGeneration=0, pairingTimer;
 function schedulePairingRefresh(data){clearTimeout(pairingTimer);if(!props.open)return;const waits=data.rooms.map(r=>r.nextUpdateAt-r.serverTime).filter(Number.isFinite);if(waits.length)pairingTimer=setTimeout(refresh,Math.max(250,Math.min(...waits)+100));}
 async function refresh(){const generation=++refreshGeneration;loading.value=true;try{const data=await roomsApi.list();if(!props.open||generation!==refreshGeneration)return;rooms.value=data.rooms;schedulePairingRefresh(data);if(roomSession.root && tab.value==='licenses'){const list=await roomsApi.licenses();if(props.open&&generation===refreshGeneration)licenses.value=list;}}catch(e){if(props.open&&generation===refreshGeneration)fail(e);}finally{if(generation===refreshGeneration)loading.value=false;}}
@@ -116,16 +158,17 @@ async function submitLicense(){if(busy.value||composing.value)return;if(['licens
 const refreshVisible=()=>{if(props.open&&!document.hidden)refresh();};
 document.addEventListener('visibilitychange',refreshVisible);
 window.addEventListener('musicparty:pairing',refreshVisible);
-watch(()=>props.open,open=>{resetDelete();resetAction();clearTimeout(pairingTimer);revealedKeys.value=new Set();notice.value='';if(open){view.value='rooms';tab.value=roomSession.root?'all':'mine';error.value='';refresh();}else{refreshGeneration++;loading.value=false;licenses.value=[];rooms.value=[];selectedLicense.value=null;licenseKey.value='';licenseNote.value='';roomName.value='';}});
-onBeforeUnmount(()=>{alive=false;refreshGeneration++;clearTimeout(pairingTimer);resetDelete();resetAction();unregisterBack();document.removeEventListener('visibilitychange',refreshVisible);window.removeEventListener('musicparty:pairing',refreshVisible);});
+watch(()=>props.open,open=>{resetDelete();resetAction();clearTimeout(pairingTimer);systemConfigGeneration++;systemConfigLoading.value=false;systemConfigLoaded.value=false;systemConfig.value={};revealedKeys.value=new Set();notice.value='';if(open){view.value='rooms';tab.value=roomSession.root?'all':'mine';error.value='';refresh();}else{refreshGeneration++;loading.value=false;licenses.value=[];rooms.value=[];selectedLicense.value=null;licenseKey.value='';licenseNote.value='';roomName.value='';}});
+onBeforeUnmount(()=>{alive=false;refreshGeneration++;systemConfigGeneration++;clearTimeout(pairingTimer);resetDelete();resetAction();unregisterBack();document.removeEventListener('visibilitychange',refreshVisible);window.removeEventListener('musicparty:pairing',refreshVisible);});
 </script>
 
 <style scoped>
 .room-manager-panel{display:flex;flex-direction:column;max-height:calc(100dvh - 2rem);overflow:hidden}
 .room-manager-panel>header,.room-manager-panel>footer{flex-shrink:0}
 .room-manager-body{display:flex;flex-direction:column;min-height:0;flex:1 1 auto}
-.room-manager-body>:not(.room-manager-list){flex-shrink:0}
+.room-manager-body>:not(.room-manager-list):not(.room-manager-system){flex-shrink:0}
 .room-manager-list{min-height:0;flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.room-manager-system{min-height:0;flex:1 1 auto;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
 .room-manager-action{position:relative;flex-shrink:0;padding:.5rem;color:rgb(var(--medical-400))}
 .room-manager-action:disabled{opacity:.4}
 .action-pulse{animation:room-action-pulse .5s ease-in-out}

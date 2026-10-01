@@ -22,7 +22,7 @@ public class RoomRuntimeConfig {
     @Bean("defaultAppProperties") @ConfigurationProperties("app.music-api")
     public AppProperties defaults() { return new AppProperties(); }
     @Bean @Primary @RoomScoped
-    public AppProperties roomProperties(@Qualifier("defaultAppProperties") AppProperties defaults,RoomRepository repository,ObjectMapper mapper) throws Exception {
+    public AppProperties roomProperties(@Qualifier("defaultAppProperties") AppProperties defaults,RoomRepository repository,ObjectMapper mapper,SystemConfigService systemConfig) throws Exception {
         String saved=repository.payload(RoomContext.require(),"config");
         AppProperties config=saved==null?mapper.readValue(mapper.writeValueAsString(defaults),AppProperties.class):mapper.readValue(saved,AppProperties.class);
         // Server endpoints are deployment settings, credentials belong to the room.
@@ -31,6 +31,7 @@ public class RoomRuntimeConfig {
         config.getBilibili().setBaseUrl(defaults.getBilibili().getBaseUrl());
         config.setAdminPassword(null);
         if(saved==null) { config.getNetease().setCookie("");config.getBilibili().setCookie("");config.setPrivateDj(new AppProperties.PrivateDjConfig()); }
+        systemConfig.bind(config);
         return config;
     }
     @Bean public Object roomReactorContext(RoomScope scope) {
