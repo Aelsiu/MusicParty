@@ -14,7 +14,7 @@
           <template v-if="tab!=='licenses'">
             <div class="room-manager-list border-t border-medical-200">
               <div v-for="room in visibleRooms" :key="room.id" class="flex items-center gap-2 sm:gap-3 py-4 border-b border-medical-200">
-                <button @click="emit('select',room)" :disabled="busy" class="text-left flex-1 min-w-0"><span class="block text-base font-bold break-words">{{ room.name }}</span><span class="block text-[11px] text-medical-400 font-mono mt-1">ID {{ room.id }}<template v-if="roomSession.root && tab==='all'"> / {{ room.ownerId }}</template></span></button>
+                <button @click="chooseRoom(room)" :disabled="busy" class="text-left flex-1 min-w-0"><span class="block text-base font-bold break-words">{{ room.name }}</span><span class="block text-[11px] text-medical-400 font-mono mt-1">ID {{ room.id }}<template v-if="roomSession.root && tab==='all'"> / {{ room.ownerId }}</template></span></button>
                 <PairingCode :code="room.pairingCode" compact :copy-label="`复制 ${room.name} 的配对码`" />
                 <button @click="deleteRoom(room.id)" :disabled="busy" :aria-label="`删除房间 ${room.name}，三秒内连续点击三次`" class="room-manager-action">
                   <Trash2 :key="actionEffect.key===`room-delete:${room.id}`?actionEffect.sequence:0" class="w-4 h-4" :class="{ 'action-pulse': actionEffect.key===`room-delete:${room.id}` }" />
@@ -69,6 +69,7 @@
           </template>
           <div class="flex gap-2 mt-6"><button type="button" @click="cancelEdit" class="flex-1 border border-medical-200 py-3 text-xs font-bold">CANCEL</button><button :disabled="busy||composing" :class="view==='license-delete'?'border border-medical-200 text-accent':'bg-accent text-white'" class="flex-1 py-3 text-xs font-bold disabled:opacity-40">{{ busy?'SAVING...':view==='license-delete'?'DEL':view==='license-note'?'SAVE':view==='license-update'?'UPDATE':'ADD LICENSE' }}</button></div>
         </form>
+        <p v-if="notice && view==='rooms'" role="status" class="text-xs text-accent mt-4">{{ notice }}</p>
         <p v-if="error" role="alert" class="text-xs text-red-500 mt-4">{{ error }}</p>
         <p v-if="busy" aria-live="polite" class="sr-only">正在处理操作</p>
       </div>
@@ -85,8 +86,10 @@ import { roomsApi } from '../api/rooms';
 import { roomSession, clearManager } from '../services/roomSession';
 import { registerBackHandler } from '../services/backNavigation';
 import { graphemes, validRoomName, validLicenseKey, validLicenseNote, randomLicenseKey } from '../utils/roomValidation';
-const props=defineProps({open:Boolean});const emit=defineEmits(['close','select']);
-const rooms=ref([]),licenses=ref([]),tab=ref('mine'),view=ref('rooms'),busy=ref(false),loading=ref(false),error=ref(''),roomName=ref(''),licenseKey=ref(''),showKey=ref(false),selectedLicense=ref(null),composing=ref(false);
+const props=defineProps({open:Boolean,selecting:Boolean,currentRoomId:{type:String,default:''}});const emit=defineEmits(['close','select']);
+const rooms=ref([]),licenses=ref([]),tab=ref('mine'),view=ref('rooms'),working=ref(false),loading=ref(false),error=ref(''),notice=ref(''),roomName=ref(''),licenseKey=ref(''),showKey=ref(false),selectedLicense=ref(null),composing=ref(false);
+const busy=computed(()=>working.value||props.selecting);
+function chooseRoom(room){if(busy.value)return;error.value='';if(room.id===props.currentRoomId){notice.value='已在该房间中';return;}notice.value='';emit('select',room);}
 const licenseNote=ref(''),revealedKeys=ref(new Set());
 const toggleKey=id=>{const next=new Set(revealedKeys.value);next.has(id)?next.delete(id):next.add(id);revealedKeys.value=next;};
 const tabs=[{id:'all',label:'全部房间'},{id:'mine',label:'我的房间'},{id:'licenses',label:'许可清单'}];
@@ -106,14 +109,14 @@ const fail=e=>{error.value=e.response?.data?.message||e.response?.data?.detail||
 let refreshGeneration=0, pairingTimer;
 function schedulePairingRefresh(data){clearTimeout(pairingTimer);if(!props.open)return;const waits=data.rooms.map(r=>r.nextUpdateAt-r.serverTime).filter(Number.isFinite);if(waits.length)pairingTimer=setTimeout(refresh,Math.max(250,Math.min(...waits)+100));}
 async function refresh(){const generation=++refreshGeneration;loading.value=true;try{const data=await roomsApi.list();if(!props.open||generation!==refreshGeneration)return;rooms.value=data.rooms;schedulePairingRefresh(data);if(roomSession.root && tab.value==='licenses'){const list=await roomsApi.licenses();if(props.open&&generation===refreshGeneration)licenses.value=list;}}catch(e){if(props.open&&generation===refreshGeneration)fail(e);}finally{if(generation===refreshGeneration)loading.value=false;}}
-async function deleteRoom(id){if(busy.value)return;if(deleting.id!==id){resetDelete();deleting.id=id;deleteTimer=setTimeout(resetDelete,3000);}deleting.count++;pulseAction(`room-delete:${id}`,4-deleting.count);if(deleting.count<3)return;clearTimeout(deleteTimer);busy.value=true;try{await new Promise(resolve=>setTimeout(resolve,500));if(!alive||!props.open)return;await roomsApi.delete(id);resetDelete();await refresh();}catch(e){fail(e);resetDelete();}finally{busy.value=false;}}
+async function deleteRoom(id){if(busy.value)return;if(deleting.id!==id){resetDelete();deleting.id=id;deleteTimer=setTimeout(resetDelete,3000);}deleting.count++;pulseAction(`room-delete:${id}`,4-deleting.count);if(deleting.count<3)return;clearTimeout(deleteTimer);working.value=true;try{await new Promise(resolve=>setTimeout(resolve,500));if(!alive||!props.open)return;await roomsApi.delete(id);resetDelete();await refresh();}catch(e){fail(e);resetDelete();}finally{working.value=false;}}
 const guardComposition=event=>{if(composing.value||event.isComposing||event.keyCode===229)event.preventDefault();};
-async function submitRoom(){if(busy.value||composing.value)return;if(!validRoomName(roomName.value)){error.value='房间名须为 2–16 个可见字符，不含换行或不可见控制字符';return;}busy.value=true;try{const room=await roomsApi.create(roomName.value,requestId);roomName.value='';view.value='rooms';await refresh();emit('select',room);}catch(e){fail(e);}finally{busy.value=false;}}
-async function submitLicense(){if(busy.value||composing.value)return;if(['license-add','license-update'].includes(view.value)&&!validLicenseKey(licenseKey.value)){error.value='密钥须为 8–16 位大小写英文字母、数字或符号，不含空白';return;}if(view.value==='license-note'&&!validLicenseNote(licenseNote.value)){error.value='备注最多 16 个可见字符，不含换行或不可见控制字符';return;}busy.value=true;try{if(view.value==='license-add')await roomsApi.addLicense(licenseKey.value);else if(view.value==='license-update')await roomsApi.updateLicense(selectedLicense.value.id,licenseKey.value);else if(view.value==='license-note')await roomsApi.updateLicenseNote(selectedLicense.value.id,licenseNote.value);else await roomsApi.deleteLicense(selectedLicense.value.id);cancelEdit();await refresh();}catch(e){fail(e);}finally{busy.value=false;}}
+async function submitRoom(){if(busy.value||composing.value)return;if(!validRoomName(roomName.value)){error.value='房间名须为 2–16 个可见字符，不含换行或不可见控制字符';return;}working.value=true;try{await roomsApi.create(roomName.value,requestId);roomName.value='';view.value='rooms';notice.value='房间已创建，点击房间名称进入';await refresh();}catch(e){fail(e);}finally{working.value=false;}}
+async function submitLicense(){if(busy.value||composing.value)return;if(['license-add','license-update'].includes(view.value)&&!validLicenseKey(licenseKey.value)){error.value='密钥须为 8–16 位大小写英文字母、数字或符号，不含空白';return;}if(view.value==='license-note'&&!validLicenseNote(licenseNote.value)){error.value='备注最多 16 个可见字符，不含换行或不可见控制字符';return;}working.value=true;try{if(view.value==='license-add')await roomsApi.addLicense(licenseKey.value);else if(view.value==='license-update')await roomsApi.updateLicense(selectedLicense.value.id,licenseKey.value);else if(view.value==='license-note')await roomsApi.updateLicenseNote(selectedLicense.value.id,licenseNote.value);else await roomsApi.deleteLicense(selectedLicense.value.id);cancelEdit();await refresh();}catch(e){fail(e);}finally{working.value=false;}}
 const refreshVisible=()=>{if(props.open&&!document.hidden)refresh();};
 document.addEventListener('visibilitychange',refreshVisible);
 window.addEventListener('musicparty:pairing',refreshVisible);
-watch(()=>props.open,open=>{resetDelete();resetAction();clearTimeout(pairingTimer);revealedKeys.value=new Set();if(open){view.value='rooms';tab.value=roomSession.root?'all':'mine';error.value='';refresh();}else{refreshGeneration++;loading.value=false;licenses.value=[];rooms.value=[];selectedLicense.value=null;licenseKey.value='';licenseNote.value='';roomName.value='';}});
+watch(()=>props.open,open=>{resetDelete();resetAction();clearTimeout(pairingTimer);revealedKeys.value=new Set();notice.value='';if(open){view.value='rooms';tab.value=roomSession.root?'all':'mine';error.value='';refresh();}else{refreshGeneration++;loading.value=false;licenses.value=[];rooms.value=[];selectedLicense.value=null;licenseKey.value='';licenseNote.value='';roomName.value='';}});
 onBeforeUnmount(()=>{alive=false;refreshGeneration++;clearTimeout(pairingTimer);resetDelete();resetAction();unregisterBack();document.removeEventListener('visibilitychange',refreshVisible);window.removeEventListener('musicparty:pairing',refreshVisible);});
 </script>
 

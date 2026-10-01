@@ -12,7 +12,8 @@ test('单滑杆线性覆盖 0–100%，最大对应原线性音量的 50%', () =
     }
 });
 test('保持已保存的实际输出及静音，超过新上限的旧音量截断到 50%', () => {
-    assert.equal(readSavedVolume(null), DEFAULT_VOLUME);
+    assert.equal(DEFAULT_VOLUME, 0.2);
+    assert.equal(readSavedVolume(null), 0.2);
     for (const gain of [0, 0.01, 0.1, 0.25, 0.5]) {
         assert(Math.abs(volumeToGain(readSavedVolume(String(gain))) - gain) < 1e-12);
     }

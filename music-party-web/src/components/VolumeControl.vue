@@ -3,9 +3,8 @@
     <button @click="toggleMute" class="text-medical-500 hover:text-accent shrink-0" :aria-label="ui.volume ? '静音' : '取消静音'">
       <VolumeX v-if="ui.volume === 0" class="w-5 h-5" /><Volume1 v-else-if="ui.volume < 0.5" class="w-5 h-5" /><Volume2 v-else class="w-5 h-5" />
     </button>
-    <div class="min-w-0" :class="compact ? 'w-24' : 'flex-1'">
+    <div class="min-w-0" :class="compact ? 'w-[7.2rem]' : 'flex-1'">
       <input type="range" min="0" max="1" step="0.01" :value="ui.volume" @input="ui.setVolume(Number($event.target.value))" aria-label="音量 0% 到 100%" class="volume-range w-full block" :style="{ '--fill': `${ui.volume * 100}%` }" />
-      <div class="flex justify-between text-[8px] leading-none text-medical-400 font-mono"><span>0%</span><span>100%</span></div>
     </div>
     <div class="w-12 shrink-0 text-[10px] font-mono text-medical-400 text-right">
       <span v-if="editing" class="flex items-center justify-end">
@@ -19,8 +18,9 @@
 import { ref, nextTick } from 'vue';
 import { VolumeX, Volume1, Volume2 } from 'lucide-vue-next';
 import { useUiStore } from '../stores/ui';
+import { DEFAULT_VOLUME } from '../utils/volumeMapping';
 defineProps({ compact: Boolean });
-const ui=useUiStore(),editing=ref(false),draft=ref(''),input=ref(null),lastVolume=ref(0.1);
+const ui=useUiStore(),editing=ref(false),draft=ref(''),input=ref(null),lastVolume=ref(DEFAULT_VOLUME);
 async function edit(){draft.value=String(Math.round(ui.volume*100));editing.value=true;await nextTick();input.value?.select();}
 function commit(){if(/^\d{1,3}$/.test(draft.value.trim()))ui.setVolume(Math.min(100,Number(draft.value))/100);editing.value=false;}
 function toggleMute(){if(ui.volume>0){lastVolume.value=ui.volume;ui.setVolume(0);}else ui.setVolume(lastVolume.value);}

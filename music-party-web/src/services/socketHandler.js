@@ -21,6 +21,10 @@ function handleGameEvent(event) {
     const userName = event.userId === 'SYSTEM' ? '系统' : userStore.resolveName(event.userId);
 
     // 1. 处理特殊业务逻辑 (非 UI 展示)
+    if (event.action === 'PAIRING_TRIGGER' || event.action === 'ROOMS_TRIGGER') {
+        window.dispatchEvent(new Event(event.action === 'PAIRING_TRIGGER' ? 'musicparty:show-pairing' : 'musicparty:show-rooms'));
+        return;
+    }
     if (event.action === 'LIKE') {
         window.dispatchEvent(new CustomEvent('player:like', { detail: { userId: event.userId } }));
     }

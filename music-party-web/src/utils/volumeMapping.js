@@ -1,4 +1,4 @@
-export const DEFAULT_VOLUME = 0.1;
+export const DEFAULT_VOLUME = 0.2;
 
 export function clampVolume(value) {
     return Number.isFinite(value) ? Math.max(0, Math.min(1, value)) : DEFAULT_VOLUME;

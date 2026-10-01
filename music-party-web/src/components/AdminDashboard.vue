@@ -202,14 +202,14 @@
               </div>
             </div>
 
-            <!-- Right Column: Environment & Danger Zone (5 cols) -->
+            <!-- Right Column: Pairing & Danger Zone (5 cols) -->
             <div class="lg:col-span-5 space-y-6">
 
-              <!-- Section: Room Environment -->
+              <!-- Section: Room Pairing -->
               <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
                 <div class="p-3 bg-strong text-white flex items-center gap-2">
                   <Globe class="w-4 h-4" />
-                  <span class="text-xs font-bold uppercase tracking-widest font-mono">环境配置 / Environment</span>
+                  <span class="text-xs font-bold uppercase tracking-widest font-mono">配对密钥 / Pairing Key</span>
                 </div>
                 <div class="p-4 space-y-4">
                   <RoomPairingCard />
@@ -229,16 +229,18 @@
                       <RoundSwitch :model-value="playerStore.config[`${plat.id}Enabled`]" @update:model-value="togglePlatform(plat.id)" :label="`${plat.name}平台`" />
                     </div>
                     <NeteaseQrLogin v-if="plat.id==='netease'" />
-                    <label class="block text-[11px] font-bold text-medical-500">{{ plat.id==='netease'?'手动更新网易云 Cookie':'手动更新B站Cookie' }}</label>
-                    <div class="flex gap-2">
-                      <input
-                        type="password"
-                        v-model="plat.value"
-                        :placeholder="'输入新 ' + plat.tokenName + '...'"
-                        class="placeholder-mono placeholder-cookie flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 text-base focus:border-accent"
-                      />
-                      <button @click="updateCookie(plat.id, plat.value)" class="bg-strong text-white px-3 font-bold text-[10px] hover:bg-accent transition-colors">更新</button>
-                    </div>
+                    <template v-else>
+                      <label class="block text-[11px] font-bold text-medical-500">手动更新B站Cookie</label>
+                      <div class="flex gap-2">
+                        <input
+                          type="password"
+                          v-model="plat.value"
+                          :placeholder="'输入新 ' + plat.tokenName + '...'"
+                          class="placeholder-mono placeholder-cookie flex-1 min-w-0 bg-medical-50 border border-medical-200 px-3 py-2 text-base focus:border-accent"
+                        />
+                        <button @click="updateCookie(plat.id, plat.value)" class="bg-strong text-white px-3 font-bold text-[10px] hover:bg-accent transition-colors">更新</button>
+                      </div>
+                    </template>
                   </div>
                 </div>
               </div>

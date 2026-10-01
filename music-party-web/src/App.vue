@@ -6,7 +6,7 @@
   <div class="h-screen w-screen overflow-hidden font-sans">
     <AudioEngine v-if="userStore.isAuthPassed" />
     <!-- 1. 认证遮罩 -->
-    <AuthOverlay @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed" />
+    <AuthOverlay @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed && !switchingRoom" />
 
     <!-- 2. 启动页 (Start Screen) -->
     <!-- 注意：点击 Connect 后，我们先不销毁它，直到 socket 连接成功，或者直接切换布局 -->
@@ -49,15 +49,19 @@
     <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode && !adminStore.showDashboard && !adminStore.showAuthModal" />
     <AdminAuthModal />
     <AdminDashboard />
+    <RoomManager :open="showRoomManager" :selecting="switchingRoom" :current-room-id="userStore.isAuthPassed ? roomSession.roomId : ''" @close="showRoomManager = false" @select="switchManagedRoom" />
+    <PairingCodeModal :open="showPairingCode" @close="showPairingCode = false" />
   </div>
 </template>
 
 <script setup>
 import { socketService } from './services/socket';
 import { useChatStore } from './stores/chat';
-import { roomSession } from './services/roomSession';
+import { roomSession, selectRoom } from './services/roomSession';
+import { roomsApi } from './api/rooms';
+import { enterManagedRoom } from './services/roomNavigation';
 import { handleModalBack } from './services/backNavigation';
-import { ref, onMounted } from 'vue';
+import { ref, nextTick, onMounted } from 'vue';
 import { useEventListener } from '@vueuse/core';
 import { usePlayerStore } from './stores/player';
 import { useUserStore } from './stores/user';
@@ -79,6 +83,8 @@ import ToastNotification from './components/ToastNotification.vue';
 import TutorialOverlay from './components/TutorialOverlay.vue';
 import AdminAuthModal from './components/AdminAuthModal.vue';
 import AdminDashboard from './components/AdminDashboard.vue';
+import RoomManager from './components/RoomManager.vue';
+import PairingCodeModal from './components/PairingCodeModal.vue';
 
 const player = usePlayerStore();
 const userStore = useUserStore();
@@ -89,8 +95,11 @@ const connecting = ref(false);
 const chat = useChatStore();
 const showSearch = ref(false);
 const showSettings = ref(false);
+const showRoomManager = ref(false);
+const showPairingCode = ref(false);
+const switchingRoom = ref(false);
 const toastInstance = ref(null);
-const { register, info } = useToast();
+const { register, info, error } = useToast();
 
 const startGame = () => {
   if (connecting.value) return;
@@ -103,14 +112,53 @@ const returnEntry = () => {
   socketService.disconnect();
   player.connected = false;
   player.syncState({ nowPlaying: null, queue: [], isPaused: true, onlineUsers: [] });
+  player.localProgress = 0; player.isBuffering = false; player.isErrorState = false;
   chat.messages = []; chat.unreadCount = 0; chat.isOpen = false;
+  chat.isLoadingMore = false; chat.hasMore = true;
   hasStarted.value = false; connecting.value = false; showSearch.value = false; showSettings.value = false;
+  showRoomManager.value = false; showPairingCode.value = false;
   adminStore.showDashboard = false; adminStore.showAuthModal = false; adminStore.isVerified = false;
   userStore.resetAuthentication();
   window.AndroidBridge?.updateMedia?.(JSON.stringify({ title: 'Music Party', artist: '', paused: true, position: 0, duration: 0, roomId: '' }));
 };
 useEventListener(window, 'musicparty:return-entry', returnEntry);
 useEventListener(window, 'musicparty:connected', () => { connecting.value = false; hasStarted.value = true; });
+useEventListener(window, 'musicparty:show-pairing', () => {
+  if (!userStore.isAuthPassed) return;
+  if (!roomSession.managerToken) { error('请先使用 //admin 验证许可密钥'); return; }
+  showRoomManager.value = false;
+  showPairingCode.value = true;
+});
+useEventListener(window, 'musicparty:show-rooms', () => {
+  if (!userStore.isAuthPassed) return;
+  if (!roomSession.managerToken) { error('请先使用 //admin 验证许可密钥'); return; }
+  showPairingCode.value = false;
+  showRoomManager.value = true;
+});
+const switchManagedRoom = async room => {
+  if (switchingRoom.value) return;
+  switchingRoom.value = true;
+  try {
+    const result = await enterManagedRoom(room, {
+      currentRoomId: () => roomSession.roomId,
+      isActive: () => userStore.isAuthPassed && showRoomManager.value,
+      manage: roomsApi.manage,
+      leave: returnEntry,
+      settle: nextTick,
+      enter: current => {
+        selectRoom(current, '', true);
+        userStore.roomName = current.name;
+        userStore.justReturned = false;
+        userStore.isAuthPassed = true;
+      }
+    });
+    if (result === 'current') info('已在该房间中');
+  } catch (e) {
+    error(e.response?.data?.message || '无法进入房间，请重试');
+  } finally {
+    switchingRoom.value = false;
+  }
+};
 window.musicPartyBack = () => {
   if (userStore.showNameModal) { userStore.showNameModal = false; userStore.setPostNameAction(null); return true; }
   if (handleModalBack()) return true;
