@@ -20,7 +20,7 @@ RUN npm ci
 # 复制前端源代码
 COPY music-party-web/ .
 # 编译生产环境代码
-RUN npm run build
+RUN npm test && npm run build
 
 # ============================
 # Stage 2: Build Backend (Spring Boot)

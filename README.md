@@ -63,6 +63,10 @@ docker compose up -d --build
 
 最高许可只在服务端文件中更换，更换后重启，普通许可通过最高许可管理界面新增、更新、删除
 
+### 增量更新（保留 FFmpeg 和 NCM API）
+
+已经使用本仓库 Compose 或 Ubuntu 部署包部署时，可在本机运行 `.\build-update.ps1`，按根 `VERSION` 和当前 Git `HEAD` 构建 JAR 更新包，输出 `dist/update/MusicParty-update-<版本号>-<提交号>.tar.gz`，然后在服务器执行包内 `update-docker.sh`。脚本复用原主应用镜像中的 FFmpeg/Java，仅替换应用，保留 NCM API 容器，停主应用后备份配置与数据库，并提供回退命令。完整命令见 [Docker Compose 增量更新](docs/incremental-update.md)，构建环境见 [构建说明](BUILD.md)。
+
 ### 旧版环境变量说明
 
 以下环境变量提供房间级设置的默认参数，以及九项全局系统参数的首次初始化值，保存后的配置从 SQLite 恢复，旧房间的九项系统参数不再作为单独配置使用，Cookie 在各房间管理台配置，旧版 `ADMIN_PASSWORD`、`NETEASE_COOKIE`、`BILIBILI_COOKIE` 不再作为全服凭据使用，完整配置见示例文件
@@ -91,7 +95,7 @@ docker compose up -d --build
 
 ## Windows 启动器
 
-本分支的启动器已适配多房间配置与新版 NCM 运行时，可以通过 `build-local.ps1` 构建，首次运行需直接编辑 EXE 同目录的 `config/application.properties` 配置最高许可，详见 [多房间部署文档](docs/multi-rooms-deployment.md)
+本分支的启动器已适配多房间配置与新版 NCM 运行时，可以通过 `build-windows.ps1` 构建，输出 `dist/windows/MusicParty-windows-<版本号>-<提交号>.exe`。首次运行需直接编辑 EXE 同目录的 `config/application.properties` 配置最高许可，详见 [多房间部署文档](docs/multi-rooms-deployment.md)。构建所需工具、最低版本与命令见 [构建说明](BUILD.md)。
 
 上游旧版 Releases 的启动器不包含本分支的改动，本次修改尚未发布新的安装包
 
@@ -244,7 +248,7 @@ docker compose up -d --build
 
 ### 前端 (music-party-web)
 
-1.  环境要求：Node.js 22 或以上
+1.  环境要求：Node.js 22.12.0 或以上
 2.  进入目录并安装依赖：
     ```bash
     cd music-party-web
@@ -267,7 +271,18 @@ docker compose up -d --build
 
 ### 完整构建
 
-建议直接使用 Docker 镜像进行生产环境运行。构建镜像请参考根目录下的 `Dockerfile`。
+四种版本的一键构建环境、工具获取方式、最低版本与排错请查看 [构建说明](BUILD.md)：
+
+| 目标 | 脚本 | 默认交付目录 |
+|---|---|---|
+| Windows 启动器 EXE | `build-windows.ps1`（原 `build-local.ps1`） | `dist/windows/` |
+| Ubuntu 完整部署包 | `build-ubuntu.ps1` | `dist/ubuntu/amd64/` 或 `dist/ubuntu/arm64/` |
+| Ubuntu 已部署实例的增量更新包 | `build-update.ps1` | `dist/update/` |
+| Android 客户端 APK | `build-app.ps1` | `dist/android/debug/`、`release/` 或 `release-unsigned/` |
+
+交付文件统一命名为 `MusicParty-环境-版本号-提交号`，应用版本只从根目录 `VERSION` 读取，初始为 `1.3.9`，提交号使用当前 Git `HEAD` 的短提交号。调整发布版本只需修改 `VERSION` 并提交，四个脚本会统一传入前端、Java 和 Android 构建；具体文件名、校验与版本规则见 [构建说明](BUILD.md)。
+
+Ubuntu 完整包包含应用与 NCM API 镜像，部署步骤见 [Ubuntu 部署包说明](docs/ubuntu-deployment.md)；服务器生产环境推荐使用 Docker。直接从源码构建镜像仍可参考根目录下的 `Dockerfile`。
 
 ---
 

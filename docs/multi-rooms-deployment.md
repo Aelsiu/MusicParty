@@ -38,13 +38,13 @@ docker compose up -d --build
 
 发布流程随包提供 Node.js 22 和 NCM API 源码运行时，替代原先的 Node.js 18 打包运行时，Java 21、FFmpeg 继续随包提供
 
-本地源码构建需要 Node.js 22 或以上、Java 21、Maven、Go 1.23.12、Wails 2.12.0，以及 FFmpeg，可运行
+本地源码构建需要 Git 2.x、Node.js 22.12.0 或以上、JDK 21、Go 1.23.12 或以上的稳定版、Wails 2.12.0，以及 Windows x64 静态 FFmpeg 7.0.1 或以上。Maven 由仓库 Wrapper 提供；完整工具准备和排错见 [构建说明](../BUILD.md)。可运行
 
 ```powershell
-.\build-local.ps1 -NeteaseApiPath '..\api-enhanced' -FfmpegPath 'C:\tools\ffmpeg.exe'
+.\build-windows.ps1 -NeteaseApiPath '..\api-enhanced' -FfmpegPath 'C:\tools\ffmpeg.exe'
 ```
 
-`NeteaseApiPath` 指向预先检出的 `NeteaseCloudMusicApiEnhanced/api-enhanced`，输出为 `launcher/build/bin/MusicParty.exe`
+`NeteaseApiPath` 指向预先检出的 `NeteaseCloudMusicApiEnhanced/api-enhanced`，最终交付输出为 `dist/windows/MusicParty-windows-<版本号>-<提交号>.exe`。版本号只读取仓库根 `VERSION`（初始为 `1.3.9`），提交号为当前 Git `HEAD` 的短提交号；调整发布版本只修改根 `VERSION` 并提交后构建。
 
 ## 许可清单与管理入口
 

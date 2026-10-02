@@ -3,7 +3,7 @@
   "outputfilename": "MusicParty.exe",
   "frontend:dir": "frontend",
   "wailsjsdir": "frontend/src",
-  "frontend:install": "npm install",
+  "frontend:install": "npm ci",
   "frontend:build": "npm run build",
   "frontend:dev:watcher": "npm run dev",
   "frontend:dev:serverUrl": "http://localhost:5173",

@@ -22,7 +22,7 @@ on:
         default: ''
 
 jobs:
-  # ===================== 版本号唯一来源：从 tag 提取并计算 =====================
+  # ===================== 应用版本唯一来源：仓库根 VERSION =====================
   setup:
     runs-on: ubuntu-latest
     outputs:
@@ -30,29 +30,50 @@ jobs:
       version_code: ${{ steps.compute.outputs.version_code }}
       tag: ${{ steps.compute.outputs.tag }}
       wails_version: ${{ steps.compute.outputs.wails_version }}
+      short_commit: ${{ steps.compute.outputs.short_commit }}
     steps:
+      - name: Checkout MusicParty
+        uses: actions/checkout@v4
+
       - name: Compute version
         id: compute
+        env:
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
         run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            RAW="$GITHUB_REF_NAME"
-          else
-            RAW="${{ inputs.release_tag }}"
+          VER="$(cat VERSION)"
+          VER="${VER#"${VER%%[![:space:]]*}"}"
+          VER="${VER%"${VER##*[![:space:]]}"}"
+          PATTERN='^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-([0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*))?$'
+          if [[ ! "$VER" =~ $PATTERN ]]; then
+            echo 'VERSION must contain major.minor.patch or major.minor.patch-prerelease, without a v prefix.' >&2
+            exit 1
           fi
-          RAW="${RAW#v}"
-          VER="${RAW:-dev}"
-          echo "version=$VER" >> "$GITHUB_OUTPUT"
-          echo "tag=$VER" >> "$GITHUB_OUTPUT"
-          # versionCode: 主*10000+次*100+patch（先删非数字、空段再兜底 0，避免 dev 回退时算术报错）
-          IFS='.' read -r M m p <<< "$VER"
-          M=${M//[^0-9]/}; m=${m//[^0-9]/}; p=${p//[^0-9]/}
-          M=${M:-0}; m=${m:-0}; p=${p:-0}
+          PRERELEASE="${BASH_REMATCH[5]}"
+          IFS='.' read -ra IDENTIFIERS <<< "$PRERELEASE"
+          for IDENTIFIER in "${IDENTIFIERS[@]}"; do
+            if [[ "$IDENTIFIER" =~ ^0[0-9]+$ ]]; then
+              echo 'Numeric prerelease identifiers in VERSION must not have leading zeros.' >&2
+              exit 1
+            fi
+          done
+          WV="${VER%%-*}"
+          IFS='.' read -r M m p <<< "$WV"
+          # The default Android code reserves two decimal digits for minor and patch.
+          if (( ${#M} > 6 || ${#m} > 2 || ${#p} > 2 )); then
+            echo 'VERSION is outside the default Android versionCode range; minor and patch must be below 100.' >&2
+            exit 1
+          fi
           VC=$(( M * 10000 + m * 100 + p ))
           VC=$(( VC == 0 ? 1 : VC ))
+          if (( VC > 2100000000 )); then
+            echo 'Calculated Android versionCode exceeds 2100000000.' >&2
+            exit 1
+          fi
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version_code=$VC" >> "$GITHUB_OUTPUT"
-          # Wails 需要数值版本号，dev 回退 0.0.0（否则 EXE 版本资源解析可能失败）
-          if [[ "$VER" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then WV="$VER"; else WV="0.0.0"; fi
           echo "wails_version=$WV" >> "$GITHUB_OUTPUT"
+          echo "short_commit=$(git rev-parse --short=7 HEAD)" >> "$GITHUB_OUTPUT"
 
   # ===================== 业务2：Windows 启动器 EXE =====================
   build-launcher:
@@ -182,15 +203,21 @@ jobs:
 
       - name: Build Wails Launcher
         run: |
-          cd launcher
-          go mod tidy
-          wails build -platform windows/amd64
+          $artifactName = 'MusicParty-windows-${{ needs.setup.outputs.version }}-${{ needs.setup.outputs.short_commit }}.exe'
+          Push-Location launcher
+          try {
+            go mod tidy
+            wails build -platform windows/amd64 -o $artifactName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally { Pop-Location }
+          New-Item -ItemType Directory -Path 'dist/windows' -Force | Out-Null
+          Copy-Item -LiteralPath (Join-Path 'launcher/build/bin' $artifactName) -Destination (Join-Path 'dist/windows' $artifactName)
 
       - name: Upload EXE artifact
         uses: actions/upload-artifact@v4
         with:
           name: MusicParty-windows-exe
-          path: launcher/build/bin/MusicParty.exe
+          path: dist/windows/MusicParty-windows-${{ needs.setup.outputs.version }}-${{ needs.setup.outputs.short_commit }}.exe
 
   # ===================== 业务3：Android APK =====================
   build-apk:
@@ -227,22 +254,30 @@ jobs:
         working-directory: android
         run: gradle assembleDebug assembleRelease -PversionName=${{ needs.setup.outputs.version }} -PversionCode=${{ needs.setup.outputs.version_code }}
 
+      - name: Prepare APK delivery filenames
+        run: |
+          APK_NAME='MusicParty-android-${{ needs.setup.outputs.version }}-${{ needs.setup.outputs.short_commit }}.apk'
+          mkdir -p dist/android/debug dist/android/release-unsigned
+          cp android/app/build/outputs/apk/debug/app-debug.apk "dist/android/debug/$APK_NAME"
+          cp android/app/build/outputs/apk/release/app-release-unsigned.apk "dist/android/release-unsigned/$APK_NAME"
+
       - name: Upload debug APK (dev 测试用)
         uses: actions/upload-artifact@v4
         with:
           name: music-party-debug
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: dist/android/debug/MusicParty-android-${{ needs.setup.outputs.version }}-${{ needs.setup.outputs.short_commit }}.apk
 
       # 配置了签名 secrets 才签名（未配置则跳过，仅出未签名 release 包）
       - name: Sign release APK
         if: env.KS_B64 != ''
         run: |
           echo "$KS_B64" | base64 -d > keystore.jks
+          mkdir -p dist/android/release
           # apksigner 属于 Android SDK build-tools，默认不在 PATH 上，用完整路径调用
           "$ANDROID_HOME/build-tools/34.0.0/apksigner" sign \
             --ks keystore.jks \
             --ks-pass env:KS_PASS --key-pass env:KEY_PASS --ks-key-alias "$KEY_ALIAS" \
-            --out MusicParty.apk \
+            --out 'dist/android/release/MusicParty-android-${{ needs.setup.outputs.version }}-${{ needs.setup.outputs.short_commit }}.apk' \
             android/app/build/outputs/apk/release/app-release-unsigned.apk
 
       - name: Upload signed APK (供发布/手动下载)
@@ -250,7 +285,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: music-party-release
-          path: MusicParty.apk
+          path: dist/android/release/MusicParty-android-${{ needs.setup.outputs.version }}-${{ needs.setup.outputs.short_commit }}.apk
 
   # ===================== 发布：把 EXE + APK 合并进同一个 Release =====================
   publish:
@@ -307,11 +342,12 @@ jobs:
             echo '```'
             echo ""
             echo "### Docker 部署"
-            echo '- 精确版本：`docker pull thornex/music-party:${{ needs.setup.outputs.version }}`'
+            printf '%s%s%s\n' '- 精确版本：`docker pull thornex/music-party:' "${DOCKER_TAG#v}" '`'
             echo '- 最新：`docker pull thornex/music-party:latest`'
           } > release-body.md
         env:
           RELEASE_TAG: ${{ inputs.release_tag }}
+          DOCKER_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.release_tag }}
 
       # 保险：删掉该 tag 已有的 release（draft 或已发布）。
       # softprops 对已存在的 release 只更新正文、跳过 assets 上传（实测手动触发 target 已存在 release 时 0 assets）；
