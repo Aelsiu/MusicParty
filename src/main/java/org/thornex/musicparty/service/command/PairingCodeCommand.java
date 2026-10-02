@@ -26,16 +26,17 @@ public class PairingCodeCommand implements ChatCommand {
     @Override
     public void execute(String args, User user) {
         String parameter=CommandSupport.parameter(args,"copy");
-        if (!java.util.Set.of("copy","open").contains(parameter)) {
-            commands.reply(user,"用法：//code [copy|open]，不带参数默认 copy");
+        if (!java.util.Set.of("copy","on","off").contains(parameter)) {
+            commands.reply(user,"用法：//code [copy|on|off]，不带参数默认 copy");
             return;
         }
         if (!commands.requireManager(user)) return;
-        if ("open".equals(parameter)) {
+        if ("on".equals(parameter) || "off".equals(parameter)) {
+            boolean open="on".equals(parameter);
             String room=org.thornex.musicparty.room.RoomContext.require();
-            repository.setPairingOpen(room,true);
-            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/pairing"), java.util.Map.of("open",true));
-            commands.reply(user,"已开启房内配对码展示");
+            repository.setPairingOpen(room,open);
+            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/pairing"), java.util.Map.of("open",open));
+            commands.reply(user,open?"已开启房内配对码展示":"已关闭房内配对码展示");
             return;
         }
         PlayerEvent event = new PlayerEvent(

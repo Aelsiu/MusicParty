@@ -11,7 +11,7 @@ test('unique command prefixes complete with or without slashes, ignoring case', 
 
 test('ambiguous prefixes, non-commands, extra arguments and unavailable commands do not complete', () => {
     for (const manager of [false, true]) {
-        for (const text of ['c', '//c', '', '//', 'hello', '//stream o', '//clear all extra', '//code a']) {
+        for (const text of ['c', '//c', '', '//', 'hello', '//stream o', '//clear all extra', '//code a', '//code o', '//code open']) {
             assert.equal(completeCommand(text, manager), null, text);
         }
     }
@@ -23,6 +23,10 @@ test('parameter completion follows the clear all clarification and parameter per
     assert.equal(completeCommand('//clear a', true), '//clear all');
     assert.equal(completeCommand('clear d', true), '//clear dead');
     assert.equal(completeCommand('//code c', true), '//code copy');
+    assert.equal(completeCommand('//code on', true), '//code on');
+    assert.equal(completeCommand('//code of', true), '//code off');
+    assert.equal(completeCommand('//code on', false), null);
+    assert.equal(completeCommand('//code of', false), null);
     assert.equal(completeCommand('//jump d', true), '//jump dog');
     assert.equal(completeCommand('//stream n', false), '//stream now');
     assert.equal(completeCommand('//clear a', false), null);
@@ -32,8 +36,9 @@ test('parameter completion follows the clear all clarification and parameter per
 test('shortcut menu only offers commands and parameters allowed to this room identity', () => {
     assert.deepEqual(commandChoices(false).map(item => item.text), ['//clear self', '//stream now', '//admin']);
     const manager = commandChoices(true).map(item => item.text);
-    assert.equal(manager.length, 14);
-    for (const command of ['//clear all', '//clear dead', '//clear chat', '//stream on', '//stream off', '//jump dog', '//code copy', '//code open', '//rooms']) {
+    assert.equal(manager.length, 15);
+    assert.equal(manager.includes('//code open'), false);
+    for (const command of ['//clear all', '//clear dead', '//clear chat', '//stream on', '//stream off', '//jump dog', '//code copy', '//code on', '//code off', '//rooms']) {
         assert.ok(manager.includes(command));
     }
 });
@@ -43,6 +48,10 @@ test('command parsing applies explicit defaults but does not accept invalid or e
         assert.deepEqual(parseChatCommand(`//${name}`), { name, parameter, valid: true });
     }
     assert.deepEqual(parseChatCommand('//CODE COPY'), { name: 'code', parameter: 'copy', valid: true });
+    assert.deepEqual(parseChatCommand('//CODE ON'), { name: 'code', parameter: 'on', valid: true });
+    assert.deepEqual(parseChatCommand('//code off'), { name: 'code', parameter: 'off', valid: true });
+    assert.equal(parseChatCommand('//code open').valid, false);
+    assert.equal(parseChatCommand('//code off extra').valid, false);
     assert.equal(parseChatCommand('//code all').valid, false);
     assert.equal(parseChatCommand('//code copy extra').valid, false);
     assert.equal(parseChatCommand('//rooms anything').valid, false);

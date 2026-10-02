@@ -18,7 +18,8 @@ export const chatCommands = [
     { name: 'admin', label: '打开管理台 / 许可验证' },
     { name: 'code', defaultParameter: 'copy', manager: true, parameters: [
         { name: 'copy', label: '复制最新配对码' },
-        { name: 'open', label: '在播放页展示配对码' }
+        { name: 'on', label: '在播放页展示配对码' },
+        { name: 'off', label: '取消播放页配对码展示' }
     ] },
     { name: 'rooms', label: '打开房间管理', manager: true }
 ];

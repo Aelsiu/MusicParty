@@ -9,6 +9,7 @@ import org.thornex.musicparty.config.AppProperties;
 import org.thornex.musicparty.dto.ChatMessage;
 import org.thornex.musicparty.dto.User;
 import org.thornex.musicparty.room.RoomContext;
+import org.thornex.musicparty.room.RoomRepository;
 import org.thornex.musicparty.service.*;
 import org.thornex.musicparty.service.stream.*;
 
@@ -73,6 +74,42 @@ class RoomCommandParametersTest {
         verify(stream).setEnabled(true); verify(stream).setEnabled(false);
         verify(player, times(2)).broadcastFullPlayerState();
         verify(persistence, times(2)).saveNow();
+    }
+
+    @ParameterizedTest @CsvSource({"on,true", "ON,true", "off,false", "OFF,false"})
+    void pairingOnAndOffOnlyChangeCurrentRoomAndBroadcastVisibilityFlag(String parameter, boolean open) {
+        var repository = mock(RoomRepository.class);
+        var messaging = mock(SimpMessagingTemplate.class);
+        when(support.requireManager(user)).thenReturn(true);
+        try (var ignored = RoomContext.enter("Room1234")) {
+            new PairingCodeCommand(messaging, support, repository).execute(parameter, user);
+        }
+        verify(repository).setPairingOpen("Room1234", open);
+        verify(messaging).convertAndSend("/topic/rooms/Room1234/pairing", java.util.Map.of("open", open));
+        verify(support).reply(user, open ? "已开启房内配对码展示" : "已关闭房内配对码展示");
+        verifyNoMoreInteractions(repository, messaging);
+    }
+
+    @Test void ordinaryUsersCannotTogglePairingVisibility() {
+        var repository = mock(RoomRepository.class);
+        var messaging = mock(SimpMessagingTemplate.class);
+        var command = new PairingCodeCommand(messaging, support, repository);
+        command.execute("on", user);
+        command.execute("off", user);
+        verify(support, times(2)).requireManager(user);
+        verifyNoInteractions(repository, messaging);
+    }
+
+    @Test void removedOpenParameterAndInvalidPairingArgumentsNeverMutateVisibility() {
+        var repository = mock(RoomRepository.class);
+        var messaging = mock(SimpMessagingTemplate.class);
+        var command = new PairingCodeCommand(messaging, support, repository);
+        for (String parameter : new String[]{"open", "on extra", "off extra", "unknown"}) {
+            command.execute(parameter, user);
+        }
+        verify(support, times(4)).reply(user, "用法：//code [copy|on|off]，不带参数默认 copy");
+        verify(support, never()).requireManager(user);
+        verifyNoInteractions(repository, messaging);
     }
 
     @ParameterizedTest @CsvSource({"''", "now"})

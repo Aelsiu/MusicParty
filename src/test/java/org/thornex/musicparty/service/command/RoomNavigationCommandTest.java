@@ -2,6 +2,7 @@ package org.thornex.musicparty.service.command;
 
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
@@ -51,5 +52,28 @@ class RoomNavigationCommandTest {
         assertTrue(chat.getHistoryFull().isEmpty());
         assertEquals("newer-tab", sharedProfile.getSessionId());
         verifyNoMoreInteractions(template);
+    }
+
+    @Test void pairingOnAndOffDispatchThroughChatWithoutBroadcastingOrSavingCommandMessages() {
+        var template = mock(SimpMessagingTemplate.class);
+        var users = mock(UserService.class);
+        var repository = mock(org.thornex.musicparty.room.RoomRepository.class);
+        var commands = mock(CommandSupport.class);
+        when(users.getUser("sending-tab")).thenReturn(Optional.of(new User("profile", "other-tab", "Owner")));
+        when(commands.requireManager(any())).thenReturn(true);
+        var chat = new ChatService(template, users, new AppProperties(),
+                List.of(new PairingCodeCommand(template, commands, repository)));
+        try (var ignored = org.thornex.musicparty.room.RoomContext.enter("Room1234")) {
+            assertTrue(chat.processIncomingMessage("sending-tab", "//CODE ON"));
+            assertTrue(chat.processIncomingMessage("sending-tab", "//code off"));
+        }
+        verify(repository).setPairingOpen("Room1234", true);
+        verify(repository).setPairingOpen("Room1234", false);
+        verify(template).convertAndSend("/topic/rooms/Room1234/pairing", java.util.Map.of("open", true));
+        verify(template).convertAndSend("/topic/rooms/Room1234/pairing", java.util.Map.of("open", false));
+        verify(commands).reply(argThat(sender -> sender.getSessionId().equals("sending-tab")), eq("已开启房内配对码展示"));
+        verify(commands).reply(argThat(sender -> sender.getSessionId().equals("sending-tab")), eq("已关闭房内配对码展示"));
+        assertTrue(chat.getHistoryFull().isEmpty());
+        verifyNoMoreInteractions(repository, template);
     }
 }
