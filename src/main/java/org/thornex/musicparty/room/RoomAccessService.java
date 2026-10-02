@@ -11,7 +11,9 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class RoomAccessService {
     public record Manager(String token,String licenseId,String version,long expiresAt) { public boolean root() { return "ROOT".equals(licenseId); } }
-    public record Admission(String token,String roomId,long epoch,long expiresAt) {}
+    public record Admission(String token,String roomId,long epoch,long expiresAt,boolean publicEntry,long accessVersion) {
+        public Admission(String token,String roomId,long epoch,long expiresAt) { this(token,roomId,epoch,expiresAt,false,0); }
+    }
     public record Connection(String roomId,String managerToken,String userToken) {}
     private final RoomRepository repository;
     private final MultiRoomProperties properties;
@@ -44,13 +46,31 @@ public class RoomAccessService {
     public Admission join(String code,String address) {
         limit(address); long now=System.currentTimeMillis(); repository.rotate(now);
         var room=repository.rooms().stream().filter(r -> Objects.equals(r.pairingCode(),code)).findFirst().orElseThrow(() -> denied("配对码无效或已更新"));
-        attempts.remove(address); cleanup();
-        Admission value=new Admission(token(),room.id(),repository.pairingEpoch(now),repository.nextPairingUpdateAt(now));
+        attempts.remove(address);return issue(room,now,false);
+    }
+    public Admission join(String roomId,String code,String address) {
+        limit(address);long now=System.currentTimeMillis();repository.rotate(now);
+        var room=repository.room(roomId);
+        if(!equal(code,room.pairingCode())) throw denied("配对码不属于此房间或已更新");
+        attempts.remove(address);return issue(room,now,false);
+    }
+    public Admission publicAdmission(String roomId,String address) {
+        limit(address);long now=System.currentTimeMillis();repository.rotate(now);
+        var room=repository.room(roomId);
+        if(!room.publicRoom()) throw denied("此房间需要配对码或许可密钥");
+        attempts.remove(address);return issue(room,now,true);
+    }
+    private Admission issue(RoomRepository.Room room,long now,boolean publicEntry) {
+        cleanup();
+        Admission value=new Admission(token(),room.id(),repository.pairingEpoch(now),repository.nextPairingUpdateAt(now),publicEntry,room.accessVersion());
         repository.saveAdmission(value); admissions.put(value.token(),value); return value;
     }
     public void admission(String token,String roomId) {
         Admission a=token==null?null:admissions.computeIfAbsent(token,repository::admission);
-        if (a==null || !a.roomId().equals(roomId) || a.epoch()!=repository.pairingEpoch(System.currentTimeMillis()) || !repository.exists(roomId)) throw denied("配对码已更新，请重新进入房间");
+        long now=System.currentTimeMillis();
+        if (a==null || !a.roomId().equals(roomId) || a.expiresAt()<=now || a.epoch()!=repository.pairingEpoch(now) || !repository.exists(roomId)) throw denied("入房凭证已失效，请重新进入房间");
+        var room=repository.room(roomId);
+        if(a.publicEntry() && (!room.publicRoom() || a.accessVersion()!=room.accessVersion())) throw denied("房间开放状态已改变，请重新进入房间");
     }
     public void member(String token,String managerToken,String roomId) {
         if (managerToken!=null && !managerToken.isBlank()) { own(managerToken,roomId); return; }
@@ -68,6 +88,14 @@ public class RoomAccessService {
         if (c==null || !repository.exists(c.roomId())) throw denied("房间连接已失效");
         if (c.managerToken()!=null && !c.managerToken().isBlank()) own(c.managerToken(),c.roomId());
         return c;
+    }
+    public Manager promote(String session,String roomId,String token,String managerToken) {
+        Manager manager=own(managerToken,roomId);
+        connections.compute(session,(id,c)->{
+            if(c==null || !c.roomId().equals(roomId) || token==null || token.isBlank() || !equal(c.userToken(),token)) throw denied("房间连接已改变，请重新验证");
+            return new Connection(c.roomId(),managerToken,c.userToken());
+        });
+        return manager;
     }
     public Connection disconnect(String session) { return connections.remove(session); }
     public int count(String roomId) { return (int)connections.values().stream().filter(c -> c.roomId().equals(roomId)).count(); }

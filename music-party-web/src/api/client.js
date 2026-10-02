@@ -7,8 +7,8 @@ const client = axios.create({
 });
 
 client.interceptors.request.use(config => {
-    if (roomSession.roomId) config.headers['X-Room-ID'] = roomSession.roomId;
-    if (roomSession.roomToken) config.headers['X-Room-Token'] = roomSession.roomToken;
+    if (roomSession.roomId && !config.headers.has('X-Room-ID')) config.headers['X-Room-ID'] = roomSession.roomId;
+    if (roomSession.roomToken && !config.headers.has('X-Room-Token')) config.headers['X-Room-Token'] = roomSession.roomToken;
     if (!config.skipManagementAuth && roomSession.managerToken && (roomSession.ownerAccess || config.url.startsWith('/api/rooms') || config.url.startsWith('/api/admin'))) {
         config.headers.Authorization = `Bearer ${roomSession.managerToken}`;
     }

@@ -46,3 +46,11 @@ test('leaving while the target is loading cancels a stale switch', async () => {
     assert.equal(await switching, 'cancelled');
     assert.deepEqual(calls, []);
 });
+test('browser navigation while the old room unmounts cancels target entry', async () => {
+    const { calls, dependencies } = navigation();
+    let allowed = true;
+    dependencies.canEnter = () => allowed;
+    dependencies.settle = async () => { allowed = false; };
+    assert.equal(await enterManagedRoom({ id: 'target' }, dependencies), 'cancelled');
+    assert.deepEqual(calls, [['manage', 'target'], ['leave']]);
+});

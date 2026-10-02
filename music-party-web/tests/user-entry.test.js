@@ -9,6 +9,12 @@ globalThis.localStorage = {
     setItem: (key, value) => storage.set(key, String(value)),
     removeItem: (key) => storage.delete(key)
 };
+const session = new Map();
+globalThis.sessionStorage = {
+    getItem: key => session.get(key) ?? null,
+    setItem: (key, value) => session.set(key, String(value)),
+    removeItem: key => session.delete(key)
+};
 const { useUserStore } = await import('../src/stores/user.js');
 let user;
 
@@ -76,4 +82,39 @@ test('a shared profile refresh updates another room without restoring its old bi
     assert.equal(user.neteaseAvatar, '');
     assert.equal(user.bindings.bilibili, 'shared-video');
     assert.equal(user.userToken, 'alice-token');
+});
+test('returning before CONNECT restores the remembered profile token when using its name again', () => {
+    user.prepareEntry('Bob', '');
+    assert.notEqual(user.userToken, 'alice-token');
+    user.resetAuthentication();
+    user.prepareEntry('Alice', '');
+    assert.equal(user.userToken, 'alice-token');
+});
+test('returning clears a pending name prompt and its old room callback', () => {
+    let called = false;
+    user.showNameModal = true; user.renameError = 'old error';
+    user.setPostNameAction(() => { called = true; });
+    user.resetAuthentication();
+    assert.equal(user.showNameModal, false); assert.equal(user.renameError, '');
+    user.isGuest = true;
+    user.initUser('new-session', 'Alice', false);
+    assert.equal(called, false);
+});
+test('an explicitly anonymous direct entry persists its new identity only after connection', () => {
+    user.prepareEntry('游客', '');
+    const guestToken = user.userToken;
+    assert.notEqual(guestToken, 'alice-token');
+    assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), 'alice-token');
+    user.initUser('guest-session', '游客', true);
+    assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), guestToken);
+    assert.equal(localStorage.getItem(STORAGE_KEYS.USERNAME), null);
+});
+test('choosing an entry name after guest listening creates a separate identity', () => {
+    localStorage.removeItem(STORAGE_KEYS.USERNAME);
+    user.currentUser.name = '游客'; user.isGuest = true;
+    user.prepareEntry('Carol', '');
+    assert.notEqual(user.userToken, 'alice-token');
+    assert.equal(localStorage.getItem(STORAGE_KEYS.TOKEN), 'alice-token');
+    user.initUser('carol-session', 'Carol', false);
+    assert.equal(localStorage.getItem(STORAGE_KEYS.USERNAME), 'Carol');
 });

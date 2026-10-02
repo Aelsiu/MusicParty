@@ -65,6 +65,8 @@ const handleVerify = async () => {
   loading.value = true;
   try {
     await adminApi.verify(password.value);
+    // Closing the modal during verification must not reopen the dashboard.
+    if (!adminStore.showAuthModal) { password.value = ''; return; }
     adminStore.setAdminPassword('');
     adminStore.isVerified = true;
     adminStore.showAuthModal = false;
@@ -72,7 +74,7 @@ const handleVerify = async () => {
     success('ACCESS GRANTED');
     password.value = '';
   } catch (e) {
-    error(e.response?.data?.message || 'INVALID PASSWORD');
+    error(e.response?.data?.message || e.response?.data?.detail || e.message || 'INVALID LICENSE KEY');
   } finally {
     loading.value = false;
   }

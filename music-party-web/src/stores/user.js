@@ -75,6 +75,7 @@ export const useUserStore = defineStore('user', () => {
      */
     const initUser = (sessionId, serverName, serverIsGuest) => {
         currentUser.value.sessionId = sessionId;
+        if (serverIsGuest !== undefined) localStorage.setItem(STORAGE_KEYS.TOKEN, userToken.value);
 
         // 1. 同步名字
         if (serverName) {
@@ -155,10 +156,15 @@ export const useUserStore = defineStore('user', () => {
         onNameSetCallback.value = fn;
     }
 
-    const resetAuthentication = () => {
+    const resetAuthentication = (navigate = true) => {
         isAuthPassed.value = false;
         justReturned.value = true;
-        clearRoom();
+        clearRoom(navigate);
+        roomName.value = '';
+        currentUser.value.sessionId = '';
+        showNameModal.value = false;
+        renameError.value = '';
+        onNameSetCallback.value = null;
         roomPassword.value = '';
         localStorage.removeItem(STORAGE_KEYS.ROOM_PASSWORD); // 清理旧版本保存的房间密码
     };
@@ -166,8 +172,13 @@ export const useUserStore = defineStore('user', () => {
     const prepareEntry = (name, password) => {
         justReturned.value = false;
         const previousName = localStorage.getItem(STORAGE_KEYS.USERNAME);
+        // A name edited on CONNECT is provisional until the server confirms it.
+        // Returning to the remembered name must use its persisted profile token.
+        if (previousName && name === previousName) {
+            userToken.value = localStorage.getItem(STORAGE_KEYS.TOKEN) || userToken.value;
+        }
         if (!previousName || name !== previousName) clearBindings();
-        if (previousName && name !== previousName) {
+        if ((previousName && name !== previousName) || (!previousName && name !== currentUser.value.name)) {
             // 入房时换 ID 创建新身份，等服务器确认后再保存，避免在 CONNECT 前刷新丢失旧身份。
             userToken.value = generateToken();
             currentUser.value.sessionId = '';

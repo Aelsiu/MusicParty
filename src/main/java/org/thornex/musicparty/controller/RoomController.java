@@ -18,6 +18,25 @@ public class RoomController {
     @PostMapping("/management/session") public Map<String,Object> login(@RequestBody Map<String,String> body,HttpServletRequest request) { var m=access.login(body.get("key"),request.getRemoteAddr());return Map.of("token",m.token(),"licenseId",m.licenseId(),"root",m.root(),"expiresAt",m.expiresAt()); }
     @GetMapping("/management/session") public Map<String,Object> session(HttpServletRequest request) { var m=access.manager(token(request));return Map.of("licenseId",m.licenseId(),"root",m.root(),"expiresAt",m.expiresAt()); }
     @PostMapping("/join") public Map<String,Object> join(@RequestBody Map<String,String> body,HttpServletRequest request) { var a=access.join(body.get("code"),request.getRemoteAddr());var r=repository.room(a.roomId());return Map.of("room",roomInfo(r,false),"token",a.token(),"expiresAt",a.expiresAt()); }
+    @GetMapping("/{id}/access") public Map<String,Object> roomAccess(@PathVariable String id,HttpServletResponse response) {
+        response.setHeader("Cache-Control","no-store");return roomInfo(repository.room(id),false);
+    }
+    @PostMapping("/{id}/join") public Map<String,Object> joinRoom(@PathVariable String id,@RequestBody Map<String,String> body,HttpServletRequest request) {
+        var a=access.join(id,body.get("code"),request.getRemoteAddr());return admissionInfo(a);
+    }
+    @PostMapping("/{id}/public-admission") public Map<String,Object> publicAdmission(@PathVariable String id,HttpServletRequest request) {
+        return admissionInfo(access.publicAdmission(id,request.getRemoteAddr()));
+    }
+    @PatchMapping("/{id}/access") public Map<String,Object> setAccess(@PathVariable String id,@RequestBody Map<String,Boolean> body,HttpServletRequest request,HttpServletResponse response) {
+        response.setHeader("Cache-Control","no-store");access.own(token(request),id);
+        Boolean publicRoom=body.get("publicRoom");if(publicRoom==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请提供 OPEN 状态");
+        repository.setPublicRoom(id,publicRoom);return roomInfo(repository.room(id),true);
+    }
+    @PostMapping("/{id}/owner") public Map<String,String> promoteOwner(@PathVariable String id,@RequestBody Map<String,String> body,HttpServletRequest request) {
+        String session=body.get("sessionId");if(session==null || session.isBlank()) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请提供当前房间连接");
+        var manager=access.promote(session,id,request.getHeader("X-Room-Token"),token(request));
+        return Map.of("role",manager.root()?"ROOT":"OWNER");
+    }
     @GetMapping("/{id}/admission") public Map<String,Object> resume(@PathVariable String id,@RequestHeader("X-Room-Token") String value) { access.admission(value,id);return Map.of("room",roomInfo(repository.room(id),false),"expiresAt",repository.nextPairingUpdateAt(System.currentTimeMillis())); }
     @GetMapping public Map<String,Object> list(HttpServletRequest request,HttpServletResponse response) {
         response.setHeader("Cache-Control","no-store");
@@ -37,7 +56,7 @@ public class RoomController {
     @PatchMapping("/{id}/pairing") public Map<String,Object> setPairing(@PathVariable String id,@RequestBody Map<String,Boolean> body,HttpServletRequest request,HttpServletResponse response) {
         response.setHeader("Cache-Control","no-store");
         access.own(token(request),id);
-        Boolean open=body.get("open");if(open==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请提供 OPEN 状态");
+        Boolean open=body.get("open");if(open==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请提供 SHOW 状态");
         repository.setPairingOpen(id,open);lifecycle.pairingChanged(id);return roomInfo(repository.room(id),true);
     }
     @PostMapping("/{id}/connected") public Map<String,Boolean> connected(@PathVariable String id,HttpServletRequest request) {
@@ -51,8 +70,9 @@ public class RoomController {
     @PutMapping("/licenses/{id}") public Map<String,String> updateLicense(@PathVariable String id,@RequestBody Map<String,String> body,HttpServletRequest request) { access.root(token(request));repository.replaceLicense(id,body.get("key"));access.revokeLicense(id);lifecycle.revokeInvalidManagers();return Map.of("message","许可已更新"); }
     @DeleteMapping("/licenses/{id}") public Map<String,String> deleteLicense(@PathVariable String id,HttpServletRequest request) { access.root(token(request));for(String room:repository.removeLicense(id)) lifecycle.deleted(room);access.revokeLicense(id);lifecycle.revokeInvalidManagers();return Map.of("message","许可及所属房间已删除"); }
     private Map<String,Object> roomInfo(RoomRepository.Room r,boolean manager) {
-        Map<String,Object> result=new LinkedHashMap<>();result.put("id",r.id());result.put("name",r.name());
+        Map<String,Object> result=new LinkedHashMap<>();result.put("id",r.id());result.put("name",r.name());result.put("publicRoom",r.publicRoom());
         if(manager) {result.put("ownerId",r.ownerId());result.put("pairingCode",r.pairingCode());result.put("nextUpdateAt",repository.nextPairingUpdateAt(System.currentTimeMillis()));result.put("serverTime",System.currentTimeMillis());result.put("pairingIntervalMinutes",repository.pairingIntervalMinutes());result.put("pairingOpen",r.pairingOpen());}
         return result;
     }
+    private Map<String,Object> admissionInfo(RoomAccessService.Admission a) { return Map.of("room",roomInfo(repository.room(a.roomId()),false),"token",a.token(),"expiresAt",a.expiresAt()); }
 }

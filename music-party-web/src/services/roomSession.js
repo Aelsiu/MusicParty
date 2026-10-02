@@ -1,4 +1,5 @@
 import { reactive } from 'vue';
+import { navigateRoom } from './roomRoute.js';
 
 const saved = (() => { try { return JSON.parse(sessionStorage.getItem('mp_management_session') || 'null'); } catch { return null; } })();
 export const roomSession = reactive({ roomId: '', roomName: '', roomToken: '', ownerAccess: false, managerToken: saved?.token || '', licenseId: saved?.licenseId || '', root: saved?.root || false });
@@ -16,10 +17,12 @@ export function selectRoom(room, token = '', owner = false) {
     roomSession.roomId = room.id; roomSession.roomName = room.name; roomSession.roomToken = token; roomSession.ownerAccess = owner;
     sessionStorage.setItem('mp_active_room', room.id);
     localStorage.setItem('mp_last_room', room.id);
+    navigateRoom(room.id);
 }
-export function clearRoom() {
+export function clearRoom(navigate = true) {
     roomSession.roomId = ''; roomSession.roomName = ''; roomSession.roomToken = ''; roomSession.ownerAccess = false;
     sessionStorage.removeItem('mp_active_room');
+    if (navigate) navigateRoom();
 }
 export function mediaRoomUrl(url) {
     if (!url?.startsWith('/media/rooms/')) return url;

@@ -6,7 +6,7 @@
   <div class="h-screen w-screen overflow-hidden font-sans">
     <AudioEngine v-if="userStore.isAuthPassed" />
     <!-- 1. 认证遮罩 -->
-    <AuthOverlay @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed && !switchingRoom" />
+    <AuthOverlay :key="entryRoomId" :room-id="entryRoomId" @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed && !switchingRoom" />
 
     <!-- 2. 启动页 (Start Screen) -->
     <!-- 注意：点击 Connect 后，我们先不销毁它，直到 socket 连接成功，或者直接切换布局 -->
@@ -42,14 +42,14 @@
     </MainLayout>
 
     <!-- 4. 全局弹窗 -->
-    <SearchModal :isOpen="showSearch" @close="showSearch = false" />
-    <SettingsModal :isOpen="showSettings" @close="showSettings = false" />
-    <NamePromptModal />
+    <SearchModal v-if="userStore.isAuthPassed" :isOpen="showSearch" @close="showSearch = false" />
+    <SettingsModal v-if="userStore.isAuthPassed" :isOpen="showSettings" @close="showSettings = false" />
+    <NamePromptModal v-if="userStore.isAuthPassed" />
     <ChatOverlay v-if="hasStarted && !uiStore.isLiteMode" />
     <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode && !adminStore.showDashboard && !adminStore.showAuthModal" />
-    <AdminAuthModal />
-    <AdminDashboard />
-    <RoomCleanupDialog />
+    <AdminAuthModal v-if="userStore.isAuthPassed" />
+    <AdminDashboard v-if="userStore.isAuthPassed" />
+    <RoomCleanupDialog v-if="userStore.isAuthPassed" />
     <RoomManager :open="showRoomManager" :selecting="switchingRoom" :current-room-id="userStore.isAuthPassed ? roomSession.roomId : ''" @close="showRoomManager = false" @select="switchManagedRoom" />
   </div>
 </template>
@@ -60,6 +60,7 @@ import { useChatStore } from './stores/chat';
 import { roomSession, selectRoom } from './services/roomSession';
 import { roomsApi } from './api/rooms';
 import { enterManagedRoom } from './services/roomNavigation';
+import { roomIdFromPath } from './services/roomRoute';
 import { handleModalBack } from './services/backNavigation';
 import { ref, nextTick, onMounted } from 'vue';
 import { useEventListener } from '@vueuse/core';
@@ -97,6 +98,8 @@ const showSearch = ref(false);
 const showSettings = ref(false);
 const showRoomManager = ref(false);
 const switchingRoom = ref(false);
+const entryRoomId = ref(roomIdFromPath(window.location.pathname));
+let entryGeneration = 0;
 const toastInstance = ref(null);
 const { register, info, error } = useToast();
 
@@ -107,7 +110,8 @@ const startGame = () => {
   maybeShowPwaHint();
 };
 
-const returnEntry = () => {
+const returnEntry = (navigate = true) => {
+  entryGeneration++;
   socketService.disconnect();
   player.connected = false;
   player.syncState({ nowPlaying: null, queue: [], isPaused: true, onlineUsers: [] });
@@ -117,10 +121,19 @@ const returnEntry = () => {
   hasStarted.value = false; connecting.value = false; showSearch.value = false; showSettings.value = false;
   showRoomManager.value = false;
   adminStore.showDashboard = false; adminStore.showAuthModal = false; adminStore.isVerified = false;
-  userStore.resetAuthentication();
+  userStore.resetAuthentication(navigate !== false);
   window.AndroidBridge?.updateMedia?.(JSON.stringify({ title: 'Music Party', artist: '', paused: true, position: 0, duration: 0, roomId: '' }));
 };
 useEventListener(window, 'musicparty:return-entry', returnEntry);
+useEventListener(window, 'musicparty:route', () => { entryRoomId.value = roomIdFromPath(window.location.pathname); });
+useEventListener(window, 'popstate', async () => {
+  returnEntry(false);
+  // Unmount the old room before admission for the address selected by browser navigation.
+  switchingRoom.value = true;
+  entryRoomId.value = roomIdFromPath(window.location.pathname);
+  await nextTick();
+  switchingRoom.value = false;
+});
 useEventListener(window, 'musicparty:connected', () => { connecting.value = false; hasStarted.value = true; });
 useEventListener(window, 'musicparty:show-rooms', () => {
   if (!userStore.isAuthPassed) return;
@@ -130,13 +143,15 @@ useEventListener(window, 'musicparty:show-rooms', () => {
 const switchManagedRoom = async room => {
   if (switchingRoom.value) return;
   switchingRoom.value = true;
+  let generation = entryGeneration;
   try {
     const result = await enterManagedRoom(room, {
       currentRoomId: () => roomSession.roomId,
       isActive: () => userStore.isAuthPassed && showRoomManager.value,
       manage: roomsApi.manage,
-      leave: returnEntry,
+      leave: () => { returnEntry(false); generation = entryGeneration; },
       settle: nextTick,
+      canEnter: () => generation === entryGeneration,
       enter: current => {
         selectRoom(current, '', true);
         userStore.roomName = current.name;

@@ -19,7 +19,7 @@ public class RoomRepository {
         public License { note = note == null ? "" : note; }
         public License(String id, String key) { this(id, key, ""); }
     }
-    public record Room(String id, String name, String ownerId, long createdAt, String pairingCode, long pairingEpoch, boolean autoOpen, boolean pairingOpen) {}
+    public record Room(String id, String name, String ownerId, long createdAt, String pairingCode, long pairingEpoch, boolean autoOpen, boolean pairingOpen, boolean publicRoom, long accessVersion) {}
     private static final List<String> CODES=java.util.stream.IntStream.range(0,10000).mapToObj(i->String.format(Locale.ROOT,"%04d",i)).toList();
     private final MultiRoomProperties properties;
     private final ObjectMapper mapper;
@@ -44,11 +44,11 @@ public class RoomRepository {
             s.execute("CREATE TABLE IF NOT EXISTS system_config(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS pairing_clock(id INTEGER PRIMARY KEY CHECK(id=1),interval_minutes INTEGER NOT NULL,start_ms INTEGER NOT NULL,base_epoch INTEGER NOT NULL)");
         }
-        boolean hasPairingOpen=false;
-        try (Statement s=db.createStatement(); ResultSet columns=s.executeQuery("PRAGMA table_info(rooms)")) {
-            while(columns.next()) if("pairing_open".equals(columns.getString("name"))) hasPairingOpen=true;
-        }
-        if(!hasPairingOpen) try(Statement s=db.createStatement()) { s.execute("ALTER TABLE rooms ADD COLUMN pairing_open INTEGER NOT NULL DEFAULT 0"); }
+        addColumnIfMissing("rooms","pairing_open","INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing("rooms","public_room","INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing("rooms","access_version","INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing("admissions","public_entry","INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing("admissions","access_version","INTEGER NOT NULL DEFAULT 0");
         try (Statement s = db.createStatement(); ResultSet clock = s.executeQuery("SELECT * FROM pairing_clock WHERE id=1")) {
             if (clock.next()) { pairingIntervalMinutes=clock.getInt("interval_minutes");pairingStartMs=clock.getLong("start_ms");pairingBaseEpoch=clock.getLong("base_epoch"); }
         }
@@ -73,7 +73,13 @@ public class RoomRepository {
     }
     public synchronized Room room(String id) { return rooms().stream().filter(r -> r.id().equals(id)).findFirst().orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "房间已删除")); }
     public synchronized boolean exists(String id) { return rooms().stream().anyMatch(r -> r.id().equals(id)); }
-    private Room readRoom(ResultSet r) throws SQLException { return new Room(r.getString("id"),r.getString("name"),r.getString("owner_id"),r.getLong("created_at"),r.getString("pair_code"),r.getLong("pair_epoch"),r.getInt("auto_open") != 0,r.getInt("pairing_open") != 0); }
+    private void addColumnIfMissing(String table,String name,String definition) throws SQLException {
+        try (Statement s=db.createStatement(); ResultSet columns=s.executeQuery("PRAGMA table_info("+table+")")) {
+            while(columns.next()) if(name.equals(columns.getString("name"))) return;
+        }
+        try(Statement s=db.createStatement()) { s.execute("ALTER TABLE "+table+" ADD COLUMN "+name+" "+definition); }
+    }
+    private Room readRoom(ResultSet r) throws SQLException { return new Room(r.getString("id"),r.getString("name"),r.getString("owner_id"),r.getLong("created_at"),r.getString("pair_code"),r.getLong("pair_epoch"),r.getInt("auto_open") != 0,r.getInt("pairing_open") != 0,r.getInt("public_room") != 0,r.getLong("access_version")); }
     public synchronized Room create(String owner, String name, String requestId) {
         if (!RoomValidation.name(name)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "房间名须为 2–16 个可见字符，不含换行或不可见控制字符");
         if (requestId == null || !requestId.matches("[a-zA-Z0-9-]{16,64}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少有效的创建请求标识");
@@ -120,6 +126,10 @@ public class RoomRepository {
     public synchronized long nextPairingUpdateAt(long now) { return pairingStartMs+(Math.floorDiv(now-pairingStartMs,pairingIntervalMinutes*60000L)+1)*pairingIntervalMinutes*60000L; }
     public synchronized int pairingIntervalMinutes() { return pairingIntervalMinutes; }
     public synchronized void setPairingOpen(String id, boolean open) { room(id);update("UPDATE rooms SET pairing_open=? WHERE id=?",open?1:0,id); }
+    public synchronized void setPublicRoom(String id,boolean publicRoom) {
+        if(room(id).publicRoom()==publicRoom) return;
+        update("UPDATE rooms SET public_room=?,access_version=access_version+1 WHERE id=?",publicRoom?1:0,id);
+    }
     private String newCode(long now, Set<String> extra) {
         Set<String> unavailable = new HashSet<>(extra);
         for (Room r : rooms()) if (r.pairingCode() != null) unavailable.add(r.pairingCode());
@@ -194,11 +204,11 @@ public class RoomRepository {
     }
     public synchronized String profile(String token) { try (PreparedStatement s=db.prepareStatement("SELECT payload FROM profiles WHERE token=?")) { s.setString(1,token); try (ResultSet r=s.executeQuery()) { return r.next()?r.getString(1):null; } } catch(SQLException e) { throw storage(e); } }
     public synchronized void saveProfile(String token,String payload) { update("INSERT INTO profiles(token,payload) VALUES(?,?) ON CONFLICT(token) DO UPDATE SET payload=excluded.payload",token,payload); }
-    public synchronized void saveAdmission(RoomAccessService.Admission value) { update("INSERT INTO admissions(token,room_id,epoch,expires_at) VALUES(?,?,?,?)",value.token(),value.roomId(),value.epoch(),value.expiresAt()); }
+    public synchronized void saveAdmission(RoomAccessService.Admission value) { update("INSERT INTO admissions(token,room_id,epoch,expires_at,public_entry,access_version) VALUES(?,?,?,?,?,?)",value.token(),value.roomId(),value.epoch(),value.expiresAt(),value.publicEntry()?1:0,value.accessVersion()); }
     public synchronized RoomAccessService.Admission admission(String token) {
         try (PreparedStatement s=db.prepareStatement("SELECT * FROM admissions WHERE token=?")) {
             s.setString(1,token);
-            try (ResultSet r=s.executeQuery()) { return r.next()?new RoomAccessService.Admission(token,r.getString("room_id"),r.getLong("epoch"),r.getLong("expires_at")):null; }
+            try (ResultSet r=s.executeQuery()) { return r.next()?new RoomAccessService.Admission(token,r.getString("room_id"),r.getLong("epoch"),r.getLong("expires_at"),r.getInt("public_entry")!=0,r.getLong("access_version")):null; }
         } catch(SQLException e) { throw storage(e); }
     }
     public synchronized void cleanupAdmissions(long now) { update("DELETE FROM admissions WHERE expires_at<?",now-1800000); }
