@@ -19,6 +19,7 @@ import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { Check, Copy } from 'lucide-vue-next';
 import { copyAsyncText } from '../utils/clipboard';
 import { pairingRemaining, pairingProgress } from '../utils/pairingClock';
+import { isPairingCode } from '../utils/pairingCode';
 const props=defineProps({code:String,compact:Boolean,inline:Boolean,nextUpdateAt:Number,serverTime:Number,
   intervalMinutes:{type:Number,default:10},clockOffset:Number,copyLabel:{type:String,default:'复制配对码'}});
 const now=ref(Date.now()),offset=ref(0),copied=ref(false),error=ref('');
@@ -27,7 +28,7 @@ watch(()=>props.serverTime,value=>{offset.value=Number.isFinite(value)?value-Dat
 watch(()=>props.code,()=>{++copyGeneration;clearTimeout(copyTimer);copied.value=false;error.value='';});
 const remaining=computed(()=>pairingRemaining(props.nextUpdateAt,now.value,props.clockOffset??offset.value));
 const progress=computed(()=>pairingProgress(props.nextUpdateAt,props.intervalMinutes,now.value,props.clockOffset??offset.value));
-const canCopy=computed(()=>/^\d{4}$/.test(props.code)&&(!props.nextUpdateAt||remaining.value>0));
+const canCopy=computed(()=>isPairingCode(props.code)&&(!props.nextUpdateAt||remaining.value>0));
 async function copy(){
   if(!canCopy.value)return;
   const current=++copyGeneration;

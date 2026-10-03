@@ -1,4 +1,5 @@
 import { copyAsyncText } from '../utils/clipboard.js';
+import { isPairingCode, normalizePairingCode } from '../utils/pairingCode.js';
 
 export const isPairingCodeCommand = text => /^\/\/code(?:\s|$)/i.test(text.trim());
 
@@ -12,8 +13,8 @@ export async function copyRoomPairingCode({ roomId, managerToken, manage, notify
     let fetchError;
     const code = Promise.resolve().then(() => manage(roomId)).then(room => {
         if (!isCurrent()) throw new Error('Room changed');
-        if (!/^\d{4}$/.test(room.pairingCode)) throw new Error('配对码获取失败，请重试');
-        return room.pairingCode;
+        if (!isPairingCode(room.pairingCode)) throw new Error('配对码获取失败，请重试');
+        return normalizePairingCode(room.pairingCode);
     }).catch(error => { fetchError = error; throw error; });
 
     try {

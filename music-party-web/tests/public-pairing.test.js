@@ -31,6 +31,12 @@ test('OPEN exposes only validated display fields and preserves leading zeroes', 
     assert.deepEqual(h.state(), { open: true, code: '0012', nextUpdateAt: 61000, intervalMinutes: 1, offset: 0 });
 });
 
+test('OPEN supports alphanumeric pairing codes and normalizes letter casing', async () => {
+    const h = harness(async () => opened('A0Zb'));
+    await h.session.start('one');
+    assert.equal(h.state().open, true); assert.equal(h.state().code, 'a0zb');
+});
+
 test('closing clears immediately and invalidates earlier successful requests', async () => {
     const pending = deferred(), h = harness(() => pending.promise);
     const refresh = h.session.start('one');

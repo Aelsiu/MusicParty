@@ -66,7 +66,10 @@ func GetConfigPath() string {
 }
 
 func LoadConfig() *AppConfig {
-	path := GetConfigPath()
+	return loadConfig(GetConfigPath())
+}
+
+func loadConfig(path string) *AppConfig {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return &AppConfig{
@@ -74,8 +77,8 @@ func LoadConfig() *AppConfig {
 			ServerPort:    "8080",
 			BaseURL:       "http://localhost:8080",
 			AdminPassword: "",
-			AuthorName:    "ThorNex",
-			BackWords:     "THORNEX",
+			AuthorName:    "ThorNex X Aelsiu",
+			BackWords:     "MUSIC PARTY",
 			NeteaseQuality: "exhigh",
 			NeteaseEnabled: true,
 			BilibiliEnabled: true,
@@ -100,7 +103,10 @@ func LoadConfig() *AppConfig {
 }
 
 func (c *AppConfig) Save() error {
-	path := GetConfigPath()
+	return c.save(GetConfigPath())
+}
+
+func (c *AppConfig) save(path string) error {
 	os.MkdirAll(filepath.Dir(path), 0755)
 	data, _ := json.MarshalIndent(c, "", "  ")
 	return os.WriteFile(path, data, 0644)

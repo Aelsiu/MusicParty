@@ -1,4 +1,4 @@
-import { roomSession } from './roomSession';
+import { roomSession, syncRoomShare } from './roomSession';
 import { roomsApi } from '../api/rooms';
 import { usePlayerStore } from '../stores/player';
 import { useUserStore } from '../stores/user';
@@ -28,6 +28,10 @@ function handleGameEvent(event) {
     }
     if (event.action === 'PAIRING_TRIGGER') {
         chatStore.copyPairingCode();
+        return;
+    }
+    if (event.action === 'SHARE_TRIGGER') {
+        chatStore.shareInvite();
         return;
     }
     if (event.action === 'ROOMS_TRIGGER') {
@@ -107,6 +111,7 @@ export const createSocketSubscriptions = () => {
         '/user/queue/profile': profile => userStore.syncProfile(profile),
         '/topic/lifecycle': () => { window.dispatchEvent(new Event('musicparty:return-entry')); },
         '/topic/pairing': status => { window.dispatchEvent(new CustomEvent('musicparty:pairing', { detail: status })); },
+        '/topic/share': status => { syncRoomShare(status?.enabled); },
         // 1. 状态同步
         [WS_DEST.TOPIC_STATE]: (state) => playerStore.syncState(state),
         [WS_DEST.USER_STATE]: (state) => playerStore.syncState(state),
@@ -146,6 +151,12 @@ export const createSocketCallbacks = () => {
         onConnect: (frame, isCurrent = () => true) => {
             playerStore.connected = true;
             window.dispatchEvent(new Event("musicparty:connected"));
+            const { roomId, generation, shareRevision } = roomSession;
+            const shareCurrent = () => isCurrent() && roomSession.roomId === roomId
+                && roomSession.generation === generation && roomSession.shareRevision === shareRevision;
+            roomsApi.share(roomId).then(status => {
+                if (shareCurrent()) syncRoomShare(status?.enabled === true, roomId, generation);
+            }).catch(() => { if (shareCurrent()) syncRoomShare(false, roomId, generation); });
             if (roomSession.ownerAccess) roomsApi.connected(roomSession.roomId).then(result => { if (isCurrent() && result.openAdmin) { const admin=useAdminStore(); admin.isVerified=true; admin.showDashboard=true; } }).catch(() => {});
             // 发起同步
             setTimeout(() => {

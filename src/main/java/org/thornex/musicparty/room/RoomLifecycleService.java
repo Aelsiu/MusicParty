@@ -24,6 +24,7 @@ public class RoomLifecycleService {
     public RoomLifecycleService(RoomRepository repository,RoomAccessService access,RoomScope scope,RoomSocketRegistry sockets,ApplicationContext context,SimpMessagingTemplate messaging,MultiRoomProperties properties) { this.repository=repository;this.access=access;this.scope=scope;this.sockets=sockets;this.context=context;this.messaging=messaging;this.properties=properties; }
     public void departed(String id) { if(access.count(id)==0) emptySince.putIfAbsent(id,System.currentTimeMillis()); }
     public void pairingChanged(String id) { messaging.convertAndSend("/topic/rooms/"+id+"/pairing",Map.of("open",repository.room(id).pairingOpen())); }
+    public void shareChanged(String id) { messaging.convertAndSend("/topic/rooms/"+id+"/share",Map.of("enabled",repository.room(id).shareEnabled())); }
     public void joined(String id) { emptySince.remove(id); try(var ignored=RoomContext.enter(id)) { context.getBean(QueuePersistenceService.class).ensureLoaded(); } }
     public void deleted(String id) {
         messaging.convertAndSend("/topic/rooms/"+id+"/lifecycle",Map.of("action","ROOM_DELETED"));
@@ -46,6 +47,7 @@ public class RoomLifecycleService {
                 }
                 player.playerLoop();
                 if(tick%5==0) { player.broadcastSyncHeartbeat();context.getBean(LiveStreamService.class).transcodeWatchdog();messaging.convertAndSend(RoomContext.topic("/pairing"),Map.of("open",repository.room(id).pairingOpen(),"nextUpdateAt",repository.nextPairingUpdateAt(now))); }
+                if(tick%5==0) shareChanged(id);
                 if(tick%5==0) {
                     var users=context.getBean(UserService.class);
                     messaging.convertAndSend(RoomContext.topic("/users/online"),users.getOnlineUserSummaries());

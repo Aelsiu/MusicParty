@@ -19,8 +19,8 @@ public class RoomRepository {
         public License { note = note == null ? "" : note; }
         public License(String id, String key) { this(id, key, ""); }
     }
-    public record Room(String id, String name, String ownerId, long createdAt, String pairingCode, long pairingEpoch, boolean autoOpen, boolean pairingOpen, boolean publicRoom, long accessVersion) {}
-    private static final List<String> CODES=java.util.stream.IntStream.range(0,10000).mapToObj(i->String.format(Locale.ROOT,"%04d",i)).toList();
+    public record Room(String id, String name, String ownerId, long createdAt, String pairingCode, long pairingEpoch, boolean autoOpen, boolean pairingOpen, boolean publicRoom, long accessVersion, boolean shareEnabled) {}
+    private static final int CODE_SPACE = 36 * 36 * 36 * 36;
     private final MultiRoomProperties properties;
     private final ObjectMapper mapper;
     private final SecureRandom random = new SecureRandom();
@@ -45,6 +45,7 @@ public class RoomRepository {
             s.execute("CREATE TABLE IF NOT EXISTS pairing_clock(id INTEGER PRIMARY KEY CHECK(id=1),interval_minutes INTEGER NOT NULL,start_ms INTEGER NOT NULL,base_epoch INTEGER NOT NULL)");
         }
         addColumnIfMissing("rooms","pairing_open","INTEGER NOT NULL DEFAULT 0");
+        addColumnIfMissing("rooms","share_enabled","INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing("rooms","public_room","INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing("rooms","access_version","INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing("admissions","public_entry","INTEGER NOT NULL DEFAULT 0");
@@ -79,7 +80,7 @@ public class RoomRepository {
         }
         try(Statement s=db.createStatement()) { s.execute("ALTER TABLE "+table+" ADD COLUMN "+name+" "+definition); }
     }
-    private Room readRoom(ResultSet r) throws SQLException { return new Room(r.getString("id"),r.getString("name"),r.getString("owner_id"),r.getLong("created_at"),r.getString("pair_code"),r.getLong("pair_epoch"),r.getInt("auto_open") != 0,r.getInt("pairing_open") != 0,r.getInt("public_room") != 0,r.getLong("access_version")); }
+    private Room readRoom(ResultSet r) throws SQLException { return new Room(r.getString("id"),r.getString("name"),r.getString("owner_id"),r.getLong("created_at"),r.getString("pair_code"),r.getLong("pair_epoch"),r.getInt("auto_open") != 0,r.getInt("pairing_open") != 0,r.getInt("public_room") != 0,r.getLong("access_version"),r.getInt("share_enabled") != 0); }
     public synchronized Room create(String owner, String name, String requestId) {
         if (!RoomValidation.name(name)) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "房间名须为 2–16 个可见字符，不含换行或不可见控制字符");
         if (requestId == null || !requestId.matches("[a-zA-Z0-9-]{16,64}")) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "缺少有效的创建请求标识");
@@ -126,6 +127,7 @@ public class RoomRepository {
     public synchronized long nextPairingUpdateAt(long now) { return pairingStartMs+(Math.floorDiv(now-pairingStartMs,pairingIntervalMinutes*60000L)+1)*pairingIntervalMinutes*60000L; }
     public synchronized int pairingIntervalMinutes() { return pairingIntervalMinutes; }
     public synchronized void setPairingOpen(String id, boolean open) { room(id);update("UPDATE rooms SET pairing_open=? WHERE id=?",open?1:0,id); }
+    public synchronized void setShareEnabled(String id, boolean enabled) { room(id);update("UPDATE rooms SET share_enabled=? WHERE id=?",enabled?1:0,id); }
     public synchronized void setPublicRoom(String id,boolean publicRoom) {
         if(room(id).publicRoom()==publicRoom) return;
         update("UPDATE rooms SET public_room=?,access_version=access_version+1 WHERE id=?",publicRoom?1:0,id);
@@ -136,9 +138,14 @@ public class RoomRepository {
         try (PreparedStatement s = db.prepareStatement("SELECT code FROM pairing_cooldown WHERE until_ms>?") ) {
             s.setLong(1,now); try (ResultSet r = s.executeQuery()) { while (r.next()) unavailable.add(r.getString(1)); }
         } catch (SQLException e) { throw storage(e); }
-        List<String> available = new ArrayList<>(); for (String c:CODES) if (!unavailable.contains(c)) available.add(c);
-        if (available.isEmpty()) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"配对码暂不可分配，请稍后重试");
-        return available.get(random.nextInt(available.size()));
+        SortedSet<Integer> blocked = new TreeSet<>();
+        for (String code : unavailable) if (RoomValidation.pairingCode(code)) blocked.add(Integer.parseInt(code, 36));
+        if (blocked.size() == CODE_SPACE) throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,"配对码暂不可分配，请稍后重试");
+        // Select uniformly from the available space without materializing 36^4 strings.
+        int selected = random.nextInt(CODE_SPACE - blocked.size());
+        for (int value : blocked) { if (value > selected) break; selected++; }
+        String code = Integer.toString(selected, 36);
+        return "0".repeat(4 - code.length()) + code;
     }
     public synchronized String payload(String id, String column) {
         if (!Set.of("payload","config").contains(column)) throw new IllegalArgumentException();

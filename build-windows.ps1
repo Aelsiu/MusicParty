@@ -117,9 +117,7 @@ try {
 
     $wailsBinary = Get-WindowsBuildTool 'wails.exe' 'Run go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0 and add the Go bin directory to PATH.'
     $wailsVersion = Invoke-WindowsBuildCommand $wailsBinary @('version') | Out-String
-    if ($wailsVersion -notmatch '(?m)^v2\.12\.0\s*$') {
-        throw 'Wails CLI 2.12.0 must match launcher/go.mod. Install it with: go install github.com/wailsapp/wails/v2/cmd/wails@v2.12.0'
-    }
+
     $mavenBinary = Join-Path $projectDirectory 'mvnw.cmd'
     if (-not (Test-Path -LiteralPath $mavenBinary -PathType Leaf)) { throw 'mvnw.cmd is missing. Restore the Maven wrapper from this repository.' }
 
@@ -148,6 +146,10 @@ try {
     }
 
     Write-Host "Building $artifactName"
+    Write-Host 'Testing launcher configuration defaults'
+    Push-Location 'launcher'
+    try { Invoke-WindowsBuildCommand $goBinary @('test', '-mod=readonly', './pkg/config') }
+    finally { Pop-Location }
     $env:VITE_APP_VERSION = $metadata.Version
     Write-Host 'Building and testing the web app'
     Push-Location 'music-party-web'

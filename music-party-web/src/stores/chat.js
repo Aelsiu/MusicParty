@@ -1,11 +1,12 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 import { useUserStore } from './user';
 import { socketService } from '../services/socket';
 import { WS_DEST } from '../constants/api';
-import { roomSession } from '../services/roomSession';
+import { roomSession, syncRoomShare } from '../services/roomSession';
 import { roomsApi } from '../api/rooms';
 import { copyRoomPairingCode } from '../services/pairingCode.js';
+import { copyRoomInvite } from '../services/shareInvite.js';
 
 export const useChatStore = defineStore('chat', () => {
     // 状态
@@ -106,6 +107,88 @@ export const useChatStore = defineStore('chat', () => {
         }
     };
 
+    const privateNotice = content => addMessage({
+        id: `private-${Date.now()}-${Math.random()}`, userId: 'SYSTEM', userName: 'SYSTEM',
+        content, timestamp: Date.now(), type: 'SYSTEM', private: true
+    });
+    let sharingInvite = null, updatingShare = null;
+    watch(() => roomSession.generation, () => { sharingInvite = null; updatingShare = null; }, { flush: 'sync' });
+
+    const shareContext = () => {
+        const { roomId, roomToken, managerToken, ownerAccess, generation } = roomSession;
+        return {
+            roomId, generation,
+            isCurrent: () => userStore.isAuthPassed && !userStore.isGuest
+                && roomSession.roomId === roomId && roomSession.generation === generation
+                && roomSession.roomToken === roomToken && roomSession.ownerAccess === ownerAccess
+                && (!ownerAccess || roomSession.managerToken === managerToken)
+        };
+    };
+
+    const runShareCommand = async (parameter = '', valid = true) => {
+        if (!userStore.isAuthPassed || userStore.isGuest) return false;
+        if (!valid || !['', 'on', 'off'].includes(parameter)) {
+            privateNotice('用法：//share、//share on、//share off');
+            return false;
+        }
+        if (parameter && !roomSession.ownerAccess) {
+            privateNotice('此指令仅限本房间 Owner 或 Root 使用，请通过管理入口进入房间');
+            return false;
+        }
+        const context = shareContext();
+        if (!context.roomId) return false;
+
+        if (!parameter) {
+            if (sharingInvite) return false;
+            if (!roomSession.shareEnabled) {
+                privateNotice('房间邀请分享已关闭');
+                return false;
+            }
+            const operation = {};
+            const revision = roomSession.shareRevision;
+            sharingInvite = operation;
+            const isCurrent = () => sharingInvite === operation && context.isCurrent()
+                && roomSession.shareEnabled && roomSession.shareRevision === revision;
+            try {
+                const copied = await copyRoomInvite({
+                    roomId: context.roomId, origin: window.location.origin, invite: roomsApi.invite,
+                    isCurrent,
+                    notify: privateNotice
+                });
+                if (!copied || !isCurrent()) return false;
+                window.dispatchEvent(new CustomEvent('musicparty:invite-copied', { detail: {
+                    roomId: context.roomId, generation: context.generation, shareRevision: revision
+                } }));
+                return true;
+            } finally {
+                if (sharingInvite === operation) sharingInvite = null;
+            }
+        }
+
+        if (updatingShare) return false;
+        const operation = {};
+        const revision = roomSession.shareRevision;
+        updatingShare = operation;
+        try {
+            const room = await roomsApi.setShareEnabled(context.roomId, parameter === 'on');
+            if (updatingShare !== operation || !context.isCurrent()) return false;
+            if (!syncRoomShare(room.shareEnabled, context.roomId, context.generation, revision)) {
+                privateNotice('房间分享状态已更新，请以当前状态为准');
+                return false;
+            }
+            privateNotice(room.shareEnabled ? '已允许所有房间成员分享邀请链接' : '已关闭所有房间成员的邀请分享');
+            return true;
+        } catch (error) {
+            if (updatingShare === operation && context.isCurrent()) {
+                privateNotice(error.response?.data?.message || error.response?.data?.detail || '分享状态更新失败，请重试');
+            }
+            return false;
+        } finally {
+            if (updatingShare === operation) updatingShare = null;
+        }
+    };
+    const shareInvite = () => runShareCommand();
+
     return {
         messages,
         unreadCount,
@@ -117,6 +200,8 @@ export const useChatStore = defineStore('chat', () => {
         setHistory,
         loadMoreHistory,
         prependHistory,
-        copyPairingCode
+        copyPairingCode,
+        shareInvite,
+        runShareCommand
     };
 });

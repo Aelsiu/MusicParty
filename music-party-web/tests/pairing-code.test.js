@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { copyAsyncText } from '../src/utils/clipboard.js';
 import { copyRoomPairingCode, isPairingCodeCommand } from '../src/services/pairingCode.js';
+import { isPairingCode, normalizePairingCode } from '../src/utils/pairingCode.js';
 
 function request(overrides = {}) {
     const notices = [], copied = [], fetched = [];
@@ -18,6 +19,20 @@ function request(overrides = {}) {
 test('code command matches server casing and whitespace without matching other commands', () => {
     for (const text of ['//code', ' //CODE ', '//Code ignored-args']) assert.equal(isPairingCodeCommand(text), true);
     for (const text of ['//codes', 'code', 'hello //code', '//rooms']) assert.equal(isPairingCodeCommand(text), false);
+});
+
+test('pairing codes accept four ASCII letters or digits with any case', () => {
+    for (const code of ['1234', '0000', 'abcd', 'AZ09', 'a0Zb']) assert.equal(isPairingCode(code), true);
+    for (const code of ['abc', '12345', '', ' abcd', 'abcd ', 'a-b1', 'ab汉1', 'ＡＢ１２', 1234, null]) {
+        assert.equal(isPairingCode(code), false);
+    }
+    assert.equal(normalizePairingCode('A0ZB'), 'a0zb');
+});
+
+test('alphanumeric codes are copied from the latest manager response in canonical lowercase', async () => {
+    const { dependencies, copied } = request({ manage: async () => ({ pairingCode: 'A0Zb' }) });
+    assert.equal(await copyRoomPairingCode(dependencies), true);
+    assert.deepEqual(copied, ['a0zb']);
 });
 
 test('each invocation gets the latest authorized code and preserves leading zeroes', async () => {

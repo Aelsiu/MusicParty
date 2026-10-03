@@ -22,8 +22,9 @@ public class WebSocketAuthInterceptor implements ExecutorChannelInterceptor {
             access.connect(a.getSessionId(),room,a.getFirstNativeHeader("room-token"),a.getFirstNativeHeader("management-token"));
         } else if(a.getCommand()==StompCommand.SEND || a.getCommand()==StompCommand.SUBSCRIBE) {
             var c=access.connection(a.getSessionId());String d=a.getDestination();
+            if(d==null) throw new MessageDeliveryException("ACCESS_DENIED");
             if(a.getCommand()==StompCommand.SEND && !SENDS.contains(d)) throw new MessageDeliveryException("ACCESS_DENIED");
-            if(a.getCommand()==StompCommand.SUBSCRIBE && !PRIVATE.contains(d) && (d==null || !d.matches("/topic/rooms/"+c.roomId()+"/(player/(state|queue|events)|users/online|chat|lifecycle|pairing)"))) throw new MessageDeliveryException("ACCESS_DENIED");
+            if(a.getCommand()==StompCommand.SUBSCRIBE && !PRIVATE.contains(d) && !d.matches("/topic/rooms/"+c.roomId()+"/(player/(state|queue|events)|users/online|chat|lifecycle|pairing|share)")) throw new MessageDeliveryException("ACCESS_DENIED");
         }
         return message;
     }

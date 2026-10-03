@@ -160,7 +160,7 @@ class RoomAccessIntegrationTest {
             statement.execute("INSERT INTO admissions VALUES('"+token+"','apiABCDE',"+RoomRepository.epoch(now)+","+((RoomRepository.epoch(now)+1)*600000)+")");
         }
         repository=new RoomRepository(properties,mapper);repository.initialize();controllers();
-        assertFalse(repository.room("apiABCDE").publicRoom());assertTrue(repository.room("apiABCDE").pairingOpen());
+        assertFalse(repository.room("apiABCDE").publicRoom());assertTrue(repository.room("apiABCDE").pairingOpen());assertFalse(repository.room("apiABCDE").shareEnabled());
         access.admission(token,"apiABCDE");
         http.perform(post("/api/rooms/apiABCDE/public-admission")).andExpect(status().isForbidden());
     }

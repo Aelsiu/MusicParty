@@ -33,7 +33,7 @@ export const useUiStore = defineStore('ui', () => {
     const lyricPreviewLines = ref([0, 1, 2].includes(savedLyricPreviewLines) ? savedLyricPreviewLines : 0);
     const visualizationEnabled = ref(localStorage.getItem(STORAGE_KEYS.VISUALIZATION) === 'true');
     const authorName = ref('ThorNex X Aelsiu');
-    const backWords = ref('THORNEX');
+    const backWords = ref('MUSIC PARTY');
     const theme = ref(initialTheme);
     const customThemeConfig = ref(savedCustomTheme);
 

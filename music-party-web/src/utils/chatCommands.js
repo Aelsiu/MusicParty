@@ -21,6 +21,11 @@ export const chatCommands = [
         { name: 'on', label: '在播放页展示配对码' },
         { name: 'off', label: '取消播放页配对码展示' }
     ] },
+    { name: 'share', defaultParameter: '', parameters: [
+        { name: '', label: '复制当前房间邀请链接' },
+        { name: 'on', label: '允许所有房间成员分享邀请链接', manager: true },
+        { name: 'off', label: '关闭所有房间成员的邀请分享', manager: true }
+    ] },
     { name: 'rooms', label: '打开房间管理', manager: true }
 ];
 
@@ -29,7 +34,7 @@ export function commandChoices(manager) {
         if (command.manager && !manager) return [];
         if (!command.parameters) return [{ text: `//${command.name}`, label: command.label }];
         return command.parameters.filter(parameter => manager || !parameter.manager)
-            .map(parameter => ({ text: `//${command.name} ${parameter.name}`, label: parameter.label }));
+            .map(parameter => ({ text: `//${command.name}${parameter.name ? ` ${parameter.name}` : ''}`, label: parameter.label }));
     });
 }
 
@@ -45,7 +50,7 @@ export function completeCommand(text, manager) {
     if (!command?.parameters || (command.manager && !manager)) return null;
     const parameters = command.parameters.filter(parameter => (manager || !parameter.manager)
         && parameter.name.startsWith(match[2].toLowerCase()));
-    return parameters.length === 1 ? `//${command.name} ${parameters[0].name}` : null;
+    return parameters.length === 1 ? `//${command.name}${parameters[0].name ? ` ${parameters[0].name}` : ''}` : null;
 }
 
 export function parseChatCommand(text) {

@@ -34,17 +34,17 @@ test('parameter completion follows the clear all clarification and parameter per
 });
 
 test('shortcut menu only offers commands and parameters allowed to this room identity', () => {
-    assert.deepEqual(commandChoices(false).map(item => item.text), ['//clear self', '//stream now', '//admin']);
+    assert.deepEqual(commandChoices(false).map(item => item.text), ['//clear self', '//stream now', '//admin', '//share']);
     const manager = commandChoices(true).map(item => item.text);
-    assert.equal(manager.length, 15);
+    assert.equal(manager.length, 18);
     assert.equal(manager.includes('//code open'), false);
-    for (const command of ['//clear all', '//clear dead', '//clear chat', '//stream on', '//stream off', '//jump dog', '//code copy', '//code on', '//code off', '//rooms']) {
+    for (const command of ['//clear all', '//clear dead', '//clear chat', '//stream on', '//stream off', '//jump dog', '//code copy', '//code on', '//code off', '//share', '//share on', '//share off', '//rooms']) {
         assert.ok(manager.includes(command));
     }
 });
 
 test('command parsing applies explicit defaults but does not accept invalid or extra parameters', () => {
-    for (const [name, parameter] of [['clear', 'self'], ['stream', 'now'], ['jump', 'off'], ['code', 'copy'], ['admin', ''], ['rooms', '']]) {
+    for (const [name, parameter] of [['clear', 'self'], ['stream', 'now'], ['jump', 'off'], ['code', 'copy'], ['share', ''], ['admin', ''], ['rooms', '']]) {
         assert.deepEqual(parseChatCommand(`//${name}`), { name, parameter, valid: true });
     }
     assert.deepEqual(parseChatCommand('//CODE COPY'), { name: 'code', parameter: 'copy', valid: true });
@@ -56,4 +56,20 @@ test('command parsing applies explicit defaults but does not accept invalid or e
     assert.equal(parseChatCommand('//code copy extra').valid, false);
     assert.equal(parseChatCommand('//rooms anything').valid, false);
     assert.equal(parseChatCommand('code'), null);
+});
+
+test('share completion is available to User while on and off remain management only', () => {
+    assert.equal(completeCommand('sh', true), '//share');
+    assert.equal(completeCommand('//share of', true), '//share off');
+    assert.equal(completeCommand('//share on', true), '//share on');
+    assert.equal(completeCommand('sh', false), '//share');
+    assert.equal(completeCommand('//SHARE', false), '//share');
+    assert.equal(completeCommand('//share ', false), '//share');
+    assert.equal(completeCommand('//share on', false), null);
+    assert.equal(completeCommand('//share of', false), null);
+    assert.equal(completeCommand('//share o', true), null);
+    assert.deepEqual(parseChatCommand('//SHARE ON'), { name: 'share', parameter: 'on', valid: true });
+    assert.deepEqual(parseChatCommand('//share off'), { name: 'share', parameter: 'off', valid: true });
+    assert.equal(parseChatCommand('//share copy').valid, false);
+    assert.equal(parseChatCommand('//share on extra').valid, false);
 });

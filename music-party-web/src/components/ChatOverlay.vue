@@ -218,6 +218,7 @@ import { MessageSquare, X, Send, Terminal, Zap, Loader2, MoreVertical } from 'lu
 import dayjs from 'dayjs';
 import { commandChoices, completeCommand, parseChatCommand } from '../utils/chatCommands.js';
 import { roomSession } from '../services/roomSession';
+import { isShareCommand } from '../services/shareInvite.js';
 
 const chatStore = useChatStore();
 const playerStore = usePlayerStore();
@@ -441,6 +442,7 @@ const send = (event) => {
   // Start clipboard access in this click/Enter gesture, before awaiting the API.
   const command = parseChatCommand(text);
   if (command?.name === 'code' && command.valid && command.parameter === 'copy') chatStore.copyPairingCode();
+  else if (isShareCommand(text)) chatStore.runShareCommand(command?.parameter, command?.valid === true);
   else playerStore.sendChatMessage(text);
   inputContent.value = '';
 };

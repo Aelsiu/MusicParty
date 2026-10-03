@@ -8,8 +8,8 @@ const config = reactive({
   serverPort: '8080',
   baseUrl: 'http://localhost:8080',
   adminPassword: '',
-  authorName: 'ThorNex',
-  backWords: 'THORNEX',
+  authorName: 'ThorNex X Aelsiu',
+  backWords: 'MUSIC PARTY',
   neteaseCookie: '',
   neteaseQuality: 'exhigh',
   neteaseEnabled: true,
@@ -208,6 +208,7 @@ const openWeb = () => {
                     <option value="exhigh">极高</option>
                     <option value="lossless">无损</option>
                     <option value="hires">高解析度</option>
+                    <option value="jyeffect">高清臻音</option>
                   </select>
                 </div>
               </div>

@@ -27,7 +27,7 @@ app:
   music-api:
     base-url: ${BASE_URL:http://localhost:8080}
     author-name: ${APP_AUTHOR_NAME:ThorNex X Aelsiu}
-    back-words: ${APP_BACK_WORDS:THORNEX}
+    back-words: ${APP_BACK_WORDS:MUSIC PARTY}
     netease:
       # The base URL of your deployed NeteaseCloudMusicApi instance
       base-url: ${NETEASE_API_URL:http://netease-api:3000}

@@ -87,9 +87,11 @@ git clone https://github.com/NeteaseCloudMusicApiEnhanced/api-enhanced.git exter
   -FfmpegPath 'C:\Tools\ffmpeg\bin\ffmpeg.exe'
 ```
 
-脚本安装并测试前端依赖、构建后端、在打包副本中安装 API 生产依赖，再构建 Wails 启动器，不改变外部 API 源码目录。EXE 内包含本机 Node 运行时、NCM API、前后端 JAR、FFmpeg 和由 JDK 21 裁剪的 JRE。只传入 `ffmpeg.exe` 会只打包这个文件，所以不要使用还依赖同目录 DLL 的 FFmpeg 构建。
+脚本先运行启动器配置的 Go 回归测试，再安装并测试前端依赖、构建后端、在打包副本中安装 API 生产依赖，最后构建 Wails 启动器，不改变外部 API 源码目录。配置测试失败会中止构建；GitHub Release 的 Windows 构建也执行此检查。EXE 内包含本机 Node 运行时、NCM API、前后端 JAR、FFmpeg 和由 JDK 21 裁剪的 JRE。只传入 `ffmpeg.exe` 会只打包这个文件，所以不要使用还依赖同目录 DLL 的 FFmpeg 构建。
 
 最终交付输出为 `dist/windows/MusicParty-windows-<version>-<commit>.exe`。最终用户无需安装 Go、Node、Java 或 Maven，但需要 WebView2 Runtime。首次运行按 [多房间部署文档](docs/multi-rooms-deployment.md) 编辑 EXE 同目录的 `config/application.properties`，设置最高许可和外部访问地址。
+
+项目默认署名为 `ThorNex X Aelsiu`，默认背景文字为 `MUSIC PARTY`。Windows 的 `launcher_config.json` 在用户保存启动器配置时生成于 EXE 同目录，并非构建脚本生成；其中已有的配置会继续保留。更新 EXE 不会自动覆盖旧 JSON，如需恢复这两个默认值，请仅修改 `authorName` 和 `backWords`，保留其他配置。各平台的来源与覆盖顺序见 [构建署名排查记录](docs/build-branding-audit.md)。
 
 ## Ubuntu 首次部署：build-ubuntu.ps1
 

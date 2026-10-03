@@ -36,5 +36,6 @@ public enum PlayerAction {
     SYSTEM_MESSAGE,
     ADMIN_TRIGGER,
     PAIRING_TRIGGER,
+    SHARE_TRIGGER,
     ROOMS_TRIGGER
 }

@@ -45,13 +45,14 @@ public class RoomAccessService {
     public Manager root(String token) { Manager m=manager(token); if (!m.root()) throw denied("需要最高许可"); return m; }
     public Admission join(String code,String address) {
         limit(address); long now=System.currentTimeMillis(); repository.rotate(now);
-        var room=repository.rooms().stream().filter(r -> Objects.equals(r.pairingCode(),code)).findFirst().orElseThrow(() -> denied("配对码无效或已更新"));
+        String normalized = normalizePairingCode(code);
+        var room=repository.rooms().stream().filter(r -> Objects.equals(r.pairingCode(),normalized)).findFirst().orElseThrow(() -> denied("配对码无效或已更新"));
         attempts.remove(address);return issue(room,now,false);
     }
     public Admission join(String roomId,String code,String address) {
         limit(address);long now=System.currentTimeMillis();repository.rotate(now);
         var room=repository.room(roomId);
-        if(!equal(code,room.pairingCode())) throw denied("配对码不属于此房间或已更新");
+        if(!equal(normalizePairingCode(code),room.pairingCode())) throw denied("配对码不属于此房间或已更新");
         attempts.remove(address);return issue(room,now,false);
     }
     public Admission publicAdmission(String roomId,String address) {
@@ -104,6 +105,10 @@ public class RoomAccessService {
     public void revokeRoom(String id) { admissions.values().removeIf(a->a.roomId().equals(id)); }
     public String token() { byte[] b=new byte[32];random.nextBytes(b);return Base64.getUrlEncoder().withoutPadding().encodeToString(b); }
     private boolean equal(String a,String b) { return a!=null && b!=null && MessageDigest.isEqual(a.getBytes(StandardCharsets.UTF_8),b.getBytes(StandardCharsets.UTF_8)); }
+    private String normalizePairingCode(String code) {
+        if (!RoomValidation.pairingCode(code)) throw denied("请输入四位英文字母或数字配对码");
+        return code.toLowerCase(Locale.ROOT);
+    }
     private String digest(String value) { try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8))); } catch(NoSuchAlgorithmException e) { throw new IllegalStateException(e); } }
     private synchronized void limit(String address) {
         long now=System.currentTimeMillis(); Attempt old=attempts.get(address);

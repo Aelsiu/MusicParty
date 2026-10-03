@@ -58,7 +58,8 @@ import { authApi } from '../api/auth';
 import { useUserStore } from '../stores/user';
 import { roomSession, saveManager, clearManager, selectRoom } from '../services/roomSession';
 import { resolveRoomEntry } from '../services/roomEntry';
-import { navigateRoom } from '../services/roomRoute';
+import { navigateRoom, roomIdFromPath, consumeRoomPairingCode } from '../services/roomRoute';
+import { isPairingCode, normalizePairingCode } from '../utils/pairingCode';
 import { registerBackHandler } from '../services/backNavigation';
 
 const props = defineProps({ roomId: { type: String, default: '' } });
@@ -68,7 +69,8 @@ const name = ref(localStorage.getItem('mp_username') || ''), code = ref(''), key
 const busy = ref(false), ready = ref(false), error = ref(''), licenseError = ref(''), roomCount = ref(0);
 const showLicense = ref(false), showManager = ref(false), targetRoom = ref(null), licenseInput = ref(null);
 let alive = true, generation = 0;
-const current = request => alive && request === generation;
+let queryPairingCode, queryConsumed = false;
+const current = request => alive && request === generation && roomIdFromPath(window.location.pathname) === props.roomId;
 const unregisterBack = registerBackHandler(110, () => {
   if (!showLicense.value) return false;
   if (!busy.value) closeLicense();
@@ -106,10 +108,11 @@ async function join() {
   error.value = '';
   const value = entryName(); if (!value) return;
   if (props.roomId && key.value) { await verifyRoomLicense(value); return; }
-  if (!/^[0-9]{4}$/.test(code.value)) { error.value = '请输入四位配对码'; return; }
+  if (!isPairingCode(code.value)) { error.value = '请输入四位字母或数字配对码'; return; }
   busy.value = true; const request = ++generation;
   try {
-    const result = props.roomId ? await roomsApi.joinRoom(props.roomId, code.value) : await roomsApi.join(code.value);
+    const pairingCode = normalizePairingCode(code.value);
+    const result = props.roomId ? await roomsApi.joinRoom(props.roomId, pairingCode) : await roomsApi.join(pairingCode);
     if (!current(request)) return;
     remember(result); enter(result.room, result.token, false, value);
   } catch (e) {
@@ -149,11 +152,12 @@ async function ownerEntry(room) {
   finally { if (current(request)) busy.value = false; }
 }
 async function initialize() {
+  if (!queryConsumed) { queryPairingCode = consumeRoomPairingCode(props.roomId); queryConsumed = true; }
   ready.value = false; error.value = ''; const request = ++generation;
   try {
     const status = await authApi.getStatus(); if (!current(request)) return;
     roomCount.value = status.roomCount;
-    if (roomSession.managerToken) {
+    if (queryPairingCode === undefined && roomSession.managerToken) {
       try { await roomsApi.session(); }
       catch (e) { if (!current(request)) return; if (e.response?.status === 403) clearManager(); else throw e; }
     }
@@ -161,15 +165,17 @@ async function initialize() {
     let admission = null;
     try { admission = JSON.parse(localStorage.getItem('mp_admission_' + props.roomId) || 'null'); } catch { /* Discard malformed local state. */ }
     const resolved = await resolveRoomEntry(props.roomId, {
-      api: roomsApi, managerToken: roomSession.managerToken, admission,
-      discardAdmission: () => localStorage.removeItem('mp_admission_' + props.roomId)
+      api: roomsApi, managerToken: roomSession.managerToken, admission, pairingCode: queryPairingCode,
+      discardAdmission: () => localStorage.removeItem('mp_admission_' + props.roomId),
+      isCurrent: () => current(request)
     });
     if (!current(request)) return;
+    queryPairingCode = undefined;
     if (resolved.kind === 'member' || resolved.kind === 'owner') {
       if (resolved.kind === 'member') remember(resolved);
       const value = name.value.trim();
       enter(resolved.room, resolved.token || '', resolved.kind === 'owner', value && !/^guest/i.test(value) && !value.startsWith('游客') ? value : '游客');
-    } else { targetRoom.value = resolved.room || null; ready.value = true; }
+    } else { targetRoom.value = resolved.room || null; error.value = resolved.error || ''; ready.value = true; }
   } catch (e) { if (current(request)) error.value = e.response?.data?.message || '服务连接失败'; }
 }
 onMounted(initialize);

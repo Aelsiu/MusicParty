@@ -59,6 +59,25 @@ public class RoomController {
         Boolean open=body.get("open");if(open==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请提供 SHOW 状态");
         repository.setPairingOpen(id,open);lifecycle.pairingChanged(id);return roomInfo(repository.room(id),true);
     }
+    @GetMapping("/{id}/share") public Map<String,Boolean> share(@PathVariable String id,HttpServletRequest request,HttpServletResponse response) {
+        response.setHeader("Cache-Control","no-store");
+        access.member(request.getHeader("X-Room-Token"),token(request),id);
+        return Map.of("enabled",repository.room(id).shareEnabled());
+    }
+    @PatchMapping("/{id}/share") public Map<String,Object> setShare(@PathVariable String id,@RequestBody Map<String,Boolean> body,HttpServletRequest request,HttpServletResponse response) {
+        response.setHeader("Cache-Control","no-store");access.own(token(request),id);
+        Boolean enabled=body.get("enabled");if(enabled==null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST,"请提供 SHARE 状态");
+        repository.setShareEnabled(id,enabled);lifecycle.shareChanged(id);return roomInfo(repository.room(id),true);
+    }
+    @GetMapping("/{id}/invite") public Map<String,Object> invite(@PathVariable String id,HttpServletRequest request,HttpServletResponse response) {
+        response.setHeader("Cache-Control","no-store");
+        access.member(request.getHeader("X-Room-Token"),token(request),id);
+        synchronized (repository) {
+            long now=System.currentTimeMillis();repository.rotate(now);var room=repository.room(id);
+            if(!room.shareEnabled()) throw new ResponseStatusException(HttpStatus.FORBIDDEN,"本房间已关闭分享");
+            return Map.of("pairingCode",room.pairingCode(),"nextUpdateAt",repository.nextPairingUpdateAt(now),"serverTime",now,"pairingIntervalMinutes",repository.pairingIntervalMinutes());
+        }
+    }
     @PostMapping("/{id}/connected") public Map<String,Boolean> connected(@PathVariable String id,HttpServletRequest request) {
         access.own(token(request),id);
         if(access.count(id)==0) throw new ResponseStatusException(HttpStatus.CONFLICT,"房间尚未连接");
@@ -70,7 +89,7 @@ public class RoomController {
     @PutMapping("/licenses/{id}") public Map<String,String> updateLicense(@PathVariable String id,@RequestBody Map<String,String> body,HttpServletRequest request) { access.root(token(request));repository.replaceLicense(id,body.get("key"));access.revokeLicense(id);lifecycle.revokeInvalidManagers();return Map.of("message","许可已更新"); }
     @DeleteMapping("/licenses/{id}") public Map<String,String> deleteLicense(@PathVariable String id,HttpServletRequest request) { access.root(token(request));for(String room:repository.removeLicense(id)) lifecycle.deleted(room);access.revokeLicense(id);lifecycle.revokeInvalidManagers();return Map.of("message","许可及所属房间已删除"); }
     private Map<String,Object> roomInfo(RoomRepository.Room r,boolean manager) {
-        Map<String,Object> result=new LinkedHashMap<>();result.put("id",r.id());result.put("name",r.name());result.put("publicRoom",r.publicRoom());
+        Map<String,Object> result=new LinkedHashMap<>();result.put("id",r.id());result.put("name",r.name());result.put("publicRoom",r.publicRoom());result.put("shareEnabled",r.shareEnabled());
         if(manager) {result.put("ownerId",r.ownerId());result.put("pairingCode",r.pairingCode());result.put("nextUpdateAt",repository.nextPairingUpdateAt(System.currentTimeMillis()));result.put("serverTime",System.currentTimeMillis());result.put("pairingIntervalMinutes",repository.pairingIntervalMinutes());result.put("pairingOpen",r.pairingOpen());}
         return result;
     }

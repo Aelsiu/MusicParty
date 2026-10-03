@@ -48,6 +48,7 @@ build/
 /launcher/bin/
 /launcher/frontend/node_modules/
 /launcher/frontend/dist/
+/launcher/frontend/package.json.md5
 /launcher/frontend/src/wailsjs/
 /external-api-source/
 /android/.gradle/

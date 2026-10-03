@@ -8,26 +8,27 @@
     <input :value="modelValue" @input="onInput" @keydown.enter="$emit('complete')"
            @focus="focused = true; updateCaret($event)" @blur="focused = false"
            @click="updateCaret" @keyup="updateCaret" @select="updateCaret"
-           type="text" inputmode="numeric" pattern="[0-9]*" maxlength="4"
-           autocomplete="off" :aria-label="label"
+           type="text" inputmode="text" pattern="[A-Za-z0-9]{4}" maxlength="4"
+           autocomplete="off" autocapitalize="none" :spellcheck="false" :aria-label="label"
            class="absolute inset-0 w-full h-full opacity-0 cursor-text" />
   </div>
 </template>
 
 <script setup>
 import { ref, computed } from 'vue';
+import { isPairingCode, normalizePairingCode } from '../utils/pairingCode';
 
 const props = defineProps({ modelValue: { type: String, default: '' }, label: { type: String, default: '四位配对码' } });
 const emit = defineEmits(['update:modelValue', 'complete']);
 const focused = ref(false);
 const caret = ref(0);
 const activeIndex = computed(() => Math.min(caret.value, props.modelValue.length, 3) + 1);
-const isComplete = computed(() => /^[0-9]{4}$/.test(props.modelValue));
+const isComplete = computed(() => isPairingCode(props.modelValue));
 const updateCaret = (event) => { caret.value = event.target.selectionStart ?? props.modelValue.length; };
 
 const onInput = (event) => {
-  const position = event.target.value.slice(0, event.target.selectionStart).replace(/[^0-9]/g, '').length;
-  const value = event.target.value.replace(/[^0-9]/g, '').slice(0, 4);
+  const position = event.target.value.slice(0, event.target.selectionStart).replace(/[^a-z0-9]/gi, '').length;
+  const value = normalizePairingCode(event.target.value.replace(/[^a-z0-9]/gi, '').slice(0, 4));
   event.target.value = value;
   event.target.setSelectionRange(position, position);
   updateCaret(event);

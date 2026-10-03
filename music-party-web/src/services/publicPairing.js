@@ -1,3 +1,5 @@
+import { isPairingCode, normalizePairingCode } from '../utils/pairingCode.js';
+
 const empty = () => ({ open: false, code: '', nextUpdateAt: 0, intervalMinutes: 10, offset: 0 });
 
 // The public component never uses the manager endpoint. Closed state drops the code,
@@ -12,12 +14,12 @@ export function createPublicPairingSession({ fetchPairing, publish, now = Date.n
             const result = await fetchPairing(id);
             if (!active || current !== generation || id !== roomId) return;
             if (result.open !== true) { knownClosed = true; clear(); return; }
-            if (typeof result.pairingCode !== 'string' || !/^\d{4}$/.test(result.pairingCode) || !Number.isFinite(result.nextUpdateAt)
+            if (!isPairingCode(result.pairingCode) || !Number.isFinite(result.nextUpdateAt)
                 || !Number.isFinite(result.serverTime) || result.nextUpdateAt <= result.serverTime
                 || !Number.isInteger(result.pairingIntervalMinutes)
                 || result.pairingIntervalMinutes < 1 || result.pairingIntervalMinutes > 60) throw new Error('Invalid pairing response');
             knownClosed = false;
-            state = { open: true, code: result.pairingCode, nextUpdateAt: result.nextUpdateAt,
+            state = { open: true, code: normalizePairingCode(result.pairingCode), nextUpdateAt: result.nextUpdateAt,
                 intervalMinutes: result.pairingIntervalMinutes, offset: result.serverTime - now() };
             publish(state);
         } catch {

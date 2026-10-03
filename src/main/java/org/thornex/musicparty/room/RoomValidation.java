@@ -6,6 +6,7 @@ public final class RoomValidation {
     private static final Pattern GRAPHEME = Pattern.compile("\\X");
     private RoomValidation() {}
     public static boolean key(String key) { return key != null && key.matches("[\\x21-\\x7E]{8,16}"); }
+    public static boolean pairingCode(String code) { return code != null && code.matches("[A-Za-z0-9]{4}"); }
     public static boolean name(String value) {
         return visibleText(value, 2, 16);
     }

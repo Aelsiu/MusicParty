@@ -207,6 +207,9 @@ jobs:
           Push-Location launcher
           try {
             go mod tidy
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            go test -mod=readonly ./pkg/config
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             wails build -platform windows/amd64 -o $artifactName
             if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } finally { Pop-Location }
