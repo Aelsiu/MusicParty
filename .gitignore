@@ -67,3 +67,4 @@ build/
 /.snow/
 # git worktree 工作区
 /.worktrees/
+/docs/architecture/
