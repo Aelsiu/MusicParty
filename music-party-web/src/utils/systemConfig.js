@@ -1,3 +1,4 @@
+export const videoResolutionOptions = ['UNLIMITED', '480P', '720P', '1080P', '1440P', '2160P'];
 export const systemFields = {
     '队列最大长度': { field: 'maxQueueSize', requestField: 'maxSize', min: 1, max: 10000 },
     '历史记录容量': { field: 'maxHistorySize', requestField: 'historySize', min: 0, max: 10000 },
@@ -7,11 +8,12 @@ export const systemFields = {
     '发言频率限制(ms)': { field: 'minChatIntervalMs', min: 0, max: 600000 },
     '消息最大长度': { field: 'maxChatMessageLength', min: 1, max: 10000 },
     'B站时长上限(分钟)': { field: 'bilibiliMaxDurationMinutes', min: 1, max: 1440 },
+    '视频时长上限(分钟)': { field: 'videoMaxDurationMinutes', min: 1, max: 1440 },
     '配对码更新周期(分钟)': { field: 'pairingIntervalMinutes', min: 1, max: 60 }
 };
 
 export function systemConfigDraft(snapshot) {
-    return Object.fromEntries(Object.values(systemFields).map(({ field }) => [field, snapshot[field] ?? (field === 'pairingIntervalMinutes' ? 10 : undefined)]));
+    return { videoMaxResolution: snapshot.videoMaxResolution ?? 'UNLIMITED', ...Object.fromEntries(Object.values(systemFields).map(({ field }) => [field, snapshot[field] ?? (field === 'videoMaxDurationMinutes' ? 120 : field === 'pairingIntervalMinutes' ? 10 : undefined)])) };
 }
 
 export function systemConfigUpdate(config) {
@@ -23,5 +25,8 @@ export function systemConfigUpdate(config) {
         }
         update[requestField] = value;
     }
+    const cap = config.videoMaxResolution ?? 'UNLIMITED';
+    if (!videoResolutionOptions.includes(cap)) throw new RangeError('视频分辨率上限无效');
+    update.videoMaxResolution = cap;
     return update;
 }

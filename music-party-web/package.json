@@ -13,6 +13,7 @@
     "@stomp/stompjs": "^7.2.1",
     "@vueuse/core": "^14.1.0",
     "axios": "^1.13.2",
+    "dashjs": "^5.2.1",
     "dayjs": "^1.11.19",
     "lucide-vue-next": "^0.562.0",
     "pinia": "^3.0.4",

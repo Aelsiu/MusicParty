@@ -43,12 +43,13 @@
                   <span class="text-[9px] font-mono opacity-60">IDLE_STATE_MONITOR</span>
                 </div>
                 <div class="p-4 space-y-4">
+                  <p class="text-xs text-accent">当前模式：{{ playerStore.mediaMode === 'VIDEO' ? '一起看视频' : '一起听歌' }}。播放控制、锁和队列清理作用于当前模式。</p>
                   <!-- Control Grid -->
                   <div class="grid grid-cols-3 gap-3">
                     <button @click="execPlayerAction('PAUSE')" class="flex flex-col items-center justify-center p-4 bg-medical-50 border border-medical-200 hover:border-accent hover:text-accent transition-all group">
-                      <Pause v-if="!playerStore.isPaused" class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
+                      <Pause v-if="!playerStore.intentPaused" class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
                       <Play v-else class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
-                      <span class="text-[10px] font-bold font-mono">{{ playerStore.isPaused ? '恢复' : '暂停' }}</span>
+                      <span class="text-[10px] font-bold font-mono">{{ playerStore.intentPaused ? '恢复' : '暂停' }}</span>
                     </button>
                     <button @click="execPlayerAction('SKIP')" class="flex flex-col items-center justify-center p-4 bg-medical-50 border border-medical-200 hover:border-accent hover:text-accent transition-all group">
                       <SkipForward class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
@@ -84,10 +85,10 @@
                       </div>
                       <div class="flex items-center justify-between border-l border-medical-100 pl-3">
                         <div class="flex flex-col">
-                          <span class="text-[10px] font-bold text-medical-800">{{ playerStore.allowOfflineShuffle ? '含离线' : '仅在线' }}</span>
+                          <span class="text-[10px] font-bold text-medical-800">{{ playerStore.allowOfflineShuffle ? '含离线' : '在线优先' }}</span>
                           <span class="text-[8px] text-medical-400 font-mono uppercase">曲库范围</span>
                         </div>
-                        <RoundSwitch :model-value="playerStore.allowOfflineShuffle" @update:model-value="execPlayerAction('TOGGLE_ALLOW_OFFLINE')" label="随机播放包含离线成员" />
+                        <RoundSwitch :model-value="playerStore.allowOfflineShuffle" @update:model-value="execPlayerAction('TOGGLE_ALLOW_OFFLINE')" label="随机播放包含离线成员（无在线候选时回退全体）" />
                       </div>
                     </div>
 
@@ -128,7 +129,7 @@
                         <span class="text-[10px] font-bold text-medical-800">直播推流</span>
                         <span class="text-[8px] text-medical-400 font-mono uppercase">LIVE_STREAM_MODE</span>
                       </div>
-                      <RoundSwitch :model-value="playerStore.streamActive" @update:model-value="toggleStream" label="直播推流" />
+                      <RoundSwitch :model-value="playerStore.streamActive" @update:model-value="toggleStream" :disabled="playerStore.mediaMode === 'VIDEO'" label="直播推流" />
                     </div>
                   </div>
 
@@ -155,13 +156,16 @@
                 </div>
                 <div class="p-4 space-y-4">
                   <!-- 模式开关（两个开关都是"点选开启、再点关闭"；全关即整体关闭，无需独立"关闭"按钮） -->
+                  <p v-if="playerStore.mediaMode === 'VIDEO'" class="text-xs text-medical-500">视频模式保留私人 FM / DJ 配置并暂停执行，仅允许关闭。</p>
                   <div class="space-y-1">
                     <span class="text-[9px] font-bold text-medical-400 font-mono uppercase">模式 · 开关</span>
                     <div class="grid grid-cols-2 gap-1 p-1 bg-medical-50 border border-medical-100">
                       <button @click="setPrivateDjMode(privateDj.mode === 'FM' ? 'OFF' : 'FM')"
+                              :disabled="playerStore.mediaMode === 'VIDEO' && privateDj.mode !== 'FM'"
                               class="py-1.5 text-[10px] font-bold transition-colors"
                               :class="privateDj.mode === 'FM' ? 'bg-accent text-white' : 'text-medical-500 hover:bg-medical-200'">私人FM</button>
                       <button @click="setPrivateDjMode(privateDj.mode === 'DJ' ? 'OFF' : 'DJ')"
+                              :disabled="playerStore.mediaMode === 'VIDEO' && privateDj.mode !== 'DJ'"
                               class="py-1.5 text-[10px] font-bold transition-colors"
                               :class="privateDj.mode === 'DJ' ? 'bg-accent text-white' : 'text-medical-500 hover:bg-medical-200'">私人DJ</button>
                     </div>
@@ -176,7 +180,7 @@
                         <span class="info-tip text-[8px] text-medical-400 font-mono uppercase">{{ sw.hint }}</span>
                       </div>
                       <RoundSwitch :model-value="privateDj[sw.field]" @update:model-value="togglePrivateDjSwitch(sw.field)"
-                                   :disabled="privateDj.mode === 'OFF'" :label="sw.label" />
+                                   :disabled="privateDj.mode === 'OFF' || playerStore.mediaMode === 'VIDEO'" :label="sw.label" />
                     </div>
                   </div>
                 </div>
@@ -213,6 +217,7 @@
                     <NeteaseQrLogin v-if="plat.id==='netease'" />
                     <template v-else>
                       <label class="block text-[11px] font-bold text-medical-500">手动更新B站Cookie</label>
+                      <p class="text-[11px] text-medical-500">{{ playerStore.config.bilibiliCookieConfigured ? '本房间已配置 Cookie；失效时请重新登录 B 站并更新。' : '本房间尚未配置 Cookie，一起看视频需要登录凭据。' }}</p>
                       <div class="flex gap-2">
                         <input
                           type="password"
@@ -342,6 +347,7 @@ const privateDjSwitches = [
 ];
 
 const setPrivateDjMode = async (mode) => {
+  if (playerStore.mediaMode === 'VIDEO' && mode !== 'OFF') { error('视频模式下只能关闭私人 FM / DJ'); return; }
   // 切到 FM/DJ 视为开启，需已配置网易云 Cookie（后端同样校验，这里先给友好提示）
   if (mode !== 'OFF' && !playerStore.config.neteaseCookieConfigured) {
     error('需先配置网易云 Cookie');
@@ -356,6 +362,7 @@ const setPrivateDjMode = async (mode) => {
 };
 
 const togglePrivateDjSwitch = async (field) => {
+  if (playerStore.mediaMode === 'VIDEO') return;
   const update = { [field]: !privateDj.value[field] };
   try {
     const data = await adminApi.updatePrivateDj(adminStore.adminPassword, update);
@@ -384,6 +391,7 @@ const toggleLock = async (type, locked) => {
 };
 
 const toggleStream = async () => {
+  if (playerStore.mediaMode === 'VIDEO') { error('视频模式不支持音乐直播推流'); return; }
   try {
     const data = await adminApi.setStream(adminStore.adminPassword, !playerStore.streamActive);
     success(data.message);
@@ -400,6 +408,8 @@ const updateCookie = async (platform, value) => {
   if (!value) return;
   try {
     const data = await adminApi.setCookie(adminStore.adminPassword, platform, value);
+    const target = platforms.value.find(item => item.id === platform);
+    if (target) target.value = '';
     success(data.message);
   } catch (e) {
     error('凭据更新失败');
@@ -418,9 +428,10 @@ const togglePlatform = async (platformId) => {
 };
 
 const handleReset = async () => {
-  if (!confirm('!!! 警告 !!! \n这将清空本房间队列和播放历史，并停止播放 \n你确定要继续吗？')) return;
+  const context = playerStore.playbackContext();
+  if (!context || !confirm(`这将清空当前${playerStore.mediaMode === 'VIDEO' ? '视频' : '音乐'}模式的队列和历史，并停止播放。另一模式现场保留。确认重置？`)) return;
   try {
-    const data = await adminApi.resetSystem(adminStore.adminPassword);
+    const data = await adminApi.resetSystem(adminStore.adminPassword, context);
     warning(data.message);
   } catch (e) {
     error('房间重置失败');

@@ -21,14 +21,14 @@ import java.util.List;
 @org.thornex.musicparty.room.RoomScoped
 public class MusicSocketController {
 
-    private final MusicPlayerService musicPlayerService;
+    private final org.thornex.musicparty.playback.RoomPlaybackCoordinator coordinator;
     private final UserService userService;
     private final SimpMessagingTemplate messagingTemplate;
     private final ChatService chatService;
     private final org.thornex.musicparty.room.RoomAccessService roomAccess;
 
-    public MusicSocketController(MusicPlayerService musicPlayerService, UserService userService, SimpMessagingTemplate messagingTemplate, ChatService chatService, org.thornex.musicparty.room.RoomAccessService roomAccess) {
-        this.musicPlayerService = musicPlayerService;
+    public MusicSocketController(org.thornex.musicparty.playback.RoomPlaybackCoordinator coordinator, UserService userService, SimpMessagingTemplate messagingTemplate, ChatService chatService, org.thornex.musicparty.room.RoomAccessService roomAccess) {
+        this.coordinator = coordinator;
         this.userService = userService;
         this.messagingTemplate = messagingTemplate;
         this.chatService = chatService;
@@ -36,75 +36,68 @@ public class MusicSocketController {
     }
 
     @MessageMapping("/player/resync")
-    public void requestResync(@Header("simpSessionId") String sessionId) {
-        musicPlayerService.broadcastFullPlayerState();
-    }
+    public void requestResync(@Header("simpSessionId") String session) { coordinator.resync(session); }
+
+    @MessageMapping("/player/clock")
+    public void clock(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.clock(session,request); }
+
+    @MessageMapping("/control/media-mode")
+    public void mediaMode(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"mode",request); }
 
     @MessageMapping("/enqueue")
-    public void enqueue(EnqueueRequest request, @Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        musicPlayerService.enqueue(request, sessionId);
-    }
+    public void enqueue(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"enqueue",request); }
 
     @MessageMapping("/enqueue/playlist")
-    public void enqueuePlaylist(EnqueuePlaylistRequest request, @Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        musicPlayerService.enqueuePlaylist(request, sessionId);
-    }
+    public void enqueuePlaylist(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"playlist",request); }
 
     @MessageMapping("/control/next")
-    public void nextSong(@Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        musicPlayerService.skipToNext(sessionId);
-    }
+    public void nextSong(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"next",request); }
 
     @MessageMapping("/control/toggle-shuffle")
-    public void cyclePlayMode(@Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        musicPlayerService.cyclePlayMode(sessionId);
-    }
+    public void cyclePlayMode(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"shuffle",request); }
 
     @MessageMapping("/control/seek")
-    public void seek(@Payload SeekRequest request, @Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        var connection = roomAccess.connection(sessionId);
-        if (!org.thornex.musicparty.room.RoomContext.require().equals(connection.roomId())) return;
-        boolean manager = connection.managerToken() != null && !connection.managerToken().isBlank();
-        musicPlayerService.seek(request, sessionId, manager);
-    }
+    public void seek(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"seek",request); }
 
     @MessageMapping("/control/toggle-pause")
-    public void togglePause(@Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        musicPlayerService.togglePause(sessionId);
-    }
+    public void togglePause(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"pause",request); }
 
     @MessageMapping("/queue/top")
-    public void topSong(@Payload QueueActionRequest request, @Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        musicPlayerService.topSong(request.queueId(), sessionId);
-    }
+    public void topSong(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"top",request); }
 
     @MessageMapping("/queue/remove")
-    public void removeSong(@Payload QueueActionRequest request, @Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        var connection = roomAccess.connection(sessionId);
-        if (!org.thornex.musicparty.room.RoomContext.require().equals(connection.roomId())) return;
-        boolean manager = connection.managerToken() != null && !connection.managerToken().isBlank();
-        musicPlayerService.removeSongFromQueue(request.queueId(), sessionId, manager);
-    }
+    public void removeSong(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"remove",request); }
 
-    // 点赞接口（可携带客户端上报的播放位置，用于播放条打点；为空则服务器自己算）
     @MessageMapping("/control/like")
-    public void likeSong(@Payload(required = false) LikeRequest request, @Header("simpSessionId") String sessionId) {
-        if (isGuest(sessionId)) return;
-        musicPlayerService.likeSong(sessionId, request != null ? request.position() : null);
-    }
+    public void likeSong(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"like",request); }
+
+    @MessageMapping("/video/source/refresh")
+    public void refreshVideo(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"refresh",request); }
+
+    @MessageMapping("/video/watch/status")
+    public void watchVideo(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.watchStatus(session,request); }
+
+    @MessageMapping("/video/control/rate")
+    public void videoRate(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"rate",request); }
+
+    @MessageMapping("/video/control/page")
+    public void videoPage(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"page",request); }
+
+    @MessageMapping("/video/control/recover")
+    public void recoverVideo(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.command(session,"recover",request); }
+    @MessageMapping("/video/import/favorites")
+    public void importFavorites(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.favoriteImport(session,request); }
+    @MessageMapping("/video/import/status")
+    public void importStatus(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.importStatus(session,request); }
+    @MessageMapping("/video/interaction/resync")
+    public void interactionResync(com.fasterxml.jackson.databind.JsonNode request, @Header("simpSessionId") String session) { coordinator.interactionResync(session,request); }
 
     @MessageMapping("/user/rename")
     public void rename(RenameRequest request, @Header("simpSessionId") String sessionId) {
+        coordinator.internal(() -> {
         if (userService.renameUser(sessionId, request.newName())) {
-            musicPlayerService.broadcastOnlineUsers();
+            coordinator.changed();
+            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/users/online"),userService.getOnlineUserSummaries());
             // PUSH updated user info to the user
             userService.getUser(sessionId).ifPresent(user -> {
                 UserSummary summary = new UserSummary(user.getToken(), sessionId, user.getName(), user.isGuest());
@@ -117,6 +110,7 @@ public class MusicSocketController {
                 messagingTemplate.convertAndSendToUser(sessionId, "/queue/events", errorEvent, createSessionHeaders(sessionId));
             });
         }
+        });
     }
 
     @MessageMapping("/user/bind")
@@ -126,7 +120,7 @@ public class MusicSocketController {
 
     @SubscribeMapping("/topic/player/state")
     public PlayerState getInitialPlayerState() {
-        return musicPlayerService.getCurrentPlayerState();
+        return coordinator.read();
     }
 
     @SubscribeMapping("/topic/users/online")
@@ -136,9 +130,9 @@ public class MusicSocketController {
 
     @SubscribeMapping("/user/me")
     public UserSummary getMyUserInfo(@Header("simpSessionId") String sessionId) {
-        return userService.getUser(sessionId)
+        return coordinator.readMember(sessionId, () -> userService.getUser(sessionId)
                 .map(u -> new UserSummary(u.getToken(), sessionId, u.getName(), u.isGuest()))
-                .orElse(new UserSummary(sessionId, sessionId, "Unknown", true));
+                .orElse(new UserSummary(sessionId, sessionId, "Unknown", true)));
     }
 
     private boolean isGuest(String sessionId) {
@@ -147,23 +141,21 @@ public class MusicSocketController {
 
     @SubscribeMapping("/user/profile")
     public java.util.Map<String,Object> getSharedProfile(@Header("simpSessionId") String sessionId) {
-        return userService.getUser(sessionId).map(user -> java.util.Map.<String,Object>of("name",user.getName(),"bindings",java.util.Map.copyOf(user.getBindings()))).orElse(java.util.Map.of());
+        return coordinator.readMember(sessionId, () -> userService.getUser(sessionId).map(user -> java.util.Map.<String,Object>of("name",user.getName(),"bindings",java.util.Map.copyOf(user.getBindings()))).orElse(java.util.Map.of()));
     }
 
     // 聊天消息处理
     @MessageMapping("/chat")
-    public void handleChat(ChatRequest request, @Header("simpSessionId") String sessionId) {
-        // 1. Strict guest check: Guests cannot chat or send commands
-        if (isGuest(sessionId)) return;
-
-        // 2. Check content validity
-        if (request.content() == null || request.content().trim().isEmpty()) return;
-        if (!chatService.isMessageLengthValid(request.content())) return;
-
-        // 3. Try process as command
-        if (chatService.processIncomingMessage(sessionId, request.content().trim())) {
+    public void handleChat(com.fasterxml.jackson.databind.JsonNode body, @Header("simpSessionId") String sessionId) {
+        ChatRequest request = new ChatRequest(body.path("content").asText(""));
+        if (isGuest(sessionId) || request.content().trim().isEmpty() || !chatService.isMessageLengthValid(request.content())) return;
+        String content = request.content().trim();
+        boolean playbackCommand = content.matches("(?i)^//(clear|jump|stream)(\\s.*)?$") && !content.matches("(?i)^//clear\\s+chat\\s*$");
+        if (playbackCommand) {
+            coordinator.chat(sessionId,body,() -> chatService.processIncomingMessage(sessionId,content));
             return;
         }
+        if (chatService.processIncomingMessage(sessionId,content)) return;
 
         userService.getUser(sessionId).ifPresent(user -> {
             // 4. Rate Limit Check

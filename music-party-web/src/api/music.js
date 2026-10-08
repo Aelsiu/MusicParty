@@ -1,8 +1,9 @@
 import client from './client';
 
 export const musicApi = {
+    videoMetadata: bvid => client.get(`/api/video/metadata/${encodeURIComponent(bvid)}`, { headers: { 'playback-protocol': '3' } }),
     // 搜索歌曲
-    search: (platform, keyword) => client.get(`/api/search/${platform}/${keyword}`),
+    search: (platform, keyword) => client.get(`/api/search/${platform}/${encodeURIComponent(keyword)}`),
 
     // 获取歌词
     getLyric: (platform, songId) => client.get(`/api/music/lyric/${platform}/${songId}`),

@@ -18,9 +18,11 @@
                 <label :for="`system-${setting.field}`" class="block text-[10px] font-bold text-medical-500">{{ label }}</label>
                 <input :id="`system-${setting.field}`" v-model.number="systemConfig[setting.field]" type="number" :min="setting.min" :max="setting.max" step="1" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs outline-none focus:border-accent font-mono" />
               </div>
+              <label class="col-span-2 text-xs text-medical-500">视频分辨率上限
+                <select v-model="systemConfig.videoMaxResolution" class="w-full mt-2 bg-medical-50 border border-medical-200 px-2 py-2"><option v-for="cap in videoResolutionOptions" :key="cap" :value="cap">{{ cap === 'UNLIMITED' ? '不限制' : cap }}</option></select>
+                <span class="block mt-1">按视频短边限制分辨率，各观看端仍独立选择画质。</span>
+              </label>
             </fieldset>
-            <label for="system-watch-together" class="block text-[10px] font-bold text-medical-500 mt-4 mb-1">一起看</label>
-            <input id="system-watch-together" disabled placeholder="功能开发中" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs disabled:opacity-50" />
             <button type="submit" :disabled="busy||systemConfigLoading||!systemConfigLoaded" class="mt-6 w-full bg-strong text-white py-3 text-xs font-bold hover:bg-accent transition-colors flex items-center justify-center gap-2 disabled:opacity-50"><Save class="w-4 h-4" /> {{ working?'正在保存...':'应用并保存所有更改' }}</button>
             <button type="button" @click="loadSystemConfig" :disabled="busy||systemConfigLoading" class="block mx-auto text-[11px] text-accent mt-1 p-2 disabled:opacity-50">{{ systemConfigLoading?'LOADING...':'REFRESH' }}</button>
           </form>
@@ -103,7 +105,7 @@ import { roomsApi } from '../api/rooms';
 import { roomSession, clearManager } from '../services/roomSession';
 import { registerBackHandler } from '../services/backNavigation';
 import { graphemes, validRoomName, validLicenseKey, validLicenseNote, randomLicenseKey } from '../utils/roomValidation';
-import { systemFields, systemConfigDraft, systemConfigUpdate } from '../utils/systemConfig';
+import { systemFields, systemConfigDraft, systemConfigUpdate, videoResolutionOptions } from '../utils/systemConfig';
 const props=defineProps({open:Boolean,selecting:Boolean,currentRoomId:{type:String,default:''}});const emit=defineEmits(['close','select']);
 const rooms=ref([]),licenses=ref([]),tab=ref('mine'),view=ref('rooms'),working=ref(false),loading=ref(false),error=ref(''),notice=ref(''),roomName=ref(''),licenseKey=ref(''),showKey=ref(false),selectedLicense=ref(null),composing=ref(false);
 const busy=computed(()=>working.value||props.selecting);

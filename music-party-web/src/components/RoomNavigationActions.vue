@@ -1,5 +1,9 @@
 <template>
   <div class="room-nav-actions flex items-center gap-2 sm:gap-3 shrink-0">
+    <button v-if="roomSession.ownerAccess && !user.isGuest" type="button" :disabled="!player.synchronized"
+            @click="requestMode" class="text-accent font-bold py-2 px-1 disabled:opacity-40"
+            :aria-label="player.mediaMode === 'VIDEO' ? '切换到一起听歌' : '切换到一起看视频'">{{ player.mediaMode === 'VIDEO' ? '一起看视频 ⇄' : '一起听歌 ⇄' }}</button>
+    <span v-else class="text-medical-500 whitespace-nowrap">{{ player.mediaMode === 'VIDEO' ? '一起看视频' : '一起听歌' }}</span>
     <button v-if="roomSession.shareEnabled" type="button" class="room-nav-action font-mono text-accent py-2 px-1"
             :disabled="copying" :aria-busy="copying || sharePhase === 'scrambling' || sharePhase === 'restoring'"
             :aria-label="sharePhase === 'copied' ? '邀请链接已复制，再次点击可重新分享' : '复制房间邀请链接'"
@@ -15,6 +19,9 @@
       <span class="room-nav-label" aria-hidden="true"><span v-for="(part, index) in returnText" :key="index" :class="{ 'room-nav-dud': part.dud }">{{ part.text }}</span></span>
     </button>
     <span class="sr-only" role="status" aria-live="polite" aria-atomic="true">{{ announcement }}</span>
+    <ConfirmDialog :open="!!pendingMode" title="切换房间媒体模式" confirm-label="确认切换"
+                   :message="`切换到${pendingMode?.mode === 'VIDEO' ? '一起看视频' : '一起听歌'}？当前模式会暂停并保留现场，目标模式也保持暂停，由成员手动播放。`"
+                   @cancel="pendingMode = null" @confirm="confirmMode" />
   </div>
 </template>
 
@@ -27,9 +34,26 @@ import { copyRoomInvite } from '../services/shareInvite';
 import { createTextScrambler } from '../utils/textScramble';
 import { createReturnConfirmation } from '../services/returnConfirmation';
 import { useToast } from '../composables/useToast';
+import { usePlayerStore } from '../stores/player';
+import { useUserStore } from '../stores/user';
+import ConfirmDialog from './ConfirmDialog.vue';
 
 const emit = defineEmits(['return']);
 const { error } = useToast();
+const player = usePlayerStore(), user = useUserStore(), pendingMode = ref(null);
+function requestMode() {
+  const context = player.playbackContext();
+  if (context) pendingMode.value = { context, generation: player.clientGeneration, mode: player.mediaMode === 'VIDEO' ? 'MUSIC' : 'VIDEO' };
+}
+function confirmMode() {
+  const pending = pendingMode.value; pendingMode.value = null;
+  if (!pending || pending.generation !== player.clientGeneration || !player.isContextCurrent(pending.context)) return;
+  player.switchMediaMode(pending.mode, pending.context);
+}
+watch(() => [player.clientGeneration, player.playbackEpoch, player.modeEpoch, player.synchronized, roomSession.ownerAccess, user.isGuest], () => {
+  if (pendingMode.value && (!roomSession.ownerAccess || user.isGuest || !player.isContextCurrent(pendingMode.value.context)
+      || pendingMode.value.generation !== player.clientGeneration)) pendingMode.value = null;
+}, { flush: 'sync' });
 const reducedMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const shareText = ref([{ text: 'SHARE', dud: false }]), returnText = ref([{ text: 'RETURN', dud: false }]);
 const sharePhase = ref('idle'), returnPhase = ref('idle'), copying = ref(false), announcement = ref('');

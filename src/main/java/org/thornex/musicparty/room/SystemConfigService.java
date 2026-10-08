@@ -41,12 +41,23 @@ public class SystemConfigService {
         String saved = repository.systemConfig();
         // Conflicting legacy room overrides cannot define one global value. Seed from deployment defaults.
         current = saved == null ? SystemConfigSnapshot.from(defaults) : mapper.readValue(saved, SystemConfigSnapshot.class);
+        current = new SystemConfigSnapshot(current.maxQueueSize(), current.maxHistorySize(), current.maxUserSongs(),
+                current.maxPlaylistImportSize(), current.maxChatHistorySize(), current.minChatIntervalMs(),
+                current.maxChatMessageLength(), current.bilibiliMaxDurationMinutes(), current.pairingIntervalMinutes(),
+                current.videoMaxDurationMinutes(), current.videoMaxResolution(), 0L);
+        String invalid = current.validationError();
+        if (invalid != null) throw new IllegalStateException(invalid);
         repository.saveSystemConfig(mapper.writeValueAsString(current), current.pairingIntervalMinutes());
     }
 
     public SystemConfigSnapshot snapshot() { return current; }
 
-    public synchronized void update(AdminConfigUpdateRequest request) {
+    public void update(AdminConfigUpdateRequest request) {
+        commitUpdate(request);
+        refreshRooms();
+    }
+
+    private synchronized void commitUpdate(AdminConfigUpdateRequest request) {
         if (request.hasRoomConfig()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "房间播放配置请在管理终端中设置");
         }
@@ -59,12 +70,19 @@ public class SystemConfigService {
             throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "全局系统参数保存失败", e);
         }
         current = next;
+    }
+
+    private void refreshRooms() {
         for (String id : scope.activeIds()) {
             if (!scope.active(id) || !repository.exists(id)) continue;
             try (var ignored = RoomContext.enter(id)) {
-                context.getBean(MusicQueueManager.class).trimHistoryToLimit();
-                context.getBean(ChatService.class).trimHistoryToLimit();
-                context.getBean(MusicPlayerService.class).broadcastFullPlayerState();
+                context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).internal(() -> {
+                    context.getBean(MusicQueueManager.class).trimHistoryToLimit();
+                    context.getBean(org.thornex.musicparty.service.VideoPlayerService.class).trimHistoryToLimit();
+                    context.getBean(org.thornex.musicparty.service.VideoPlayerService.class).applySourcePolicy();
+                    context.getBean(ChatService.class).trimHistoryToLimit();
+                    context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).changed();
+                });
                 context.getBean(org.springframework.messaging.simp.SimpMessagingTemplate.class)
                         .convertAndSend(RoomContext.topic("/pairing"), java.util.Map.of("nextUpdateAt", repository.nextPairingUpdateAt(System.currentTimeMillis())));
             } catch (RuntimeException e) {
@@ -87,6 +105,13 @@ public class SystemConfigService {
 
         AppProperties.PlayerConfig oldPlayer = properties.getPlayer();
         AppProperties.PlayerConfig player = new AppProperties.PlayerConfig() {
+            @Override public int getVideoMaxDurationMinutes() { return current.videoMaxDurationMinutes(); }
+            @Override public String getVideoMaxResolution() { return current.videoMaxResolution(); }
+            @Override public long getVideoPolicyRevision() { return current.videoPolicyRevision(); }
+            @Override public AppProperties.VideoPolicySnapshot videoPolicySnapshot() {
+                SystemConfigSnapshot captured = current;
+                return new AppProperties.VideoPolicySnapshot(captured.videoMaxResolution(), captured.videoMaxDurationMinutes(), captured.videoPolicyRevision());
+            }
             @Override public int getMaxPlaylistImportSize() { return current.maxPlaylistImportSize(); }
             @Override public int getPairingIntervalMinutes() { return current.pairingIntervalMinutes(); }
         };

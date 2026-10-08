@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 @Service
+@org.springframework.context.annotation.Primary
 @org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 public class MusicQueueManager {
@@ -26,6 +27,9 @@ public class MusicQueueManager {
 
     // 使用并发安全的双端队列
     private final Deque<MusicQueueItem> queue = new ConcurrentLinkedDeque<>();
+    // A selected queue item stays visible and occupies quota until playback is committed.
+    private MusicQueueItem pendingItem;
+    private final Set<QueueReservation> reservations = new HashSet<>();
     private final List<Music> playHistory = Collections.synchronizedList(new LinkedList<>());
 
     // 用于实现“公平随机播放”：记录上一个播放的用户
@@ -42,7 +46,7 @@ public class MusicQueueManager {
      */
     public synchronized MusicQueueItem add(Music music, UserSummary enqueuedBy, QueueItemStatus initialStatus) {
         // 检查队列是否已满
-        if (queue.size() >= appProperties.getQueue().getMaxSize()) {
+        if (logicalSize() + reservations.stream().mapToInt(value -> value.count).sum() >= appProperties.getQueue().getMaxSize()) {
             return null;
         }
 
@@ -65,6 +69,12 @@ public class MusicQueueManager {
      * 将指定歌曲置顶
      */
     public synchronized TopResult top(String queueId, PlayMode playMode) {
+        if (pendingItem != null && pendingItem.queueId().equals(queueId)) {
+            if (pendingItem.priority() == Priority.GLOBAL_TOP) return TopResult.NONE;
+            boolean global = pendingItem.priority() == Priority.USER_TOP || playMode != PlayMode.SHUFFLE;
+            pendingItem = pendingItem.withPriority(global ? Priority.GLOBAL_TOP : Priority.USER_TOP);
+            return global ? TopResult.GLOBAL : TopResult.PERSONAL;
+        }
         Optional<MusicQueueItem> itemOpt = findByQueueId(queueId);
         if (itemOpt.isEmpty()) {
             return TopResult.NONE;
@@ -115,12 +125,15 @@ public class MusicQueueManager {
      * @return 移除的数量
      */
     public synchronized int removeByUser(String userToken) {
+        int pendingRemoved = 0;
+        if (pendingItem != null && pendingItem.enqueuedBy().token().equals(userToken)) { pendingItem = null; pendingRemoved = 1; }
+        cancelReservations(userToken);
         List<MusicQueueItem> toRemove = queue.stream()
                 .filter(item -> item.enqueuedBy().token().equals(userToken))
                 .toList();
         
         toRemove.forEach(queue::remove);
-        return toRemove.size();
+        return toRemove.size() + pendingRemoved;
     }
 
     /**
@@ -134,6 +147,9 @@ public class MusicQueueManager {
      * 从队列中移除一首歌曲
      */
     public synchronized Optional<MusicQueueItem> remove(String queueId) {
+        if (pendingItem != null && pendingItem.queueId().equals(queueId)) {
+            MusicQueueItem removed = pendingItem; pendingItem = null; return Optional.of(removed);
+        }
         Optional<MusicQueueItem> itemOpt = findByQueueId(queueId);
         itemOpt.ifPresent(queue::remove);
         return itemOpt;
@@ -142,7 +158,7 @@ public class MusicQueueManager {
     public synchronized Optional<MusicQueueItem> removeAuthorized(String queueId, String token, boolean manager) {
         Optional<MusicQueueItem> item = findByQueueId(queueId);
         if (item.isEmpty() || (!manager && !item.get().enqueuedBy().token().equals(token))) return Optional.empty();
-        item.ifPresent(queue::remove);
+        item.ifPresent(value -> { if (pendingItem != null && pendingItem.queueId().equals(value.queueId())) pendingItem = null; else queue.remove(value); });
         return item;
     }
 
@@ -317,6 +333,7 @@ public class MusicQueueManager {
     // ... (rest of methods)
 
     private Optional<MusicQueueItem> findByQueueId(String queueId) {
+        if (pendingItem != null && pendingItem.queueId().equals(queueId)) return Optional.of(pendingItem);
         return queue.stream()
                 .filter(item -> item.queueId().equals(queueId))
                 .findFirst();
@@ -345,18 +362,22 @@ public class MusicQueueManager {
      * 清空队列和历史记录
      */
     public synchronized void clearAll() {
+        pendingItem = null;
+        cancelReservations(null);
         queue.clear();
         playHistory.clear();
         lastPlayedUserToken.set("");
     }
 
     public synchronized void clearPendingQueue() {
+        pendingItem = null;
+        cancelReservations(null);
         queue.clear();
     }
 
     /** 确保队列中存在一个私人FM 合成标记项（幂等） */
     public synchronized void ensureFmMarker() {
-        if (queue.size() >= appProperties.getQueue().getMaxSize()) return;
+        if (logicalSize() >= appProperties.getQueue().getMaxSize()) return;
         if (isMusicInQueue(FM_MARKER_ID)) return;
         Music fmMusic = new Music(FM_MARKER_ID, "私人FM", List.of("私人FM"), 0L, FM_MARKER_ID, null);
         UserSummary fmUser = new UserSummary(FM_MARKER_USER_TOKEN, FM_MARKER_USER_TOKEN, "私人FM", false);
@@ -380,8 +401,60 @@ public class MusicQueueManager {
                 });
     }
 
-    public List<MusicQueueItem> getQueueSnapshot() {
-        return new ArrayList<>(queue);
+    public synchronized List<MusicQueueItem> getQueueSnapshot() {
+        List<MusicQueueItem> view = new ArrayList<>();
+        if (pendingItem != null) view.add(pendingItem);
+        queue.stream().filter(item -> pendingItem == null || !pendingItem.queueId().equals(item.queueId())).forEach(view::add);
+        return view;
+    }
+
+    public synchronized void retainPending(MusicQueueItem item) {
+        if (item == null || FM_MARKER_ID.equals(item.music().platform())) return;
+        queue.removeIf(value -> value.queueId().equals(item.queueId()));
+        pendingItem = item;
+    }
+
+    public synchronized void completePending(String queueId) {
+        if (pendingItem != null && pendingItem.queueId().equals(queueId)) pendingItem = null;
+    }
+
+    public synchronized List<MusicQueueItem> getPersistenceQueueSnapshot() { return getQueueSnapshot(); }
+
+    private int logicalSize() { return queue.size() + (pendingItem == null ? 0 : 1); }
+
+    /** Reserve metadata/import quota before starting network work. */
+    public synchronized QueueReservation reserve(String userToken, int requested) {
+        int queueFree = appProperties.getQueue().getMaxSize() - logicalSize()
+                - reservations.stream().mapToInt(value -> value.count).sum();
+        long userCount = getQueueSnapshot().stream().filter(item -> userToken.equals(item.enqueuedBy().token())).count();
+        int userReserved = reservations.stream().filter(value -> userToken.equals(value.userToken)).mapToInt(value -> value.count).sum();
+        int count = Math.max(0, Math.min(requested, Math.min(queueFree,
+                appProperties.getQueue().getMaxUserSongs() - (int) userCount - userReserved)));
+        QueueReservation reservation = new QueueReservation(userToken, count);
+        if (count > 0) reservations.add(reservation); else reservation.accepted = false;
+        return reservation;
+    }
+
+    public synchronized void cancelReservations(String userToken) {
+        for (QueueReservation value : new ArrayList<>(reservations)) {
+            if (userToken == null || userToken.equals(value.userToken)) { value.accepted = false; reservations.remove(value); }
+        }
+    }
+
+    public final class QueueReservation implements AutoCloseable {
+        private final String userToken;
+        private final int count;
+        private boolean accepted = true;
+        private QueueReservation(String userToken, int count) { this.userToken = userToken; this.count = count; }
+        public int count() { return count; }
+        /** False means clear/reset cancelled this operation; it must not repopulate the queue. */
+        public boolean release() {
+            synchronized (MusicQueueManager.this) {
+                if (!accepted) return false;
+                accepted = false; reservations.remove(this); return true;
+            }
+        }
+        @Override public void close() { release(); }
     }
 
     public List<Music> getHistorySnapshot() {
@@ -395,6 +468,8 @@ public class MusicQueueManager {
      * 从持久化存储恢复队列和历史记录
      */
     public synchronized void restore(List<MusicQueueItem> loadedQueue, List<Music> loadedHistory) {
+        pendingItem = null;
+        cancelReservations(null);
         // Clear current
         queue.clear();
         playHistory.clear();
@@ -413,6 +488,7 @@ public class MusicQueueManager {
     }
 
     private boolean isMusicInQueue(String musicId) {
+        if (pendingItem != null && pendingItem.music().id().equals(musicId)) return true;
         return queue.stream().anyMatch(item -> item.music().id().equals(musicId));
     }
 

@@ -17,8 +17,31 @@ public record AdminConfigUpdateRequest(
     Integer voteSkipWaitTime,
     String seekPolicy,
     @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = org.thornex.musicparty.room.StrictIntegerDeserializer.class)
-    Integer pairingIntervalMinutes
+    Integer pairingIntervalMinutes,
+    @com.fasterxml.jackson.databind.annotation.JsonDeserialize(using = org.thornex.musicparty.room.StrictIntegerDeserializer.class)
+    Integer videoMaxDurationMinutes,
+    String videoMaxResolution
 ) {
+    public AdminConfigUpdateRequest(Integer maxSize, Integer historySize, Integer maxUserSongs,
+            Integer maxPlaylistImportSize, Integer maxChatHistorySize, Long minChatIntervalMs,
+            Integer maxChatMessageLength, String neteaseQuality, Boolean neteaseEnabled,
+            Boolean bilibiliEnabled, Integer bilibiliMaxDurationMinutes, Boolean voteSkipEnabled,
+            Double voteSkipThreshold, Integer voteSkipWaitTime, String seekPolicy, Integer pairingIntervalMinutes,
+            Integer videoMaxDurationMinutes) {
+        this(maxSize, historySize, maxUserSongs, maxPlaylistImportSize, maxChatHistorySize, minChatIntervalMs,
+                maxChatMessageLength, neteaseQuality, neteaseEnabled, bilibiliEnabled, bilibiliMaxDurationMinutes,
+                voteSkipEnabled, voteSkipThreshold, voteSkipWaitTime, seekPolicy, pairingIntervalMinutes, videoMaxDurationMinutes, null);
+    }
+    public AdminConfigUpdateRequest(Integer maxSize, Integer historySize, Integer maxUserSongs,
+            Integer maxPlaylistImportSize, Integer maxChatHistorySize, Long minChatIntervalMs,
+            Integer maxChatMessageLength, String neteaseQuality, Boolean neteaseEnabled,
+            Boolean bilibiliEnabled, Integer bilibiliMaxDurationMinutes, Boolean voteSkipEnabled,
+            Double voteSkipThreshold, Integer voteSkipWaitTime, String seekPolicy, Integer pairingIntervalMinutes) {
+        this(maxSize, historySize, maxUserSongs, maxPlaylistImportSize, maxChatHistorySize,
+                minChatIntervalMs, maxChatMessageLength, neteaseQuality, neteaseEnabled,
+                bilibiliEnabled, bilibiliMaxDurationMinutes, voteSkipEnabled, voteSkipThreshold,
+                voteSkipWaitTime, seekPolicy, pairingIntervalMinutes, null);
+    }
     public AdminConfigUpdateRequest(Integer maxSize, Integer historySize, Integer maxUserSongs,
             Integer maxPlaylistImportSize, Integer maxChatHistorySize, Long minChatIntervalMs,
             Integer maxChatMessageLength, String neteaseQuality, Boolean neteaseEnabled,
@@ -33,7 +56,7 @@ public record AdminConfigUpdateRequest(
         return maxSize != null || historySize != null || maxUserSongs != null
                 || maxPlaylistImportSize != null || maxChatHistorySize != null
                 || minChatIntervalMs != null || maxChatMessageLength != null
-                || bilibiliMaxDurationMinutes != null || pairingIntervalMinutes != null;
+                || bilibiliMaxDurationMinutes != null || pairingIntervalMinutes != null || videoMaxDurationMinutes != null || videoMaxResolution != null;
     }
 
     public boolean hasRoomConfig() {

@@ -2,6 +2,7 @@ package org.thornex.musicparty.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
@@ -30,8 +31,19 @@ public class QueuePersistenceService {
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private org.thornex.musicparty.room.RoomRepository roomRepository;
 
-    public void ensureLoaded() {}
-    public void saveNow() { saveData(); }
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private VideoPlayerService videoPlayer;
+    @org.springframework.beans.factory.annotation.Autowired(required = false)
+    private org.thornex.musicparty.playback.PlaybackMailbox mailbox;
+    private boolean loaded;
+    private String savedMode = "MUSIC";
+    public void ensureLoaded() { if (!loaded) { loadData(); loaded = true; } }
+    public String restoredMode() { return savedMode; }
+    public void saveNow() {
+        if (mailbox != null && !mailbox.isOnMailboxThread()) mailbox.submit(this::saveData);
+        else saveData();
+    }
+
 
     private final MusicQueueManager musicQueueManager;
     private final ChatService chatService;
@@ -44,43 +56,49 @@ public class QueuePersistenceService {
 
     @PostConstruct
     public void init() {
-        loadData();
+        // RoomScope constructs beans while holding its monitor. No engine restore or worker wait here.
+        if (org.thornex.musicparty.room.RoomContext.current() == null) ensureLoaded();
     }
 
     @PreDestroy
     public void cleanup() {
-        saveData();
+        if (org.thornex.musicparty.room.RoomContext.current() == null) saveData();
     }
 
     public void scheduledSave() {
-        saveData();
+        saveNow();
     }
 
     synchronized void saveData() {
-        String roomId = org.thornex.musicparty.room.RoomContext.current();
-        if (roomRepository != null && roomId != null && !roomRepository.exists(roomId)) return;
-        try {
-            File file = getPersistenceFile();
-            PersistentData data = new PersistentData();
-            data.setQueue(musicQueueManager.getQueueSnapshot());
-            data.setHistory(musicQueueManager.getHistorySnapshot());
-            data.setChatHistory(chatService.getHistoryFull());
-            data.setSettings(buildSettingsSnapshot());
+        try { saveStrict(savedMode); }
+        catch (Exception e) { log.error("Failed to save persistence data for room {}", org.thornex.musicparty.room.RoomContext.current(), e); }
+    }
 
-            if (roomRepository != null && org.thornex.musicparty.room.RoomContext.current() != null) {
-                Object config = appProperties instanceof org.springframework.aop.scope.ScopedObject scoped ? scoped.getTargetObject() : appProperties;
-                ObjectNode roomConfig = objectMapper.valueToTree(config);
-                ((ObjectNode) roomConfig.get("queue")).remove(List.of("maxSize", "historySize", "maxUserSongs"));
-                ((ObjectNode) roomConfig.get("player")).remove(List.of("maxPlaylistImportSize", "pairingIntervalMinutes"));
-                ((ObjectNode) roomConfig.get("chat")).remove(List.of("maxHistorySize", "minIntervalMs", "maxMessageLength"));
-                ((ObjectNode) roomConfig.get("bilibili")).remove("maxDurationMinutes");
-                roomRepository.save(org.thornex.musicparty.room.RoomContext.require(), objectMapper.writeValueAsString(data), objectMapper.writeValueAsString(roomConfig));
-            } else objectMapper.writeValue(file, data);
-            log.debug("Queue, music history and chat history saved to {}", file.getAbsolutePath());
-        } catch (Exception e) {
-            if (roomRepository != null && roomId != null && !roomRepository.exists(roomId)) return;
-            log.error("Failed to save persistence data", e);
+    /** A mode switch must not mutate memory until this transaction has succeeded. */
+    public synchronized void saveStrict(String candidateMode) throws IOException {
+        if (mailbox != null) mailbox.assertOnMailboxThread();
+        String roomId = org.thornex.musicparty.room.RoomContext.current();
+        if (roomRepository != null && roomId != null && !roomRepository.exists(roomId)) throw new IOException("Room deleted");
+        PersistentData data = new PersistentData();
+        data.setSnapshotVersion(2);
+        data.setQueue(roomId == null ? musicQueueManager.getQueueSnapshot() : musicPlayerService.getPersistenceQueueSnapshot());
+        data.setHistory(musicQueueManager.getHistorySnapshot());
+        data.setChatHistory(chatService.getHistoryFull());
+        data.setSettings(buildSettingsSnapshot(candidateMode));
+        if (videoPlayer != null && roomId != null) {
+            data.setVideoQueue(videoPlayer.getPersistenceQueueSnapshot());
+            data.setVideoHistory(videoPlayer.getHistorySnapshot());
         }
+        if (roomRepository != null && roomId != null) {
+            Object config = appProperties instanceof org.springframework.aop.scope.ScopedObject scoped ? scoped.getTargetObject() : appProperties;
+            ObjectNode roomConfig = objectMapper.valueToTree(config);
+            ((ObjectNode) roomConfig.get("queue")).remove(List.of("maxSize", "historySize", "maxUserSongs"));
+            ((ObjectNode) roomConfig.get("player")).remove(List.of("maxPlaylistImportSize", "pairingIntervalMinutes", "videoMaxDurationMinutes", "videoMaxResolution", "videoPolicyRevision"));
+            ((ObjectNode) roomConfig.get("chat")).remove(List.of("maxHistorySize", "minIntervalMs", "maxMessageLength"));
+            ((ObjectNode) roomConfig.get("bilibili")).remove("maxDurationMinutes");
+            roomRepository.save(roomId, objectMapper.writeValueAsString(data), objectMapper.writeValueAsString(roomConfig));
+        } else objectMapper.writeValue(getPersistenceFile(), data);
+        savedMode = candidateMode;
     }
 
     synchronized void loadData() {
@@ -91,7 +109,15 @@ public class QueuePersistenceService {
                     PersistentData data = objectMapper.readValue(json, PersistentData.class);
                     musicQueueManager.restore(data.getQueue() != null ? data.getQueue() : Collections.emptyList(), data.getHistory() != null ? data.getHistory() : Collections.emptyList());
                     chatService.restore(data.getChatHistory() != null ? data.getChatHistory() : Collections.emptyList());
+                    migrateLegacySharedSettings(data);
                     applySettings(data.getSettings());
+                    musicPlayerService.refreshSharedPlayerConfig();
+                    if (videoPlayer != null) {
+                        videoPlayer.restore(data.getVideoQueue() == null ? List.of() : data.getVideoQueue(),
+                                data.getVideoHistory() == null ? List.of() : data.getVideoHistory());
+                        if (data.getSettings() != null) videoPlayer.applyPlayerSettings(modeSettings(data.getSettings().videoPlayer()));
+                    }
+                    savedMode = data.getSettings() != null && "VIDEO".equals(data.getSettings().mediaMode()) ? "VIDEO" : "MUSIC";
                 }
                 musicPlayerService.pauseForEmptyRoom();
             } catch (Exception e) { throw new IllegalStateException("Room snapshot could not be restored", e); }
@@ -134,11 +160,7 @@ public class QueuePersistenceService {
         boolean hasExternalConfig = roomConfigFileService.isConfigured();
         if (s.player() != null) {
             SettingsSnapshot.PlayerSettings player = s.player();
-            if (hasExternalConfig) {
-                player = new SettingsSnapshot.PlayerSettings(
-                        player.playMode(), player.fairShuffle(), player.allowOfflineShuffle(),
-                        null, null, null, player.pauseLocked(), player.skipLocked(), player.playModeLocked());
-            }
+            if (hasExternalConfig || org.thornex.musicparty.room.RoomContext.current() != null) player = modeSettings(player);
             musicPlayerService.applyPlayerSettings(player);
         }
 
@@ -182,10 +204,10 @@ public class QueuePersistenceService {
         } else log.info("Restored persisted runtime settings from {}", appProperties.getQueue().getPersistenceFile());
     }
 
-    private SettingsSnapshot buildSettingsSnapshot() {
+    private SettingsSnapshot buildSettingsSnapshot(String candidateMode) {
         boolean roomScoped = org.thornex.musicparty.room.RoomContext.current() != null;
         return new SettingsSnapshot(
-                musicPlayerService.getPlayerSettings(),
+                roomScoped ? modeSettings(musicPlayerService.getPlayerSettings()) : musicPlayerService.getPlayerSettings(),
                 authController.getRawPassword(),
                 authController.getRoomName(),
                 liveStreamService.isEnabled(),
@@ -206,7 +228,28 @@ public class QueuePersistenceService {
                         roomScoped ? null : appProperties.getBilibili().getMaxDurationMinutes(),
                         roomScoped ? null : appProperties.getChat().getMaxMessageLength(),
                         appProperties.getNetease().getQuality(),
-                        appProperties.getPlayer().getSeekPolicy()));
+                        appProperties.getPlayer().getSeekPolicy()), candidateMode,
+                videoPlayer == null || !roomScoped ? null : modeSettings(videoPlayer.getPlayerSettings()));
+    }
+
+    /** Player snapshots own mode and locks; vote settings have one room-config source. */
+    private SettingsSnapshot.PlayerSettings modeSettings(SettingsSnapshot.PlayerSettings settings) {
+        if (settings == null) return null;
+        return new SettingsSnapshot.PlayerSettings(settings.playMode(), settings.fairShuffle(), settings.allowOfflineShuffle(),
+                null, null, null, settings.pauseLocked(), settings.skipLocked(), settings.playModeLocked(), settings.playbackRate());
+    }
+
+    /** Migrate only absent legacy room-config fields, never authoritative config or external settings. */
+    private void migrateLegacySharedSettings(PersistentData data) throws IOException {
+        if (data.getSnapshotVersion() >= 2 || roomConfigFileService.isConfigured() || data.getSettings() == null
+                || data.getSettings().player() == null) return;
+        String config = roomRepository.payload(org.thornex.musicparty.room.RoomContext.require(), "config");
+        JsonNode shared = config == null ? objectMapper.createObjectNode() : objectMapper.readTree(config).path("player");
+        SettingsSnapshot.PlayerSettings legacy = data.getSettings().player();
+        AppProperties.PlayerConfig player = appProperties.getPlayer();
+        if (!shared.hasNonNull("voteSkipEnabled") && legacy.voteSkipEnabled() != null) player.setVoteSkipEnabled(legacy.voteSkipEnabled());
+        if (!shared.hasNonNull("voteSkipThreshold") && legacy.voteSkipThreshold() != null) player.setVoteSkipThreshold(legacy.voteSkipThreshold());
+        if (!shared.hasNonNull("voteSkipWaitTime") && legacy.voteSkipWaitTime() != null) player.setVoteSkipWaitTime(legacy.voteSkipWaitTime());
     }
 
     private File getPersistenceFile() {
@@ -221,6 +264,9 @@ public class QueuePersistenceService {
 
     @Data
     private static class PersistentData {
+        private int snapshotVersion;
+        private List<MusicQueueItem> videoQueue;
+        private List<Music> videoHistory;
         private List<MusicQueueItem> queue;
         private List<Music> history;
         private List<org.thornex.musicparty.dto.ChatMessage> chatHistory;

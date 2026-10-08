@@ -1,6 +1,6 @@
 // src/composables/useAudio.js
 
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { socketService } from '../services/socket';
 import { WS_DEST } from '../constants/api';
 
@@ -11,6 +11,8 @@ const POSITION_STATE_INTERVAL = 1000;  // setPositionState 节流间隔（ms）
 const SHELL_NOTIFY_INTERVAL = 15000;   // 安卓原生壳通知栏进度刷新间隔（ms）
 
 export function useAudio(audioRef, playerStore) {
+    let alive = true, lifecycleToken = 0;
+    const retryTimers = new Set();
     const localProgress = ref(0);
     const isBuffering = ref(false);
     const retryCount = ref(0);
@@ -28,7 +30,10 @@ export function useAudio(audioRef, playerStore) {
     const requestWakeLock = async () => {
         if ('wakeLock' in navigator) {
             try {
-                wakeLock = await navigator.wakeLock.request('screen');
+                const token = lifecycleToken;
+                const acquired = await navigator.wakeLock.request('screen');
+                if (!alive || token !== lifecycleToken) { await acquired.release(); return; }
+                wakeLock = acquired;
                 console.log('Wake Lock active');
             } catch (err) {
                 console.warn('Wake Lock request failed:', err);
@@ -46,7 +51,7 @@ export function useAudio(audioRef, playerStore) {
 
     // 更新系统媒体中心 (锁屏控制)
     const updateMediaSession = () => {
-        if (!('mediaSession' in navigator) || !playerStore.nowPlaying) return;
+        if (!alive || playerStore.mediaMode !== 'MUSIC' || !('mediaSession' in navigator) || !playerStore.nowPlaying) return;
 
         const music = playerStore.nowPlaying.music;
 
@@ -73,7 +78,7 @@ export function useAudio(audioRef, playerStore) {
     // 安卓原生壳：把播放状态推给通知栏媒体控制器（window.AndroidBridge 由原生注入）
     const notifyAndroidShell = () => {
         const bridge = typeof window !== 'undefined' ? window.AndroidBridge : null;
-        if (!bridge?.updateMedia || !playerStore.nowPlaying) return;
+        if (!alive || playerStore.mediaMode !== 'MUSIC' || !bridge?.updateMedia || !playerStore.nowPlaying) return;
         const music = playerStore.nowPlaying.music;
         bridge.updateMedia(JSON.stringify({
             title: music.name,
@@ -109,10 +114,12 @@ export function useAudio(audioRef, playerStore) {
 
     // 尝试播放并处理浏览器拦截
     const safePlay = async () => {
-        if (!audioRef.value || !playerStore.nowPlaying) return;
+        if (!alive || playerStore.mediaMode !== 'MUSIC' || !audioRef.value || !playerStore.nowPlaying || playerStore.isPaused) return;
+        const audio = audioRef.value, token = lifecycleToken;
 
         try {
-            await audioRef.value.play();
+            await audio.play();
+            if (!alive || token !== lifecycleToken || playerStore.mediaMode !== 'MUSIC' || playerStore.isPaused) { audio.pause(); return; }
             isErrorState.value = false;
             updateMediaSession();
             requestWakeLock();
@@ -190,11 +197,14 @@ export function useAudio(audioRef, playerStore) {
 
         retryCount.value++;
         console.log(`Retry audio (${retryCount.value})...`);
-        setTimeout(() => {
-            if (audioRef.value) {
+        const token = lifecycleToken;
+        const timer = setTimeout(() => {
+            retryTimers.delete(timer);
+            if (alive && token === lifecycleToken && audioRef.value) {
                 audioRef.value.load();
             }
         }, 1500);
+        retryTimers.add(timer);
     };
 
     // === 5. 音频自然结束兜底：服务器没推新曲就主动重同步 ===
@@ -325,9 +335,20 @@ export function useAudio(audioRef, playerStore) {
         }, 200);
     });
 
-    onUnmounted(() => {
+    onBeforeUnmount(() => {
+        alive = false; lifecycleToken++;
+        retryTimers.forEach(clearTimeout); retryTimers.clear();
+        if (audioRef.value) { audioRef.value.pause(); audioRef.value.removeAttribute('src'); audioRef.value.load(); }
         if (typeof window !== 'undefined') {
             delete window.MusicPartyControl;
+            window.AndroidBridge?.updateMedia?.(JSON.stringify({ title: 'Music Party', artist: '', paused: true, position: 0, duration: 0, coverUrl: '' }));
+        }
+        if ('mediaSession' in navigator) {
+            navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none';
+            for (const action of ['play', 'pause', 'previoustrack', 'nexttrack', 'seekto', 'seekforward', 'seekbackward']) {
+                try { navigator.mediaSession.setActionHandler(action, null); } catch {}
+            }
+            try { navigator.mediaSession.setPositionState?.(); } catch {}
         }
         document.removeEventListener('visibilitychange', handleVisibilityChange);
         window.removeEventListener('online', handleNetworkChange);

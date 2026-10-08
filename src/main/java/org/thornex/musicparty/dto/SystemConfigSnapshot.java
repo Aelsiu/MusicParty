@@ -6,10 +6,28 @@ import org.thornex.musicparty.config.AppProperties;
 public record SystemConfigSnapshot(
         int maxQueueSize, int maxHistorySize, int maxUserSongs,
         int maxPlaylistImportSize, int maxChatHistorySize, long minChatIntervalMs,
-        int maxChatMessageLength, int bilibiliMaxDurationMinutes, Integer pairingIntervalMinutes
+        int maxChatMessageLength, int bilibiliMaxDurationMinutes, Integer pairingIntervalMinutes,
+        Integer videoMaxDurationMinutes, String videoMaxResolution, Long videoPolicyRevision
 ) {
     public SystemConfigSnapshot {
         if (pairingIntervalMinutes == null) pairingIntervalMinutes = 10;
+        if (videoMaxDurationMinutes == null) videoMaxDurationMinutes = 120;
+        if (videoMaxResolution == null) videoMaxResolution = "UNLIMITED";
+        if (videoPolicyRevision == null) videoPolicyRevision = 0L;
+    }
+    public SystemConfigSnapshot(int maxQueueSize, int maxHistorySize, int maxUserSongs,
+            int maxPlaylistImportSize, int maxChatHistorySize, long minChatIntervalMs,
+            int maxChatMessageLength, int bilibiliMaxDurationMinutes, Integer pairingIntervalMinutes,
+            Integer videoMaxDurationMinutes) {
+        this(maxQueueSize, maxHistorySize, maxUserSongs, maxPlaylistImportSize, maxChatHistorySize,
+                minChatIntervalMs, maxChatMessageLength, bilibiliMaxDurationMinutes, pairingIntervalMinutes,
+                videoMaxDurationMinutes, "UNLIMITED", 0L);
+    }
+    public SystemConfigSnapshot(int maxQueueSize, int maxHistorySize, int maxUserSongs,
+            int maxPlaylistImportSize, int maxChatHistorySize, long minChatIntervalMs,
+            int maxChatMessageLength, int bilibiliMaxDurationMinutes, Integer pairingIntervalMinutes) {
+        this(maxQueueSize, maxHistorySize, maxUserSongs, maxPlaylistImportSize, maxChatHistorySize,
+                minChatIntervalMs, maxChatMessageLength, bilibiliMaxDurationMinutes, pairingIntervalMinutes, 120);
     }
     public SystemConfigSnapshot(int maxQueueSize, int maxHistorySize, int maxUserSongs,
             int maxPlaylistImportSize, int maxChatHistorySize, long minChatIntervalMs,
@@ -23,7 +41,8 @@ public record SystemConfigSnapshot(
                 properties.getQueue().getMaxUserSongs(), properties.getPlayer().getMaxPlaylistImportSize(),
                 properties.getChat().getMaxHistorySize(), properties.getChat().getMinIntervalMs(),
                 properties.getChat().getMaxMessageLength(), properties.getBilibili().getMaxDurationMinutes(),
-                properties.getPlayer().getPairingIntervalMinutes());
+                properties.getPlayer().getPairingIntervalMinutes(), properties.getPlayer().getVideoMaxDurationMinutes(),
+                properties.getPlayer().getVideoMaxResolution(), properties.getPlayer().getVideoPolicyRevision());
     }
 
     public SystemConfigSnapshot withUpdate(AdminConfigUpdateRequest request) {
@@ -36,7 +55,11 @@ public record SystemConfigSnapshot(
                 request.minChatIntervalMs() == null ? minChatIntervalMs : request.minChatIntervalMs(),
                 request.maxChatMessageLength() == null ? maxChatMessageLength : request.maxChatMessageLength(),
                 request.bilibiliMaxDurationMinutes() == null ? bilibiliMaxDurationMinutes : request.bilibiliMaxDurationMinutes(),
-                request.pairingIntervalMinutes() == null ? pairingIntervalMinutes : request.pairingIntervalMinutes());
+                request.pairingIntervalMinutes() == null ? pairingIntervalMinutes : request.pairingIntervalMinutes(),
+                request.videoMaxDurationMinutes() == null ? videoMaxDurationMinutes : request.videoMaxDurationMinutes(),
+                request.videoMaxResolution() == null ? videoMaxResolution : request.videoMaxResolution(),
+                videoPolicyRevision + ((request.videoMaxResolution() != null && !request.videoMaxResolution().equals(videoMaxResolution))
+                        || (request.videoMaxDurationMinutes() != null && !request.videoMaxDurationMinutes().equals(videoMaxDurationMinutes)) ? 1 : 0));
     }
 
     public String validationError() {
@@ -48,7 +71,9 @@ public record SystemConfigSnapshot(
         if (minChatIntervalMs < 0 || minChatIntervalMs > 600000) return "发言间隔超出范围";
         if (maxChatMessageLength < 1 || maxChatMessageLength > 10000) return "消息最大长度超出范围";
         if (bilibiliMaxDurationMinutes < 1 || bilibiliMaxDurationMinutes > 1440) return "B站时长上限超出范围";
+        if (videoMaxDurationMinutes < 1 || videoMaxDurationMinutes > 1440) return "视频时长上限应为 1–1440 分钟的整数";
         if (pairingIntervalMinutes < 1 || pairingIntervalMinutes > 60) return "配对码更新周期应为 1–60 分钟的整数";
+        if (!org.thornex.musicparty.service.VideoSourcePolicy.isValidCap(videoMaxResolution)) return "视频分辨率上限无效";
         return null;
     }
 }

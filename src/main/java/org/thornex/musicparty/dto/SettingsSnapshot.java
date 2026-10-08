@@ -7,8 +7,14 @@ public record SettingsSnapshot(
         String roomName,
         Boolean streamEnabled,          // 直播推流开关
         PrivateDjSettings privateDj,    // 私人电台配置
-        SystemConfigSettings systemConfig // 系统参数
+        SystemConfigSettings systemConfig, // 系统参数
+        String mediaMode,
+        PlayerSettings videoPlayer
 ) {
+    public SettingsSnapshot(PlayerSettings player, String roomPassword, String roomName,
+            Boolean streamEnabled, PrivateDjSettings privateDj, SystemConfigSettings systemConfig) {
+        this(player, roomPassword, roomName, streamEnabled, privateDj, systemConfig, "MUSIC", null);
+    }
     public record PlayerSettings(
             String playMode,            // SEQUENTIAL / SHUFFLE / REPEAT_ONE
             Boolean fairShuffle,
@@ -18,8 +24,16 @@ public record SettingsSnapshot(
             Integer voteSkipWaitTime,
             Boolean pauseLocked,
             Boolean skipLocked,
-            Boolean playModeLocked
-    ) {}
+            Boolean playModeLocked,
+            Double playbackRate
+    ) {
+        public PlayerSettings(String playMode, Boolean fairShuffle, Boolean allowOfflineShuffle,
+                Boolean voteSkipEnabled, Double voteSkipThreshold, Integer voteSkipWaitTime,
+                Boolean pauseLocked, Boolean skipLocked, Boolean playModeLocked) {
+            this(playMode, fairShuffle, allowOfflineShuffle, voteSkipEnabled, voteSkipThreshold,
+                    voteSkipWaitTime, pauseLocked, skipLocked, playModeLocked, null);
+        }
+    }
 
     public record PrivateDjSettings(
             String mode,                // OFF / FM / DJ

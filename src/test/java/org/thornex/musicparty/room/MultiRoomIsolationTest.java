@@ -110,16 +110,16 @@ class MultiRoomIsolationTest {
     @Test void stateAndConfigurationAreIsolatedAndSnapshotsRestoreOnlyTheirRoom() {
         var a=repository.create("ROOT","同名🎵",UUID.randomUUID().toString());var b=repository.create("ROOT","同名🎵",UUID.randomUUID().toString());
         try(var ignored=RoomContext.enter(a.id())) {
-            context.getBean(QueuePersistenceService.class).ensureLoaded();
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).ensureReady();
             var config=context.getBean(AppProperties.class);config.getNetease().setQuality("lossless");config.getNetease().setCookie("room-a-private-cookie");
             config.getPlayer().setSeekPolicy("ALL");
             context.getBean(MusicQueueManager.class).add(new Music("songA","房间 A 歌曲",java.util.List.of("歌手"),10000,"netease",""),new UserSummary("userA","sessionA","甲",false),QueueItemStatus.READY);
             var user=context.getBean(UserService.class);user.handleConnect("sessionA","shared-user","用户甲");user.handleConnect("second-tab","shared-user","用户甲");user.disconnectUser("second-tab");assertEquals(1,user.getOnlineUserSummaries().size());
-            context.getBean(QueuePersistenceService.class).saveNow();
+            context.getBean(QueuePersistenceService.class).saveNow();context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).read();
             assertTrue(context.getBean(MusicPlayerService.class).getCurrentPlayerState().isPaused());
         }
         try(var ignored=RoomContext.enter(b.id())) {
-            context.getBean(QueuePersistenceService.class).ensureLoaded();
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).ensureReady();
             assertTrue(context.getBean(MusicQueueManager.class).getQueueSnapshot().isEmpty());
             assertEquals(1000,context.getBean(AppProperties.class).getQueue().getMaxSize());assertEquals("",context.getBean(AppProperties.class).getNetease().getCookie());
             assertEquals("exhigh",context.getBean(AppProperties.class).getNetease().getQuality());
@@ -138,16 +138,17 @@ class MultiRoomIsolationTest {
         var manager=access.login("TestRoot9","reconnect-test");
         access.connect("first",room.id(),"",manager.token());lifecycle.joined(room.id());
         try(var ignored=RoomContext.enter(room.id())) {
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).ensureReady();
             var player=context.getBean(MusicPlayerService.class);
             Object target=((org.springframework.aop.scope.ScopedObject)player).getTargetObject();
             var paused=(java.util.concurrent.atomic.AtomicBoolean)org.springframework.test.util.ReflectionTestUtils.getField(target,"isPaused");
             paused.set(false);
-            access.disconnect("first");lifecycle.departed(room.id());lifecycle.tick();assertFalse(player.getCurrentPlayerState().isPaused());
+            access.disconnect("first");lifecycle.departed(room.id());lifecycle.tick();context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).read();assertFalse(player.getCurrentPlayerState().isPaused());
             access.connect("reconnected",room.id(),"",manager.token());lifecycle.joined(room.id());assertFalse(player.getCurrentPlayerState().isPaused());
             access.disconnect("reconnected");lifecycle.departed(room.id());
             @SuppressWarnings("unchecked")
             var empty=(java.util.Map<String,Long>)org.springframework.test.util.ReflectionTestUtils.getField(lifecycle,"emptySince");
-            empty.put(room.id(),System.currentTimeMillis()-11000);lifecycle.tick();assertTrue(player.getCurrentPlayerState().isPaused());
+            empty.put(room.id(),System.currentTimeMillis()-11000);lifecycle.tick();context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).read();assertTrue(player.getCurrentPlayerState().isPaused());
             access.connect("later",room.id(),"",manager.token());lifecycle.joined(room.id());assertTrue(player.getCurrentPlayerState().isPaused());
             access.disconnect("later");lifecycle.departed(room.id());
         }

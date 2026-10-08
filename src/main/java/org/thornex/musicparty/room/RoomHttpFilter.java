@@ -13,6 +13,8 @@ public class RoomHttpFilter extends OncePerRequestFilter {
     private final RoomRepository repository;
     @org.springframework.beans.factory.annotation.Autowired
     private org.thornex.musicparty.service.QueuePersistenceService persistence;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.thornex.musicparty.playback.RoomPlaybackCoordinator playback;
     public RoomHttpFilter(RoomAccessService access,RoomRepository repository) { this.access=access;this.repository=repository; }
     public static String managementToken(HttpServletRequest request) {
         String header=request.getHeader("Authorization"); return header!=null && header.startsWith("Bearer ")?header.substring(7):null;
@@ -30,6 +32,7 @@ public class RoomHttpFilter extends OncePerRequestFilter {
             if(path.startsWith("/api/admin/")) access.own(managementToken(request),id);
             else if(!path.startsWith("/radio/")) access.member(request.getHeader("X-Room-Token")!=null?request.getHeader("X-Room-Token"):request.getParameter("roomToken"),managementToken(request)!=null?managementToken(request):request.getParameter("managerToken"),id);
             try(var ignored=RoomContext.enter(id)) {
+                playback.ensureReady();
                 chain.doFilter(request,response);
                 if(path.startsWith("/api/admin/") && !request.getMethod().equals("GET") && response.getStatus()<400) persistence.saveNow();
             }

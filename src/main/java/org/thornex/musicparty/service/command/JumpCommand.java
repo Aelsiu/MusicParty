@@ -11,6 +11,8 @@ import org.thornex.musicparty.service.QueuePersistenceService;
 @org.thornex.musicparty.room.RoomScoped
 @RequiredArgsConstructor
 public class JumpCommand implements ChatCommand {
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.playback.RoomPlaybackCoordinator playback;
     private final CommandSupport commands;
     private final AppProperties properties;
     private final MusicPlayerService player;
@@ -32,7 +34,7 @@ public class JumpCommand implements ChatCommand {
         }
         if (!commands.requireManager(user)) return;
         properties.getPlayer().setSeekPolicy(policy);
-        player.broadcastFullPlayerState();
+        if (playback == null) player.broadcastFullPlayerState(); else playback.changed();
         persistence.saveNow();
         commands.reply(user, switch (parameter) {
             case "on" -> "已允许所有成员跳转播放进度";

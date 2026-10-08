@@ -20,6 +20,8 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class StreamCommand implements ChatCommand {
 
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.playback.RoomPlaybackCoordinator playback;
     private final StreamTokenService tokenService;
     private final LiveStreamService liveStreamService;
     private final SimpMessagingTemplate messagingTemplate;
@@ -36,10 +38,13 @@ public class StreamCommand implements ChatCommand {
     @Override
     public void execute(String args, User user) {
         String parameter = CommandSupport.parameter(args, "now");
+        if (playback != null && playback.isVideo() && !"off".equals(parameter)) {
+            commands.reply(user,"一起看视频模式不支持音乐直播流"); return;
+        }
         if ("on".equals(parameter) || "off".equals(parameter)) {
             if (!commands.requireManager(user)) return;
             liveStreamService.setEnabled("on".equals(parameter));
-            player.broadcastFullPlayerState();
+            if (playback == null) player.broadcastFullPlayerState(); else playback.changed();
             persistence.saveNow();
             commands.reply(user, "on".equals(parameter) ? "直播流同步服务已启动" : "直播流同步服务已停止");
             return;

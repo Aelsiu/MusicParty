@@ -85,6 +85,17 @@
                   </button>
                 </div>
               </div>
+              <div class="space-y-2">
+                <label for="video-quality" class="text-xs font-bold text-medical-500 h-7 flex items-center">视频画质</label>
+                <select id="video-quality" :value="uiStore.videoQualityPreference.mode === 'manual' ? uiStore.videoQualityPreference.qualityId : 'auto'"
+                        @change="uiStore.setVideoQualityPreference($event.target.value)" class="w-full bg-medical-50 border border-medical-200 text-medical-700 px-2 py-1.5 text-xs outline-none focus:border-accent">
+                  <option value="auto">自动</option>
+                  <option v-for="quality in playerStore.videoQualityOptions" :key="quality.id" :value="quality.id">{{ quality.label }}{{ playerStore.mediaMode === 'MUSIC' ? '（上次视频可用）' : '' }}</option>
+                  <option v-if="unavailableQuality" :value="unavailableQuality" disabled>已保存 {{ unavailableQuality }} · 当前不可用</option>
+                </select>
+                <p class="info-tip text-xs text-medical-400">仅影响本端观看。系统上限：{{ playerStore.config.videoMaxResolution === 'UNLIMITED' || !playerStore.config.videoMaxResolution ? '不限制' : playerStore.config.videoMaxResolution }}。偏好保持不变，实际画质按可用来源降档。 {{ playerStore.actualVideoQuality ? `实际：${playerStore.actualVideoQuality}（${playerStore.videoDelivery}）` : '当前没有视频，可保存偏好。' }}</p>
+                <p v-if="playerStore.videoDelivery === 'MP4'" class="text-xs text-medical-400">当前使用有声 MP4 回退来源，暂不提供独立画质档。</p>
+              </div>
             </div>
           </section>
         </div>
@@ -145,6 +156,9 @@ const emit = defineEmits(['close']);
 const uiStore = useUiStore();
 const userStore = useUserStore();
 const playerStore = usePlayerStore();
+const unavailableQuality = computed(() => uiStore.videoQualityPreference.mode === 'manual'
+  && !playerStore.videoQualityOptions.some(option => option.id === uiStore.videoQualityPreference.qualityId)
+  ? uiStore.videoQualityPreference.qualityId : null);
 const { success, error } = useToast();
 
 const themes = [

@@ -47,6 +47,7 @@ app:
       history-size: ${QUEUE_HISTORY_SIZE:50}
       max-user-songs: ${QUEUE_MAX_USER_SONGS:100}
     player:
+      video-max-duration-minutes: ${VIDEO_MAX_DURATION_MINUTES:120}
       max-playlist-import-size: ${PLAYLIST_IMPORT_LIMIT:100}
       sync-broadcast-interval-ms: ${SYNC_BROADCAST_INTERVAL_MS:5000}
     chat:

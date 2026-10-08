@@ -68,3 +68,8 @@ build/
 # git worktree 工作区
 /.worktrees/
 /docs/architecture/
+/.video-party-trial/
+/music-party-web/.frontend-tmp/
+/*-tests.log
+/backend-check.log
+/baseline-*.log

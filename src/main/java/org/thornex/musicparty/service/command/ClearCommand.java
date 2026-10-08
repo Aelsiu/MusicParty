@@ -15,6 +15,8 @@ import org.thornex.musicparty.service.MusicPlayerService;
 public class ClearCommand implements ChatCommand {
 
     private final MusicQueueManager queueManager;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.playback.RoomPlaybackCoordinator playback;
     private final MusicPlayerService musicPlayerService;
     private final ApplicationEventPublisher eventPublisher;
     private final CommandSupport commands;
@@ -36,7 +38,7 @@ public class ClearCommand implements ChatCommand {
             commands.reply(user, "用法：//clear [self|all|dead|chat]，不带参数默认 self");
             return;
         }
-        int count = queueManager.removeByUser(user.getToken());
+        int count = playback == null ? queueManager.removeByUser(user.getToken()) : playback.clearUserQueue(user.getToken());
         
         if (count > 0) {
             // 发送系统通知 (聊天栏)
@@ -49,7 +51,7 @@ public class ClearCommand implements ChatCommand {
             ));
             
             // 广播队列更新
-            musicPlayerService.broadcastQueueUpdate();
+            if (playback == null) musicPlayerService.broadcastQueueUpdate(); else playback.changed();
         } else {
             // 如果没歌，不用特意发通知，或者发一个私有通知
             // 这里我们保持简单，不产生任何动作

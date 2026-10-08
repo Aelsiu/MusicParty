@@ -1,4 +1,4 @@
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onScopeDispose } from 'vue';
 import { useUserStore } from '../stores/user.js';
 import { usePlayerStore } from '../stores/player.js';
 import { musicApi } from '../api/music.js';
@@ -23,6 +23,12 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
     });
     const isPlaylistsLoading = ref(false);
     let playlistRequest = 0;
+    let alive = true, lifecycle = 0;
+    const capture = () => {
+        const generation = playerStore.clientGeneration, epoch = playerStore.modeEpoch, token = lifecycle;
+        return () => alive && lifecycle === token && generation === playerStore.clientGeneration && epoch === playerStore.modeEpoch;
+    };
+    onScopeDispose(() => { alive = false; lifecycle++; });
 
     // Pagination
     const offset = ref(0);
@@ -34,6 +40,8 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
     // 获取用户歌单
     const fetchPlaylists = async () => {
+        if (playerStore.mediaMode === 'VIDEO') { playlists.value = []; isPlaylistsLoading.value = false; return; }
+        const isCurrent = capture();
         const request = ++playlistRequest;
         const platform = platformRef.value;
         const uid = bindings.value[platform];
@@ -45,21 +53,22 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         isPlaylistsLoading.value = true;
         try {
             const data = await musicApi.getUserPlaylists(platform, uid);
-            if (request === playlistRequest && platformRef.value === platform && bindings.value[platform] === uid) playlists.value = data;
+            if (isCurrent() && request === playlistRequest && platformRef.value === platform && bindings.value[platform] === uid) playlists.value = data;
         } catch (e) {
-            if (request !== playlistRequest) return;
+            if (!isCurrent() || request !== playlistRequest) return;
             console.error(e);
             playlists.value = [];
             if (e.response?.data?.message) {
                 error(e.response.data.message);
             }
         } finally {
-            if (request === playlistRequest) isPlaylistsLoading.value = false;
+            if (isCurrent() && request === playlistRequest) isPlaylistsLoading.value = false;
         }
     };
 
     // 搜索用户 (用于绑定)
     const searchUser = async () => {
+        const isCurrent = capture();
         if (!searchUserKeyword.value) return;
         const keyword = searchUserKeyword.value;
         const platform = platformRef.value;
@@ -68,11 +77,12 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         userSearchResults.value = [];
         try {
             const data = await musicApi.searchUser(platform, keyword);
-            if (searchUserKeyword.value === keyword && platformRef.value === platform) {
+            if (isCurrent() && searchUserKeyword.value === keyword && platformRef.value === platform) {
                 userSearchResults.value = data;
                 hasSearchedUser.value = true;
             }
         } catch (e) {
+            if (!isCurrent()) return;
             console.error(e);
             if (e.response?.data?.message) {
                 error(e.response.data.message);
@@ -80,7 +90,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
                 error('User Search Failed');
             }
         } finally {
-            isSearchingUser.value = false;
+            if (isCurrent()) isSearchingUser.value = false;
         }
     };
 
@@ -94,6 +104,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
     // 分页获取歌单歌曲 (核心复杂逻辑)
     const fetchSongsPage = async () => {
+        const isCurrent = capture();
         if (!currentPlaylistId.value) return;
         const playlistId = currentPlaylistId.value;
         const platform = platformRef.value;
@@ -104,7 +115,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
                 offset.value,
                 limit.value
             );
-            if (currentPlaylistId.value !== playlistId || platformRef.value !== platform) return;
+            if (!isCurrent() || currentPlaylistId.value !== playlistId || platformRef.value !== platform) return;
 
             // B站特殊的分页判定
             if (platformRef.value === 'bilibili') {
@@ -126,6 +137,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
             if (rawSongs.length === 0) isLoadingMore.value = false;
 
         } catch (e) {
+            if (!isCurrent()) return;
             console.error("Fetch songs failed", e);
             if (currentPlaylistId.value === playlistId && platformRef.value === platform) hasMore.value = false;
         }
@@ -133,22 +145,25 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
 
     // 本地筛选需要扫描整张歌单；沿用现有分页接口逐页补齐。
     const loadRemainingSongs = async () => {
+        const isCurrent = capture();
         if (!currentPlaylistId.value || !hasMore.value || isLoadingMore.value || loadingRef.value) return;
         const playlistId = currentPlaylistId.value;
         const platform = platformRef.value;
         isLoadingMore.value = true;
         try {
-            while (hasMore.value && currentPlaylistId.value === playlistId && platformRef.value === platform) {
+            while (isCurrent() && hasMore.value && currentPlaylistId.value === playlistId && platformRef.value === platform) {
                 offset.value += limit.value;
                 await fetchSongsPage();
             }
         } finally {
-            isLoadingMore.value = false;
+            if (isCurrent()) isLoadingMore.value = false;
         }
     };
 
     // 点击歌单
     const loadPlaylist = async (pid) => {
+        lifecycle++;
+        const isCurrent = capture();
         listModeRef.value = 'playlist';
         currentPlaylistId.value = pid;
         songsRef.value = [];
@@ -159,12 +174,13 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
         try {
             await fetchSongsPage();
         } finally {
-            loadingRef.value = false;
+            if (isCurrent()) loadingRef.value = false;
         }
     };
 
     // 滚动加载
     const handleScroll = useDebounceFn(async (e) => {
+        const isCurrent = capture();
         if (listModeRef.value !== 'playlist') return;
         const el = e.target;
         const bottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -175,13 +191,15 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef)
             try {
                 await fetchSongsPage();
             } finally {
-                isLoadingMore.value = false;
+                if (isCurrent()) isLoadingMore.value = false;
             }
         }
     }, 200);
 
     // 设置窗口中的绑定/解绑也同步刷新搜索页。
-    watch(() => [platformRef.value, bindings.value[platformRef.value]], () => {
+    watch(() => [platformRef.value, bindings.value[platformRef.value], playerStore.modeEpoch, playerStore.clientGeneration], () => {
+        lifecycle++; playlistRequest++; playlists.value = []; userSearchResults.value = []; hasSearchedUser.value = false;
+        isSearchingUser.value = false; isPlaylistsLoading.value = false; isLoadingMore.value = false; loadingRef.value = false;
         currentPlaylistId.value = null;
         if (listModeRef.value === 'playlist') songsRef.value = [];
         fetchPlaylists();

@@ -108,4 +108,18 @@ class MusicPlayerServiceSettingsTest {
         assertFalse(captured.skipLocked());
         assertFalse(captured.playModeLocked());
     }
+
+    @Test
+    void roomVoteUpdateWritesSharedConfigUsedByTheVideoEngine() {
+        MusicPlayerService service = build();
+        service.updateConfig(new org.thornex.musicparty.dto.AdminConfigUpdateRequest(null, null, null, null,
+                null, null, null, null, null, null, null, true, .75, 23, null));
+        AppProperties.PlayerConfig shared = service.getAppProperties().getPlayer();
+        assertTrue(shared.isVoteSkipEnabled());
+        assertEquals(.75, shared.getVoteSkipThreshold());
+        assertEquals(23, shared.getVoteSkipWaitTime());
+        assertTrue(service.getCurrentPlayerState().isVoteSkipEnabled());
+        assertEquals(.75, service.getCurrentPlayerState().voteSkipThreshold());
+        assertEquals(23, service.getCurrentPlayerState().voteSkipWaitTime());
+    }
 }

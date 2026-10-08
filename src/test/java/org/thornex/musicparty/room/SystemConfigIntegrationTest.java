@@ -69,6 +69,15 @@ class SystemConfigIntegrationTest {
                 null, null, null, null, snapshot.pairingIntervalMinutes());
     }
 
+    private String roomConfigRequest(String roomId) throws Exception {
+        try(var ignored=RoomContext.enter(roomId)) {
+            var state=context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).read();
+            var body=mapper.createObjectNode().put("neteaseQuality","lossless").put("requestId",UUID.randomUUID().toString())
+                .put("expectedPlaybackEpoch",state.playbackEpoch()).put("expectedMode",state.mediaMode()).put("expectedModeEpoch",state.modeEpoch());
+            return mapper.writeValueAsString(body);
+        }
+    }
+
     @Test void onlyRootCanReadAndUpdateGlobalSettingsAndRoomEndpointsRejectAllNineFields() throws Exception {
         var license = repository.addLicense("Owner" + UUID.randomUUID().toString().substring(0, 8));
         String ownerToken = access.login(license.key(), "owner-test").token();
@@ -98,7 +107,7 @@ class SystemConfigIntegrationTest {
             assertEquals("exhigh", context.getBean(AppProperties.class).getNetease().getQuality());
         }
         http.perform(post("/api/admin/config/update").header("Authorization", "Bearer " + ownerToken)
-                        .header("X-Room-ID", room.id()).contentType("application/json").content("{\"neteaseQuality\":\"lossless\"}"))
+                        .header("X-Room-ID", room.id()).header("playback-protocol","3").contentType("application/json").content(roomConfigRequest(room.id())))
                 .andExpect(status().isOk());
     }
 
@@ -107,8 +116,9 @@ class SystemConfigIntegrationTest {
         var second = room("ROOT");
         List<AppProperties> bound = new ArrayList<>();
         for (var room : List.of(first, second)) try (var ignored = RoomContext.enter(room.id())) {
-            context.getBean(QueuePersistenceService.class).ensureLoaded();
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).ensureReady();
             bound.add((AppProperties) ((org.springframework.aop.scope.ScopedObject) context.getBean(AppProperties.class)).getTargetObject());
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).read();
             MusicQueueManager queue = context.getBean(MusicQueueManager.class);
             ChatService chat = context.getBean(ChatService.class);
             for (int i = 0; i < 8; i++) {
@@ -128,6 +138,7 @@ class SystemConfigIntegrationTest {
             assertEquals(3, properties.getQueue().getMaxSize());
         }
         for (var room : List.of(first, second)) try (var ignored = RoomContext.enter(room.id())) {
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).read();
             MusicQueueManager queue = context.getBean(MusicQueueManager.class);
             ChatService chat = context.getBean(ChatService.class);
             assertEquals(8, queue.getQueueSnapshot().size());
@@ -137,7 +148,7 @@ class SystemConfigIntegrationTest {
             assertFalse(chat.isMessageLengthValid("123456"));
             assertTrue(chat.canUserSendMessage("fresh"));
             assertFalse(chat.canUserSendMessage("fresh"));
-            context.getBean(QueuePersistenceService.class).saveNow();
+            context.getBean(QueuePersistenceService.class).saveNow();context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).read();
             var savedConfig = mapper.readTree(repository.payload(room.id(), "config"));
             assertFalse(savedConfig.get("queue").has("maxSize"));
             assertFalse(savedConfig.get("player").has("maxPlaylistImportSize"));
@@ -162,7 +173,7 @@ class SystemConfigIntegrationTest {
         SystemConfigSnapshot next = new SystemConfigSnapshot(12, 0, 13, 14, 0, 16, 17, 18);
         systemConfig.update(request(next));
         try (var ignored = RoomContext.enter(dormant.id())) {
-            context.getBean(QueuePersistenceService.class).ensureLoaded();
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).ensureReady();
             assertEquals(next, SystemConfigSnapshot.from(context.getBean(AppProperties.class)));
             assertEquals("hires", context.getBean(AppProperties.class).getNetease().getQuality());
             assertTrue(context.getBean(MusicQueueManager.class).getHistorySnapshot().isEmpty());
@@ -188,7 +199,7 @@ class SystemConfigIntegrationTest {
 
     @Test void pairingIntervalIsRootOnlyStrictIntegerAndImmediatelyRotatesActiveAndDormantRooms() throws Exception {
         var active=room("ROOT");var dormant=room("ROOT");
-        try(var ignored=RoomContext.enter(active.id())) { context.getBean(QueuePersistenceService.class).ensureLoaded(); }
+        try(var ignored=RoomContext.enter(active.id())) { context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).ensureReady(); }
         for(String value:List.of("0","61","1.5","10.0","\"5\"","true")) {
             http.perform(post("/api/rooms/system-config").header("Authorization","Bearer "+rootToken)
                     .contentType("application/json").content("{\"pairingIntervalMinutes\":"+value+"}"))

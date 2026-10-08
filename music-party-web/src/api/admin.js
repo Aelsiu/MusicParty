@@ -4,6 +4,15 @@ import { roomSession, saveManager } from '../services/roomSession';
 import { socketService } from '../services/socket';
 import { useUserStore } from '../stores/user';
 import { verifyRoomOwner } from '../services/adminVerification';
+import { usePlayerStore } from '../stores/player';
+
+const mediaPayload = (payload, context) => {
+    const current = context || usePlayerStore().playbackContext();
+    if (!current || !usePlayerStore().isContextCurrent(current)) throw new Error('房间播放状态尚未同步或已改变，请重试');
+    const { clientGeneration, ...serverContext } = current;
+    return { ...payload, ...serverContext };
+};
+const mediaHeaders = adminPwd => ({ 'X-Admin-Password': adminPwd, 'playback-protocol': '3' });
 
 /**
  * 管理员后台专用接口封装
@@ -34,23 +43,23 @@ export const adminApi = {
     },
 
     // 锁定控制 (PAUSE/SKIP/SHUFFLE/ALL)
-    setLock: (adminPwd, type, locked) => client.post('/api/admin/lock', { type, locked }, {
-        headers: { 'X-Admin-Password': adminPwd }
+    setLock: (adminPwd, type, locked) => client.post('/api/admin/lock', mediaPayload({ type, locked }), {
+        headers: mediaHeaders(adminPwd)
     }),
 
     // 强制播放器操作 (PAUSE/SKIP/SHUFFLE)
-    playerAction: (adminPwd, action) => client.post('/api/admin/player/action', { action }, {
-        headers: { 'X-Admin-Password': adminPwd }
+    playerAction: (adminPwd, action) => client.post('/api/admin/player/action', mediaPayload({ action, playbackId: usePlayerStore().nowPlaying?.playbackId ?? null }), {
+        headers: mediaHeaders(adminPwd)
     }),
 
     // 清理数据 (QUEUE/CHAT)
-    clearData: (adminPwd, target) => client.post('/api/admin/room/clear', { target }, {
-        headers: { 'X-Admin-Password': adminPwd }
+    clearData: (adminPwd, target, context) => client.post('/api/admin/room/clear', target === 'CHAT' ? { target } : mediaPayload({ target }, context), {
+        headers: mediaHeaders(adminPwd)
     }),
 
     // 系统重置
-    resetSystem: (adminPwd) => client.post('/api/admin/system/reset', {}, {
-        headers: { 'X-Admin-Password': adminPwd }
+    resetSystem: (adminPwd, context) => client.post('/api/admin/system/reset', mediaPayload({}, context), {
+        headers: mediaHeaders(adminPwd)
     }),
 
     // 更新平台 Cookie
@@ -59,17 +68,17 @@ export const adminApi = {
     }),
 
     // 直播流控制
-    setStream: (adminPwd, enabled) => client.post('/api/admin/room/stream', { enabled }, {
-        headers: { 'X-Admin-Password': adminPwd }
+    setStream: (adminPwd, enabled) => client.post('/api/admin/room/stream', mediaPayload({ enabled }), {
+        headers: mediaHeaders(adminPwd)
     }),
 
     // 更新系统配置
-    updateConfig: (adminPwd, config) => client.post('/api/admin/config/update', config, {
-        headers: { 'X-Admin-Password': adminPwd }
+    updateConfig: (adminPwd, config) => client.post('/api/admin/config/update', mediaPayload(config), {
+        headers: mediaHeaders(adminPwd)
     }),
 
     // 更新私人电台/私人DJ 配置
-    updatePrivateDj: (adminPwd, update) => client.post('/api/admin/private-dj', update, {
-        headers: { 'X-Admin-Password': adminPwd }
+    updatePrivateDj: (adminPwd, update) => client.post('/api/admin/private-dj', mediaPayload(update), {
+        headers: mediaHeaders(adminPwd)
     })
 };

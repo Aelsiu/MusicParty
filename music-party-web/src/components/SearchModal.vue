@@ -17,7 +17,7 @@
         <!-- 平台切换 TAB (移动端收紧内边距，防小屏换行)；全长方形，选中用主题色高亮 -->
         <div class="flex gap-1 mb-2 flex-wrap">
           <button
-              v-for="p in ['netease', 'bilibili']" :key="p"
+              v-for="p in (playerStore.mediaMode === 'VIDEO' ? ['bilibili'] : ['netease', 'bilibili'])" :key="p"
               @click="selectPlatform(p)"
               :disabled="!isPlatformEnabled(p)"
               class="px-4 md:px-6 py-1.5 text-sm font-bold uppercase transition-all"
@@ -30,6 +30,7 @@
           </button>
           <!-- 本地点赞列表标签（仅本地缓存，不上报服务器） -->
           <button
+              v-if="playerStore.mediaMode === 'MUSIC'"
               @click="mode = 'likesong'"
               class="px-4 md:px-6 py-1.5 text-sm font-bold transition-all"
               :class="mode === 'likesong' ? 'bg-accent text-white' : 'bg-medical-200 text-medical-500 hover:bg-medical-300'"
@@ -38,12 +39,13 @@
           </button>
         </div>
 
+        <button v-if="playerStore.mediaMode === 'VIDEO' && playerStore.videoFeatures.favoriteLinkImport" @click="mode = mode === 'favorites' ? 'search' : 'favorites'" class="mb-2 px-4 py-2 text-xs bg-medical-200 text-accent">{{ mode === 'favorites' ? '视频搜索' : '收藏夹链接导入' }}</button>
         <!-- 搜索框 -->
-        <div class="flex gap-2">
+        <div v-if="mode !== 'favorites'" class="flex gap-2">
           <input
               v-model="keyword"
               @keyup.enter="handleSearchAction"
-              :placeholder="mode === 'likesong' ? '搜索点赞的歌曲...' : '在曲库中搜索...'"
+              :placeholder="playerStore.mediaMode === 'VIDEO' ? '搜索 B 站视频，或输入 BV / 视频页面链接点播' : mode === 'likesong' ? '搜索点赞的歌曲...' : '在曲库中搜索...'"
               class="placeholder-mono flex-1 min-w-0 border px-3 py-2 outline-none transition-colors duration-300 font-sans bg-medical-100 border-medical-200 focus:border-accent"
           />
           <button
@@ -54,9 +56,26 @@
           </button>
         </div>
       </div>
+      <p v-if="playerStore.mediaMode === 'VIDEO'" class="px-4 py-2 text-xs text-medical-500">点击视频可选择分 P 入队；带 ?p=N 的链接直接选择该 P。服务器独立校验每 P 的 {{ playerStore.config.videoMaxDurationMinutes || 120 }} 分钟上限。</p>
+      <div v-if="videoPickOpen" class="absolute inset-0 z-[60] bg-overlay/80 flex items-center justify-center p-4" role="dialog" aria-label="选择分 P 入队">
+        <div class="w-full max-w-lg bg-surface border border-medical-200 p-5 space-y-4 text-medical-800">
+          <div class="flex items-center justify-between gap-3"><h3 class="font-bold">选择分 P 入队</h3><button @click="closeVideoPick" aria-label="关闭分 P 选择"><X class="w-5 h-5" /></button></div>
+          <p v-if="videoPickLoading" class="text-xs text-medical-500">正在获取可信分 P 信息…</p>
+          <p v-else-if="videoPickError" class="text-xs text-red-500" role="alert">{{ videoPickError }}</p>
+          <template v-else-if="videoPickDescriptor">
+            <p class="text-sm break-words">{{ videoPickDescriptor.title }}</p>
+            <select v-model="videoPickPage" aria-label="选择入队分 P" class="w-full min-w-0 bg-medical-50 border border-medical-200 px-2 py-2 text-sm">
+              <option v-for="page in videoPickDescriptor.pages" :key="page.page" :value="page.page" :disabled="!page.withinDurationLimit">P{{ page.page }} · {{ page.title }} · {{ Math.ceil(page.durationMs / 60000) }} 分钟{{ page.withinDurationLimit ? '' : '（超出上限）' }}</option>
+            </select>
+            <button @click="enqueuePickedPage" :disabled="!selectedVideoPage?.withinDurationLimit || selectedVideoPageQueued" class="w-full bg-accent text-white py-2 text-sm font-bold disabled:opacity-40">{{ selectedVideoPageQueued ? '该 P 已在队列' : '将选中的 P 入队' }}</button>
+            <p class="text-xs text-medical-400">每次仅入队一个 P；当前视频不会因此切 P。</p>
+          </template>
+        </div>
+      </div>
 
+      <VideoFavoriteImport v-if="playerStore.mediaMode === 'VIDEO' && mode === 'favorites'" />
       <!-- 内容区 -->
-      <div class="flex-1 overflow-hidden flex flex-col md:flex-row relative">
+      <div v-else class="flex-1 overflow-hidden flex flex-col md:flex-row relative">
 
         <!-- LikeSong：本地点赞歌曲列表（仅本地缓存，不上报服务器） -->
         <div v-if="mode === 'likesong'" class="flex-1 bg-medical-50 flex-col min-h-0 flex">
@@ -105,7 +124,7 @@
         </div>
 
         <!-- 左侧：我的歌单 / 绑定 -->
-        <div class="md:w-1/3 md:h-auto flex-shrink-0 border-b md:border-b-0 md:border-r border-medical-200 flex-col bg-surface transition-all"
+        <div v-if="playerStore.mediaMode !== 'VIDEO'" class="md:w-1/3 md:h-auto flex-shrink-0 border-b md:border-b-0 md:border-r border-medical-200 flex-col bg-surface transition-all"
              :class="mode === 'likesong' ? 'hidden' : (mobileView === 'playlists' ? 'flex w-full h-full' : 'hidden md:flex')"
         >
           <div class="flex-1 overflow-y-auto overscroll-contain p-2 space-y-2">
@@ -236,21 +255,25 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue';
+import { ref, computed, watch, onBeforeUnmount } from 'vue';
 import { usePlayerStore } from '../stores/player';
 import { useUserStore } from '../stores/user';
 import { useSearchLogic } from '../composables/useSearchLogic';
 import { usePlaylistLogic } from '../composables/usePlaylistLogic';
 import { useLikedSongs } from '../composables/useLikedSongs';
 import { matchesPlaylistSong } from '../utils/playlistFilter';
+import { videoBvid, isDirectVideoInput, createPlaybackRequestId } from '../utils/playbackProtocol';
 import { X, Search, PlusCircle, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink, RefreshCw } from 'lucide-vue-next';
 import CoverImage from './CoverImage.vue';
 import PlaylistImportIcon from './PlaylistImportIcon.vue';
+import VideoFavoriteImport from './VideoFavoriteImport.vue';
+import { musicApi } from '../api/music';
 
 const props = defineProps(['isOpen']);
 const emit = defineEmits(['close']);
 const playerStore = usePlayerStore();
 const userStore = useUserStore();
+const enqueuePlatform = computed(() => playerStore.mediaMode === 'VIDEO' ? 'bilibili-video' : platform.value);
 
 const isPlatformEnabled = (p) => {
   if (p === 'netease') return playerStore.config?.neteaseEnabled !== false;
@@ -264,6 +287,13 @@ const {
 } = useSearchLogic(emit);
 
 const handleSearchAction = async () => {
+  if (playerStore.mediaMode === 'VIDEO' && isDirectVideoInput(keyword.value)) {
+    const input = keyword.value.trim();
+    if (/:p\d+$/.test(input) || /[?&]p=\d+/.test(input)) {
+      if (playerStore.enqueue('bilibili-video', input)) emit('close');
+    } else await chooseVideoPage({ id: videoBvid(input) });
+    return;
+  }
   // LIKESONG 模式下搜索针对本地点赞记录（列表已按关键词实时过滤），不触发平台搜索
   if (mode.value === 'likesong') return;
   await doSearch();
@@ -286,6 +316,7 @@ const filteredLikedSongs = computed(() => {
 });
 
 const selectPlatform = async (p) => {
+  if (playerStore.mediaMode === 'VIDEO' && p !== 'bilibili') return;
   // 已在当前搜索平台则无需重复搜索
   if (mode.value === 'search' && platform.value === p) return;
   platform.value = p;
@@ -329,6 +360,7 @@ watch([playlistFilterKeyword, loading, isLoadingMore], () => {
 
 // 4. 交互胶水代码
 const isUnplayable = (song) => {
+  if (playerStore.mediaMode === 'VIDEO') return false;
   // B站视频时长上限（分钟）由管理面板配置，默认 10
   const maxMin = playerStore.config.bilibiliMaxDurationMinutes || 10;
   return platform.value === 'bilibili' && song.duration > maxMin * 60 * 1000;
@@ -343,7 +375,7 @@ const handleSelectPlaylist = (pid) => {
 };
 
 const handleImportPlaylist = () => {
-  playerStore.enqueuePlaylist(platform.value, currentPlaylistId.value);
+  playerStore.enqueuePlaylist(enqueuePlatform.value, currentPlaylistId.value);
   emit('close');
 };
 
@@ -358,21 +390,51 @@ const toggleSelectedSong = (id, checked) => {
 };
 const handleImportSelected = () => {
   if (!importableSelectedSongs.value.length) return;
-  for (const song of importableSelectedSongs.value) playerStore.enqueue(platform.value, song.id);
+  const context = playerStore.playbackContext();
+  for (const song of importableSelectedSongs.value) playerStore.enqueue(enqueuePlatform.value, song.id, { ...context, requestId: createPlaybackRequestId() });
   selectedSongIds.value = new Set();
   emit('close');
 };
 
 // 本地维护正在添加中的歌曲 ID 集合
 const pendingIds = ref(new Set());
+const videoPickOpen = ref(false), videoPickLoading = ref(false), videoPickError = ref('');
+const videoPickDescriptor = ref(null), videoPickPage = ref(1);
+let videoPickRequest = 0, videoPickContext = null;
+const selectedVideoPage = computed(() => videoPickDescriptor.value?.pages?.find(page => page.page === videoPickPage.value));
+const selectedVideoPageQueued = computed(() => !!selectedVideoPage.value && playerStore.queue.some(item => item.music.id === selectedVideoPage.value.canonicalId));
+const closeVideoPick = () => { videoPickRequest++; videoPickOpen.value = false; videoPickDescriptor.value = null; videoPickContext = null; };
+const chooseVideoPage = async song => {
+  const context = playerStore.playbackContext();
+  if (!context) return;
+  const request = ++videoPickRequest;
+  videoPickContext = context; videoPickOpen.value = true; videoPickLoading.value = true; videoPickError.value = ''; videoPickDescriptor.value = null;
+  try {
+    const descriptor = await musicApi.videoMetadata(videoBvid(song.id));
+    if (request !== videoPickRequest || !playerStore.isContextCurrent(context) || !props.isOpen) return;
+    videoPickDescriptor.value = descriptor;
+    videoPickPage.value = descriptor.pages?.find(page => page.withinDurationLimit)?.page || 1;
+  } catch {
+    if (request === videoPickRequest && playerStore.isContextCurrent(context)) videoPickError.value = '未能获取视频分 P，请检查网络或房间平台设置后重试。';
+  } finally { if (request === videoPickRequest) videoPickLoading.value = false; }
+};
+const enqueuePickedPage = () => {
+  if (!selectedVideoPage.value?.withinDurationLimit || selectedVideoPageQueued.value) return;
+  if (playerStore.enqueue('bilibili-video', selectedVideoPage.value.canonicalId, videoPickContext)) closeVideoPick();
+};
+const pendingTimers = new Set();
+onBeforeUnmount(() => { closeVideoPick(); pendingTimers.forEach(clearTimeout); pendingTimers.clear(); });
 
 // 检查歌曲是否已经在队列中
 const isInQueue = (songId) => {
-  return playerStore.queue.some(item => item.music.id === songId);
+  if (playerStore.mediaMode === 'VIDEO' && !/:p\d+$/.test(songId)) return false;
+  const id = songId;
+  return playerStore.queue.some(item => item.music.id === id);
 };
 
 // 处理点击添加
 const handleAddClick = (song) => {
+  if (playerStore.mediaMode === 'VIDEO') { chooseVideoPage(song); return; }
   // 防抖：如果正在添加或已在队列，直接忽略
   if (pendingIds.value.has(song.id) || isInQueue(song.id)) return;
 
@@ -380,14 +442,17 @@ const handleAddClick = (song) => {
   pendingIds.value.add(song.id);
 
   // 2. 发送请求
-  playerStore.enqueue(platform.value, song.id);
+  if (!playerStore.enqueue(enqueuePlatform.value, song.id)) { pendingIds.value.delete(song.id); return; }
 
   // 3. 设定一个“冷却时间”用于视觉反馈 (2秒)
   // WebSocket 是异步的，我们不需要一直等到服务器返回，
   // 这里的 loading 主要是为了告诉用户“操作已受理”并防止连点
-  setTimeout(() => {
-    pendingIds.value.delete(song.id);
+  const generation = playerStore.clientGeneration, epoch = playerStore.modeEpoch;
+  const timer = setTimeout(() => {
+    pendingTimers.delete(timer);
+    if (generation === playerStore.clientGeneration && epoch === playerStore.modeEpoch) pendingIds.value.delete(song.id);
   }, 2000);
+  pendingTimers.add(timer);
 };
 
 // LikeSong 列表：添加（用该歌曲自身的平台入队）
@@ -395,16 +460,18 @@ const addLikedClick = (song) => {
   if (pendingIds.value.has(song.id) || isInQueue(song.id)) return;
   pendingIds.value.add(song.id);
   playerStore.enqueue(song.platform, song.id);
-  setTimeout(() => {
+  const timer = setTimeout(() => {
+    pendingTimers.delete(timer);
     pendingIds.value.delete(song.id);
   }, 2000);
+  pendingTimers.add(timer);
 };
 
 // LikeSong 列表：跳转源页面（与播放控制器专辑封面逻辑一致）
 const openLikedSource = (song) => {
   const url = song.platform === 'netease'
     ? `https://music.163.com/#/song?id=${song.id}`
-    : `https://www.bilibili.com/video/${song.id}`;
+    : `https://www.bilibili.com/video/${videoBvid(song.id)}`;
   if (url) window.open(url, '_blank');
 };
 
@@ -414,7 +481,13 @@ watch(listMode, (m) => {
 });
 
 watch(() => props.isOpen, (val) => {
-  if (val) mobileView.value = 'playlists';
+  if (val) mobileView.value = playerStore.mediaMode === 'VIDEO' ? 'songs' : 'playlists';
+  else closeVideoPick();
+});
+watch(() => [playerStore.mediaMode, playerStore.modeEpoch, playerStore.clientGeneration], () => {
+  closeVideoPick();
+  mode.value = 'search'; pendingIds.value = new Set(); selectedSongIds.value = new Set();
+  playlistFilterInput.value = ''; playlistFilterKeyword.value = ''; mobileView.value = playerStore.mediaMode === 'VIDEO' ? 'songs' : 'playlists';
 });
 </script>
 

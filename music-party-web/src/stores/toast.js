@@ -12,6 +12,7 @@ export const useToastStore = defineStore('toast', () => {
             title: options.title || 'SYSTEM NOTICE',
             message: options.message,
             type: options.type || 'info', // success, error, info, warning
+            multiline: options.multiline === true,
             duration: options.duration || 3000
         };
 

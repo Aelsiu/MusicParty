@@ -1,5 +1,5 @@
 <template>
-  <div class="h-24 bg-surface border-t border-medical-200 flex items-center px-4 md:px-8 relative z-50 shadow-lg">
+  <div class="h-[calc(8rem+env(safe-area-inset-bottom))] md:h-24 shrink-0 pt-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] md:py-0 bg-surface border-t border-medical-200 flex items-center px-4 md:px-8 relative z-50 shadow-lg">
     <!-- 封面 -->
     <div
         id="tutorial-source"
@@ -89,23 +89,23 @@
       
       <!-- 移动端简易控制 -->
       <div class="flex md:hidden justify-end gap-3 mt-2">
-        <button id="tutorial-download-mobile" @click="downloadCurrentMusic" class="p-2 bg-medical-50 border border-medical-200 rounded-sm text-medical-500 active:bg-medical-200">
+        <button v-if="player.mediaMode === 'MUSIC'" id="tutorial-download-mobile" @click="downloadCurrentMusic" class="p-2 bg-medical-50 border border-medical-200 rounded-sm text-medical-500 active:bg-medical-200">
           <Download class="w-4 h-4" />
         </button>
         <button
             id="tutorial-random-mobile"
             @click="player.cyclePlayMode"
-            :disabled="!player.connected || player.isPlayModeLocked"
+            :disabled="!player.synchronized || player.isPlayModeLocked"
             class="p-2 border rounded-sm disabled:opacity-50 transition-colors bg-medical-50 border-medical-200 text-medical-500"
         >
           <ListOrdered v-if="player.playMode === 'SEQUENTIAL'" class="w-4 h-4" />
           <Shuffle v-else-if="player.playMode === 'SHUFFLE'" class="w-4 h-4" />
           <Repeat1 v-else class="w-4 h-4" />
         </button>
-         <button id="tutorial-pause-mobile" @click="player.togglePause" :disabled="player.isPauseLocked && !player.isPaused" class="p-2 bg-medical-100 rounded-sm disabled:opacity-50">
-             <Lock v-if="player.isPauseLocked && !player.isPaused" class="w-4 h-4 text-medical-400" />
+         <button id="tutorial-pause-mobile" @click="player.togglePause" :disabled="!player.synchronized || (player.isPauseLocked && !player.intentPaused)" class="p-2 bg-medical-100 rounded-sm disabled:opacity-50">
+             <Lock v-if="player.isPauseLocked && !player.intentPaused" class="w-4 h-4 text-medical-400" />
              <template v-else>
-                 <Play v-if="player.isPaused" class="w-4 h-4" />
+                 <Play v-if="player.intentPaused" class="w-4 h-4" />
                  <Pause v-else class="w-4 h-4" />
              </template>
          </button>
@@ -129,11 +129,11 @@
       <!-- 播放控制 -->
       <div class="flex items-center gap-4 border-r border-medical-200 pr-6">
         <!-- 新增：下载按钮 (放在 Shuffle 旁边或者 Next 后面) -->
-        <button id="tutorial-download" @click="downloadCurrentMusic" class="text-medical-400 hover:text-accent transition-colors" title="Download">
+        <button v-if="player.mediaMode === 'MUSIC'" id="tutorial-download" @click="downloadCurrentMusic" class="text-medical-400 hover:text-accent transition-colors" title="Download">
           <Download class="w-5 h-5" />
         </button>
 
-        <button id="tutorial-random" @click="player.cyclePlayMode" :disabled="player.isPlayModeLocked" :class="['text-medical-400', player.isPlayModeLocked ? 'opacity-50 cursor-not-allowed' : '']" :title="modeTitle">
+        <button id="tutorial-random" @click="player.cyclePlayMode" :disabled="!player.synchronized || player.isPlayModeLocked" :class="['text-medical-400', player.isPlayModeLocked ? 'opacity-50 cursor-not-allowed' : '']" :title="modeTitle">
             <ListOrdered v-if="player.playMode === 'SEQUENTIAL'" class="w-5 h-5" />
             <Shuffle v-else-if="player.playMode === 'SHUFFLE'" class="w-5 h-5" />
             <Repeat1 v-else class="w-5 h-5" />
@@ -142,12 +142,12 @@
         <button 
             id="tutorial-pause"
             @click="player.togglePause" 
-            :disabled="player.isPauseLocked && !player.isPaused"
+            :disabled="!player.synchronized || (player.isPauseLocked && !player.intentPaused)"
             class="w-10 h-10 bg-strong text-white flex items-center justify-center hover:bg-accent transition-colors chamfer-tl disabled:opacity-50 disabled:hover:bg-strong disabled:cursor-not-allowed"
         >
-            <Lock v-if="player.isPauseLocked && !player.isPaused" class="w-4 h-4 text-white" />
+            <Lock v-if="player.isPauseLocked && !player.intentPaused" class="w-4 h-4 text-white" />
             <template v-else>
-                <Play v-if="player.isPaused" class="w-4 h-4 fill-current" />
+                <Play v-if="player.intentPaused" class="w-4 h-4 fill-current" />
                 <Pause v-else class="w-4 h-4 fill-current" />
             </template>
         </button>
@@ -185,12 +185,13 @@ import { Download, ListOrdered, Repeat1, Shuffle, SkipForward, Play, Pause, Exte
 import CoverImage from './CoverImage.vue';
 import VolumeControl from './VolumeControl.vue';
 import { useToast } from '../composables/useToast';
+import { videoBvid } from '../utils/playbackProtocol';
 
 const player = usePlayerStore();
 const { info, error } = useToast();
 
 const nowPlaying = computed(() => player.nowPlaying);
-const likeMarkers = computed(() => nowPlaying.value?.likeMarkers || []);
+const likeMarkers = computed(() => player.mediaMode === 'MUSIC' ? nowPlaying.value?.likeMarkers || [] : []);
 const clock = ref(Date.now());
 const seekClock = setInterval(() => { clock.value=Date.now(); },100);
 onBeforeUnmount(() => clearInterval(seekClock));
@@ -230,7 +231,9 @@ const waitTimeLeft = computed(() => {
 });
 
 const isSkipDisabled = computed(() => {
+    if (!player.synchronized) return true;
     if (player.isSkipLocked) return true;
+    if (player.mediaMode === 'VIDEO' && player.videoFeatures.interactionState && player.isVoteSkipEnabled && nowPlaying.value?.enqueuedById !== useUserStore().userToken) return !player.interaction?.canVote;
     if (player.isVoteSkipEnabled) {
         // 如果是点歌者（不可投票者），允许直接切歌，不受 15s 限制
         if (!canVote.value) return false;
@@ -247,7 +250,12 @@ const canVote = computed(() => {
 });
 
 const skipBtnTitle = computed(() => {
-    if (player.isSkipLocked) return '切歌功能已被锁定';
+    if (player.isSkipLocked) return '切换功能已被锁定';
+    if (player.mediaMode === 'VIDEO' && player.videoFeatures.interactionState && player.isVoteSkipEnabled && canVote.value) {
+        if (!player.interaction) return '正在核对投票资格';
+        if (player.interaction.reason === 'WAITING') return `播放至 ${player.voteSkipWaitTime} 秒后可投票`;
+        return `${player.interaction.hasVoted ? '撤销投票' : '投票切视频'} (${player.currentVotes}/${player.eligibleUsers})`;
+    }
     if (player.isVoteSkipEnabled) {
         if (!canVote.value) return '强制切歌';
         if (waitTimeLeft.value > 0) return `${waitTimeLeft.value}s 后可投票`;
@@ -264,7 +272,7 @@ const progressPercent = computed(() => {
 
 // --- 下载逻辑 ---
 const downloadCurrentMusic = async () => {
-  if (!nowPlaying.value) return;
+  if (!nowPlaying.value || player.mediaMode !== 'MUSIC') return;
   const music = nowPlaying.value.music;
   info(`Starting download: ${music.name}...`);
   try {
@@ -289,7 +297,7 @@ const downloadCurrentMusic = async () => {
 const openSourcePage = () => {
   if (!nowPlaying.value) return;
   const { platform, id } = nowPlaying.value.music;
-  let url = platform === 'netease' ? `https://music.163.com/#/song?id=${id}` : `https://www.bilibili.com/video/${id}`;
+  let url = platform === 'netease' ? `https://music.163.com/#/song?id=${id}` : `https://www.bilibili.com/video/${videoBvid(id)}`;
   if (url) window.open(url, '_blank');
 };
 

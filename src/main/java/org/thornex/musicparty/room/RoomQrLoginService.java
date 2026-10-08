@@ -18,6 +18,8 @@ public class RoomQrLoginService {
     private final AppProperties config;
     private final RoomAccessService access;
     private final NeteaseMusicApiService netease;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.playback.RoomPlaybackCoordinator playback;
     private final MusicPlayerService player;
     private final QueuePersistenceService persistence;
     private String key,task,creator;
@@ -63,6 +65,16 @@ public class RoomQrLoginService {
         if(code==803) {
             try {valid=!cookie.isBlank() && Boolean.TRUE.equals(netease.checkCookie(cookie).block(Duration.ofSeconds(10)));}
             catch(RuntimeException e) {next="FAILED";}
+        }
+        if (code==803 && valid && playback!=null) {
+            return playback.manage(manager, () -> {
+                synchronized(this) {
+                    if(version!=generation || task==null || !task.equals(taskId)) throw cancelled();
+                    if("SUCCESS".equals(state)) return Map.of("state",state);
+                    netease.updateCookie(cookie); persistence.saveNow(); playback.changed(); state="SUCCESS";
+                    return Map.of("state",state);
+                }
+            });
         }
         synchronized(this) {
             if(version!=generation || task==null) throw cancelled();

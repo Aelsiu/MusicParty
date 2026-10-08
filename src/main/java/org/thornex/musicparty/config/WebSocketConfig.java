@@ -14,6 +14,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     private final WebSocketAuthInterceptor authInterceptor;
     @org.springframework.beans.factory.annotation.Autowired
     private org.thornex.musicparty.room.RoomSocketRegistry sockets;
+    @org.springframework.beans.factory.annotation.Autowired
+    private VideoWatcherIdentity watcherIdentity;
 
     @Override public void configureWebSocketTransport(org.springframework.web.socket.config.annotation.WebSocketTransportRegistration registration) {
         registration.addDecoratorFactory(handler -> new org.springframework.web.socket.handler.WebSocketHandlerDecorator(handler) {
@@ -45,6 +47,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // 允许所有来源，专门针对 SockJS 的严格模式
         registry.addEndpoint("/ws")
+                .addInterceptors(watcherIdentity)
                 .setAllowedOriginPatterns("*");
     }
 

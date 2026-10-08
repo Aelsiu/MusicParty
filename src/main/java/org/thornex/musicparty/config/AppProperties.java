@@ -43,6 +43,9 @@ public class AppProperties {
 
     @Data
     public static class PlayerConfig {
+        private int videoMaxDurationMinutes = 120;
+        private String videoMaxResolution = "UNLIMITED";
+        private long videoPolicyRevision = 0;
         private int pairingIntervalMinutes = 10;
         private int maxPlaylistImportSize = 100;
         private boolean voteSkipEnabled = false;
@@ -50,7 +53,14 @@ public class AppProperties {
         private int voteSkipWaitTime = 15;
         private String seekPolicy = "DISABLED";
         private long syncBroadcastIntervalMs = 5000; // 周期状态广播间隔（ms），修复移动端后台同步漂移
+
+        @com.fasterxml.jackson.annotation.JsonIgnore
+        public VideoPolicySnapshot videoPolicySnapshot() {
+            return new VideoPolicySnapshot(getVideoMaxResolution(), getVideoMaxDurationMinutes(), getVideoPolicyRevision());
+        }
     }
+
+    public record VideoPolicySnapshot(String maxResolution, int maxDurationMinutes, long revision) {}
 
     @Data
     public static class ChatConfig {

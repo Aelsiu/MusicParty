@@ -24,6 +24,9 @@ import java.io.IOException;
 public class AdminController {
 
     private final MusicPlayerService musicPlayerService;
+    @org.springframework.beans.factory.annotation.Autowired(required=false)
+    private org.thornex.musicparty.playback.RoomPlaybackCoordinator coordinator;
+
     private final ChatService chatService;
     private final AppProperties appProperties;
     private final String adminPassword;
@@ -59,112 +62,82 @@ public class AdminController {
         return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "ACCESS DENIED"));
     }
 
+    private ResponseEntity<?> playbackResponse(Map<String,Object> result) {
+        return Boolean.TRUE.equals(result.get("ok")) ? ResponseEntity.ok(result)
+                : ResponseEntity.status(HttpStatus.CONFLICT).body(result);
+    }
+
     @PostMapping("/lock")
-    public ResponseEntity<?> setLock(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminLockRequest request) {
-        if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        
-        String type = request.type().toUpperCase();
-        if ("ALL".equalsIgnoreCase(type)) {
-            musicPlayerService.setAllLocks(request.locked());
-            return ResponseEntity.ok(Map.of("message", (request.locked() ? "已开启全频道操作锁定" : "已解除全频道操作锁定")));
-        } else {
-            musicPlayerService.setLock(type, request.locked());
-            String desc = switch (type) {
-                case "PAUSE" -> "暂停控制";
-                case "SKIP" -> "切歌控制";
-                case "SHUFFLE" -> "播放模式";
-                default -> type;
-            };
-            return ResponseEntity.ok(Map.of("message", desc + (request.locked() ? "已锁定" : "已解锁")));
-        }
+    public ResponseEntity<?> setLock(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        return playbackResponse(coordinator.http(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),"lock",body));
     }
-
     @PostMapping("/player/action")
-    public ResponseEntity<?> playerAction(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminPlayerActionRequest request) {
-        if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-
-        String action = request.action().toUpperCase();
-        String msg = switch (action) {
-            case "PAUSE" -> {
-                musicPlayerService.togglePause("SYSTEM");
-                yield "播放状态已切换";
-            }
-            case "SKIP" -> {
-                musicPlayerService.skipToNext("SYSTEM");
-                yield "已强制跳过当前歌曲";
-            }
-            case "SHUFFLE" -> {
-                musicPlayerService.cyclePlayMode("SYSTEM");
-                yield "播放模式已切换";
-            }
-            case "TOGGLE_FAIR_SHUFFLE" -> {
-                musicPlayerService.toggleFairShuffle("SYSTEM");
-                yield "随机算法已切换";
-            }
-            case "TOGGLE_ALLOW_OFFLINE" -> {
-                musicPlayerService.toggleAllowOfflineShuffle("SYSTEM");
-                yield "离线成员过滤规则已更新";
-            }
-            default -> null;
-        };
-
-        if (msg == null) return ResponseEntity.badRequest().build();
-        return ResponseEntity.ok(Map.of("message", msg));
+    public ResponseEntity<?> playerAction(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        return playbackResponse(coordinator.http(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),body.path("action").asText(),body));
     }
-
+    @PostMapping("/media-mode")
+    public ResponseEntity<?> mediaMode(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        return playbackResponse(coordinator.http(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),"mode",body));
+    }
     @PostMapping("/room/clear")
-    public ResponseEntity<?> clearData(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminClearRequest request) {
-        if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-
-        String target = request.target().toUpperCase();
-        if ("CHAT".equalsIgnoreCase(target)) {
-            chatService.clearHistoryAndNotify();
-            return ResponseEntity.ok(Map.of("message", "聊天历史记录已清空"));
-        } else if ("OFFLINE".equalsIgnoreCase(target)) {
-            int count = musicPlayerService.clearOfflineSongs();
-            return ResponseEntity.ok(Map.of("message", "已清理 " + count + " 首离线成员的点播歌曲"));
-        } else {
-            musicPlayerService.clearQueue();
-            return ResponseEntity.ok(Map.of("message", "播放队列已全部重置"));
+    public ResponseEntity<?> clearData(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        if ("CHAT".equals(body.path("target").asText())) {
+            coordinator.manage(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),() -> { chatService.clearHistoryAndNotify(); return null; });
+            return ResponseEntity.ok(Map.of("message","聊天历史记录已清空"));
         }
+        return playbackResponse(coordinator.http(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),"clear",body));
     }
-
     @PostMapping("/system/reset")
-    public ResponseEntity<?> resetSystem(@RequestHeader(value = "X-Admin-Password", required = false) String password) {
-        if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-
-        musicPlayerService.resetSystem();
-        return ResponseEntity.ok(Map.of("message", "本房间播放与队列已重置"));
+    public ResponseEntity<?> resetSystem(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        return playbackResponse(coordinator.http(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),"reset",body));
     }
 
     @PostMapping("/config/cookie")
-    public ResponseEntity<?> setCookie(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminCookieRequest request) {
-        if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    public ResponseEntity<?> setCookieHttp(jakarta.servlet.http.HttpServletRequest http, @RequestBody AdminCookieRequest request) {
+        return coordinator.manage(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http), () -> setCookieInMailbox(request));
+    }
+    private ResponseEntity<?> setCookieInMailbox(AdminCookieRequest request) {
 
         if ("netease".equalsIgnoreCase(request.platform())) {
             neteaseMusicApiService.updateCookie(request.value());
             // 首次配置 cookie 后即时广播，刷新控制面板总开关门禁（neteaseCookieConfigured 来自 PlayerState）
-            musicPlayerService.broadcastFullPlayerState();
+            if (coordinator == null) musicPlayerService.broadcastFullPlayerState(); else coordinator.changed();
             return ResponseEntity.ok(Map.of("message", "网易云音乐凭据已更新"));
         } else if ("bilibili".equalsIgnoreCase(request.platform())) {
             bilibiliMusicApiService.updateCookie(request.value());
             appProperties.getBilibili().setCookie(request.value());
+            if (coordinator != null) coordinator.cookieChanged();
             return ResponseEntity.ok(Map.of("message", "Bilibili Cookie 已更新"));
         } else {
             return ResponseEntity.badRequest().build();
         }
     }
 
-    @PostMapping("/room/stream")
-    public ResponseEntity<?> setStream(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminStreamRequest request) {
-        if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
+    public ResponseEntity<?> setCookie(String password, AdminCookieRequest request) { return setCookieInMailbox(request); }
 
-        liveStreamService.setEnabled(request.enabled());
-        musicPlayerService.broadcastFullPlayerState();
-        return ResponseEntity.ok(Map.of("message", request.enabled() ? "直播流同步服务已启动" : "直播流同步服务已停止"));
+    @PostMapping("/room/stream")
+    public ResponseEntity<?> setStream(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        return playbackResponse(coordinator.httpAction(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),"stream",body, () -> {
+            boolean enabled = body.path("enabled").asBoolean();
+            if (enabled) coordinator.requireMusic();
+            liveStreamService.setEnabled(enabled); coordinator.changed();
+        }));
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
+    private com.fasterxml.jackson.databind.ObjectMapper mapper;
+
     @PostMapping("/config/update")
+    public ResponseEntity<?> updateConfigHttp(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        if (mapper.convertValue(body,AdminConfigUpdateRequest.class).hasGlobalSystemConfig())
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message","系统参数仅允许 ROOT 在 ROOM MANAGER 中全局设置"));
+        return playbackResponse(coordinator.httpAction(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),"config",body, () -> {
+            ResponseEntity<?> result = updateConfig(null,mapper.convertValue(body,AdminConfigUpdateRequest.class));
+            if (!result.getStatusCode().is2xxSuccessful()) throw new IllegalArgumentException(String.valueOf(result.getBody()));
+            coordinator.changed();
+        }));
+    }
+
     public ResponseEntity<?> updateConfig(@RequestHeader(value = "X-Admin-Password", required = false) String password, @RequestBody AdminConfigUpdateRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         if (request.hasGlobalSystemConfig()) return ResponseEntity.status(HttpStatus.FORBIDDEN)
@@ -193,6 +166,17 @@ public class AdminController {
     }
 
     @PostMapping("/private-dj")
+    public ResponseEntity<?> updatePrivateDjHttp(jakarta.servlet.http.HttpServletRequest http, @RequestBody com.fasterxml.jackson.databind.JsonNode body) {
+        return playbackResponse(coordinator.httpAction(org.thornex.musicparty.room.RoomHttpFilter.managementToken(http),http.getHeader("playback-protocol"),"private-dj",body, () -> {
+            AdminPrivateDjUpdateRequest request = mapper.convertValue(body,AdminPrivateDjUpdateRequest.class);
+            if (coordinator.isVideo() && (!"OFF".equals(request.mode()) || request.fillBlankEnabled() != null || request.joinQueueEnabled() != null || request.custodyEnabled() != null))
+                throw new IllegalArgumentException("视频模式仅允许关闭私人电台/DJ");
+            ResponseEntity<?> result = updatePrivateDj(null,request);
+            if (!result.getStatusCode().is2xxSuccessful()) throw new IllegalArgumentException(String.valueOf(result.getBody()));
+            coordinator.changed();
+        }));
+    }
+
     public ResponseEntity<?> updatePrivateDj(@RequestHeader(value = "X-Admin-Password", required = false) String password,
                                              @RequestBody AdminPrivateDjUpdateRequest request) {
         if (!isValid(password)) return ResponseEntity.status(HttpStatus.FORBIDDEN).build();

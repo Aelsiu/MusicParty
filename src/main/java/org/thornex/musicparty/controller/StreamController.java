@@ -29,7 +29,7 @@ public class StreamController {
     @GetMapping(value = "/stream", produces = "audio/mpeg")
     public ResponseBodyEmitter streamAudio(HttpServletRequest request, HttpServletResponse response,
                                            @RequestParam(name = "key", required = false) String key) {
-        if (!liveStreamService.isEnabled() || liveStreamService.isRoomEmpty()) {
+        if (!liveStreamService.isEffectiveEnabled() || liveStreamService.isRoomEmpty()) {
             response.setStatus(HttpServletResponse.SC_SERVICE_UNAVAILABLE);
             return null;
         }

@@ -9,12 +9,21 @@ import { adminApi } from '../api/admin';
 import { WS_DEST } from '../constants/api';
 import { socketService } from './socket';
 import { useCleanupStore } from '../stores/cleanup';
+import { createVideoWaitEventFilter } from '../utils/videoWaitEvents';
+const acceptVideoWaitEvent = createVideoWaitEventFilter();
 
 /**
  * 处理游戏/播放器事件通知 (Toast)
  * 这里集中管理所有的业务通知文案
  */
 function handleGameEvent(event) {
+    if (!usePlayerStore().acceptsEvent(event)) return;
+    if (event.action === 'VIDEO_WAIT_TIMEOUT') {
+        if (acceptVideoWaitEvent(event, usePlayerStore())) useToast().show({ title: '等待缓冲超时',
+            message: `「${event.userName || '一位观看成员'}」缓冲等待超过 15 秒，已暂时退出等待判定`,
+            type: 'warning', duration: 6500, multiline: true });
+        return;
+    }
     const userStore = useUserStore();
     const chatStore = useChatStore();
     const adminStore = useAdminStore();
@@ -50,10 +59,6 @@ function handleGameEvent(event) {
         }).catch(() => { if (userStore.isAuthPassed && roomSession.roomId === id) adminStore.showAuthModal = true; });
         else adminStore.showAuthModal = true;
         return;
-    }
-
-    if (event.action === 'RESET') {
-        chatStore.messages = []; // 清空聊天
     }
 
     if (event.action === 'PASSWORD_CHANGED') {
@@ -113,14 +118,18 @@ export const createSocketSubscriptions = () => {
         '/topic/pairing': status => { window.dispatchEvent(new CustomEvent('musicparty:pairing', { detail: status })); },
         '/topic/share': status => { syncRoomShare(status?.enabled); },
         // 1. 状态同步
-        [WS_DEST.TOPIC_STATE]: (state) => playerStore.syncState(state),
-        [WS_DEST.USER_STATE]: (state) => playerStore.syncState(state),
+        [WS_DEST.TOPIC_STATE]: (state, generation) => playerStore.syncState(state, generation),
+        [WS_DEST.USER_STATE]: (state, generation) => playerStore.syncState(state, generation),
+        [WS_DEST.APP_STATE]: (state, generation) => playerStore.syncState(state, generation),
+        [WS_DEST.VIDEO_IMPORT_RESULTS]: message => playerStore.receiveVideoImport(message),
+        [WS_DEST.VIDEO_INTERACTION]: message => playerStore.receiveInteraction(message),
+        [WS_DEST.USER_CLOCK]: response => playerStore.receiveClock(response),
 
         // 2. 用户列表
         [WS_DEST.TOPIC_USERS]: (users) => userStore.setOnlineUsers(users),
 
         // 3. 队列更新
-        [WS_DEST.TOPIC_QUEUE]: (data) => { playerStore.queue = data; },
+        [WS_DEST.TOPIC_QUEUE]: (data, generation) => playerStore.syncQueue(data, generation),
 
         // 4. 事件通知 (Toast)
         [WS_DEST.TOPIC_EVENTS]: handleGameEvent,
@@ -148,15 +157,16 @@ export const createSocketCallbacks = () => {
 
     return {
         // 连接成功
-        onConnect: (frame, isCurrent = () => true) => {
+        onConnect: (frame, isCurrent = () => true, generation = socketService.clientGeneration) => {
             playerStore.connected = true;
+            playerStore.beginSynchronization(generation);
             window.dispatchEvent(new Event("musicparty:connected"));
-            const { roomId, generation, shareRevision } = roomSession;
+            const { roomId, generation: roomGeneration, shareRevision } = roomSession;
             const shareCurrent = () => isCurrent() && roomSession.roomId === roomId
-                && roomSession.generation === generation && roomSession.shareRevision === shareRevision;
+                && roomSession.generation === roomGeneration && roomSession.shareRevision === shareRevision;
             roomsApi.share(roomId).then(status => {
-                if (shareCurrent()) syncRoomShare(status?.enabled === true, roomId, generation);
-            }).catch(() => { if (shareCurrent()) syncRoomShare(false, roomId, generation); });
+                if (shareCurrent()) syncRoomShare(status?.enabled === true, roomId, roomGeneration);
+            }).catch(() => { if (shareCurrent()) syncRoomShare(false, roomId, roomGeneration); });
             if (roomSession.ownerAccess) roomsApi.connected(roomSession.roomId).then(result => { if (isCurrent() && result.openAdmin) { const admin=useAdminStore(); admin.isVerified=true; admin.showDashboard=true; } }).catch(() => {});
             // 发起同步
             setTimeout(() => {
@@ -168,12 +178,18 @@ export const createSocketCallbacks = () => {
         // 连接断开 (含异常断开)
         onDisconnect: () => {
             playerStore.connected = false;
+            playerStore.synchronized = false; playerStore.interaction = null;
         },
 
         // STOMP 协议层错误 (如密码错误、Token失效、服务器内部错误等)
         onStompError: (frame) => {
             console.error('Room connection refused');
             socketService.disconnect();
+            if (`${frame.headers?.message || ''} ${frame.body || ''}`.includes('CLIENT_UPGRADE_REQUIRED')) {
+                playerStore.upgradeRequired = true; playerStore.connected = false; playerStore.synchronized = false;
+                useToast().error('播放器版本已更新，请刷新页面；若仍提示，请清除该站点缓存');
+                return;
+            }
             window.dispatchEvent(new CustomEvent('musicparty:return-entry', { detail: { message: '房间连接已失效，请重新验证' } }));
         }
     };

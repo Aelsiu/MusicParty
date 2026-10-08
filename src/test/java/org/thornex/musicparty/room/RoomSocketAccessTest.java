@@ -38,7 +38,7 @@ class RoomSocketAccessTest {
     @Test void shareSubscriptionIsAllowedOnlyInsideTheConnectedRoomForManagersAndMembers() {
         String admission=access.join(room,repository.room(room).pairingCode(),"member").token();
         var connect=StompHeaderAccessor.create(StompCommand.CONNECT);connect.setSessionId("member-session");
-        connect.setNativeHeader("room-id",room);connect.setNativeHeader("room-token",admission);connect.setLeaveMutable(true);
+        connect.setNativeHeader("playback-protocol","3");connect.setNativeHeader("room-id",room);connect.setNativeHeader("room-token",admission);connect.setLeaveMutable(true);
         assertNotNull(interceptor.preSend(MessageBuilder.createMessage(new byte[0],connect.getMessageHeaders()),null));
         for(String session:new String[]{"session","member-session"}) {
             assertNotNull(interceptor.preSend(frame(StompCommand.SUBSCRIBE,"/topic/rooms/"+room+"/share",session),null));

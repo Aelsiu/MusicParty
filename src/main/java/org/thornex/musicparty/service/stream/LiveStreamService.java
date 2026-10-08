@@ -78,6 +78,18 @@ public class LiveStreamService {
 
     // 开关状态（管理员面板控制）
     private final AtomicBoolean isEnabled = new AtomicBoolean(false);
+    private volatile boolean musicModeActive = true;
+
+    public synchronized void setPlaybackMode(boolean musicActive) {
+        musicModeActive = musicActive;
+        // Neither a switch back nor a persisted configured flag starts a transcoder.
+        isPaused = true;
+        if (!musicActive) currentMusic = null;
+        stopTranscoding();
+        broadcaster.closeAll();
+    }
+
+    public boolean isEffectiveEnabled() { return musicModeActive && isEnabled.get(); }
 
     // 播放器状态镜像（由 PlayerStateEvent 驱动）
     private volatile PlayableMusic currentMusic;
@@ -210,7 +222,7 @@ public class LiveStreamService {
     private void silenceLoop() {
         int offset = 0;
         while (!Thread.currentThread().isInterrupted()) {
-            boolean shouldBroadcast = isEnabled.get() && broadcaster.getClientCount() > 0
+            boolean shouldBroadcast = isEffectiveEnabled() && broadcaster.getClientCount() > 0
                     && !songActive.get() && silenceChunk != null && silenceChunk.length > 0;
             if (shouldBroadcast) {
                 int len = Math.min(SILENCE_CHUNK_BYTES, silenceChunk.length - offset);
@@ -263,6 +275,7 @@ public class LiveStreamService {
      */
     public boolean addListener(StreamClient client) {
         synchronized (this) {
+            if (!musicModeActive || !isEnabled.get() || isRoomEmpty()) return false;
             int maxClients = appProperties.getStream().getMaxClients();
             if (broadcaster.getClientCount() >= maxClients) {
                 log.warn("Stream: max clients reached ({}), rejecting connection", maxClients);
@@ -294,7 +307,8 @@ public class LiveStreamService {
 
     @EventListener
     public void onPlayerState(PlayerStateEvent event) {
-        if (!isEnabled.get()) {
+        if (!"MUSIC".equals(event.getState().mediaMode())) return;
+        if (!isEffectiveEnabled()) {
             return;
         }
         var state = event.getState();
@@ -339,7 +353,7 @@ public class LiveStreamService {
     private synchronized void checkState() {
         // 转码器不随连接数启停：只要开关开启且有歌在播就持续转码（"常驻热转码"）。
         // 否则新连接会先吃到几秒静音（转码器冷启动），VRC 等不到真实音频就判定失败重试。
-        boolean shouldRun = isEnabled.get() && currentMusic != null && !isPaused && resolveTarget() != null;
+        boolean shouldRun = isEffectiveEnabled() && currentMusic != null && !isPaused && resolveTarget() != null;
         if (shouldRun) {
             startTranscodingIfNeeded();
         } else {
@@ -584,7 +598,7 @@ public class LiveStreamService {
                     currentMusic != null ? currentMusic.duration() : -1);
         }
 
-        boolean shouldRun = isEnabled.get() && currentMusic != null && !isPaused && resolveTarget() != null;
+        boolean shouldRun = isEffectiveEnabled() && currentMusic != null && !isPaused && resolveTarget() != null;
         if (shouldRun) {
             long now = System.currentTimeMillis();
             if (now - lastCrashRestartTimeMs < CRASH_RESTART_BACKOFF_MS) {
@@ -607,7 +621,7 @@ public class LiveStreamService {
 
     public void transcodeWatchdog() {
         Process process = transcoderProcess;
-        if (process == null && resourceBudget != null && !isRoomEmpty() && isEnabled.get() && !isPaused) checkState();
+        if (process == null && resourceBudget != null && !isRoomEmpty() && isEffectiveEnabled() && !isPaused) checkState();
         if (process == null || !process.isAlive()) {
             return; // 未运行或已退出（退出由 handleTranscoderExit 处理）
         }

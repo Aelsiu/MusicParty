@@ -42,7 +42,7 @@ const handleSearchClick = () => {
 <template>
   <div class="h-[100dvh] w-screen flex flex-col relative overflow-hidden bg-medical-50">
     <!-- 1. 顶部栏 Header -->
-    <header v-if="!uiStore.isLiteMode" class="h-14 bg-surface border-b border-medical-200 flex justify-between items-center px-4 md:px-6 flex-shrink-0 relative z-50">
+    <header v-if="!uiStore.effectiveLiteMode" class="h-14 bg-surface border-b border-medical-200 flex justify-between items-center px-4 md:px-6 flex-shrink-0 relative z-50">
       <div class="flex items-center gap-2 flex-shrink-0">
         <div class="w-2.5 h-2.5 md:w-3 md:h-3 bg-accent flex-shrink-0"></div>
         <div class="flex items-baseline gap-1">
@@ -69,6 +69,7 @@ const handleSearchClick = () => {
 
         <!-- 精简模式按钮 -->
         <button
+            v-if="playerStore.mediaMode === 'MUSIC'"
             @click="uiStore.toggleLiteMode"
             class="flex items-center justify-center w-9 h-9 md:w-10 md:h-9 border border-medical-200 bg-medical-50 hover:bg-medical-100 text-medical-600 transition-all rounded-sm"
             title="精简模式" aria-label="精简模式"
@@ -95,7 +96,7 @@ const handleSearchClick = () => {
     </nav>
 
     <!-- 2. 主体内容区 -->
-    <div v-if="!uiStore.isLiteMode" class="flex-1 flex overflow-hidden relative">
+    <div v-if="!uiStore.effectiveLiteMode" class="flex-1 flex overflow-hidden relative">
       <aside class="w-64 bg-medical-50 border-r border-medical-200 hidden md:block overflow-y-auto">
         <UserList />
       </aside>
@@ -207,7 +208,7 @@ const handleSearchClick = () => {
       </div>
     </div>
 
-    <slot v-if="!uiStore.isLiteMode" name="player"></slot>
+    <slot v-if="!uiStore.effectiveLiteMode" name="player"></slot>
   </div>
 </template>
 

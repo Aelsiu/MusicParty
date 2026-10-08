@@ -17,6 +17,24 @@ import org.thornex.musicparty.util.MessageFormatter;
 @RequiredArgsConstructor
 public class WebSocketBroadcaster {
 
+    @EventListener
+    public void onCommittedNotice(org.thornex.musicparty.playback.CommittedPlaybackNotice notice) {
+        Object event = notice.event();
+        if (event instanceof PlayerEvent dto) {
+            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/events"),
+                    dto.versioned(notice.playbackEpoch(), notice.mediaMode(), notice.modeEpoch()));
+        } else if (event instanceof SystemMessageEvent system) {
+            PlayerEvent dto = format(system).versioned(notice.playbackEpoch(), notice.mediaMode(), notice.modeEpoch());
+            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/events"), dto);
+        } else if (event instanceof org.thornex.musicparty.event.VideoWaitTimeoutEvent timeout) {
+            PlayerEvent dto = new PlayerEvent("WARN","VIDEO_WAIT_TIMEOUT",null,
+                    "「" + timeout.userName() + "」缓冲等待超过 15 秒，已暂时退出等待判定",null,
+                    notice.playbackEpoch(),notice.mediaMode(),notice.modeEpoch(),timeout.eventId(),timeout.waitId(),
+                    timeout.playbackId(),timeout.userName(),timeout.sourceRevision());
+            messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/events"), dto);
+        } else if (event instanceof org.thornex.musicparty.event.SeekRejectedEvent rejected) onSeekRejected(rejected);
+    }
+
     private final SimpMessagingTemplate messagingTemplate;
     private final UserService userService;
 
@@ -49,6 +67,10 @@ public class WebSocketBroadcaster {
      */
     @EventListener
     public void onSystemMessage(SystemMessageEvent event) {
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/events"), format(event));
+    }
+
+    private PlayerEvent format(SystemMessageEvent event) {
         // 将内部的 SystemMessageEvent 转换为对外的 PlayerEvent DTO
         String actionCode = event.getAction() != null ? event.getAction().name() : "";
         String type = event.getLevel().name();
@@ -75,6 +97,6 @@ public class WebSocketBroadcaster {
                 formattedMessage,
                 event.getPayload()
         );
-        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/player/events"), playerEvent);
+        return playerEvent;
     }
 }

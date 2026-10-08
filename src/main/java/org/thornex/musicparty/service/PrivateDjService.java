@@ -8,6 +8,8 @@ import org.thornex.musicparty.config.AppProperties;
 import org.thornex.musicparty.dto.PrivateDjSegment;
 import org.thornex.musicparty.service.api.NeteaseMusicApiService;
 import reactor.core.publisher.Mono;
+import reactor.core.Disposable;
+import org.thornex.musicparty.playback.PlaybackMailbox;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -25,6 +27,11 @@ public class PrivateDjService {
 
     private final NeteaseMusicApiService neteaseMusicApiService;
     private final AppProperties appProperties;
+    private PlaybackMailbox mailbox;
+    private long generation;
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public void configurePlaybackMailbox(PlaybackMailbox mailbox) { this.mailbox = mailbox; }
 
     private final Deque<PrivateDjSegment> fmBatch = new ArrayDeque<>();
     private final Deque<PrivateDjSegment> djBatch = new ArrayDeque<>();
@@ -47,6 +54,7 @@ public class PrivateDjService {
     /** 清空批次缓存（模式切换 / 总开关关闭时调用） */
     public void invalidate() {
         synchronized (this) {
+            generation++;
             fmBatch.clear();
             djBatch.clear();
         }
@@ -61,6 +69,35 @@ public class PrivateDjService {
         Mono<JsonNode> fetch = fm
                 ? neteaseMusicApiService.fetchPersonalFm()
                 : neteaseMusicApiService.fetchAidjRcmd(null, null);
+        if (mailbox != null) {
+            long expectedGeneration = generation;
+            return Mono.create(sink -> {
+                PlaybackMailbox.CompletionTicket ticket;
+                try { ticket = mailbox.reserveCompletion(); }
+                catch (RuntimeException error) { sink.error(error); return; }
+                java.util.concurrent.atomic.AtomicBoolean cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+                java.util.concurrent.atomic.AtomicReference<Disposable> subscription = new java.util.concurrent.atomic.AtomicReference<>();
+                sink.onCancel(() -> {
+                    cancelled.set(true); ticket.cancel();
+                    Disposable activeRequest = subscription.get();
+                    if (activeRequest != null) activeRequest.dispose();
+                });
+                Disposable request = fetch.map(root -> fm ? parseFmBatch(root) : parseDjBatch(root))
+                        .timeout(java.time.Duration.ofSeconds(15))
+                        .subscribe(segments -> ticket.commit(() -> {
+                            if (expectedGeneration != generation) { sink.error(new IllegalStateException("Private provider request cancelled")); return; }
+                            batch.addAll(segments);
+                            // A cancelled playback attempt may cache this batch but must not consume its first segment.
+                            if (cancelled.get()) return;
+                            if (batch.isEmpty()) sink.error(new IllegalStateException("Private provider returned no playable segments"));
+                            else sink.success(batch.pollFirst());
+                        }).exceptionally(error -> { sink.error(error); return null; }),
+                        error -> ticket.commit(() -> { if (!cancelled.get()) sink.error(error); })
+                                .exceptionally(commitError -> { sink.error(commitError); return null; }));
+                subscription.set(request);
+                if (cancelled.get()) request.dispose();
+            });
+        }
         return fetch
                 .map(root -> fm ? parseFmBatch(root) : parseDjBatch(root))
                 .map(segments -> {

@@ -5,6 +5,8 @@ import { STORAGE_KEYS } from '../constants/keys';
 import client from '../api/client';
 import { DEFAULT_CUSTOM_THEME, deriveCustomPalette, normalizeCustomTheme } from '../utils/customTheme';
 import { clampVolume, readSavedVolume, volumeToGain } from '../utils/volumeMapping';
+import { usePlayerStore } from './player';
+import { readVideoQuality, normalizeVideoQuality, saveVideoQuality } from '../utils/videoQuality';
 
 const themeNames = ['classic', 'night', 'blue', 'night-blue', 'green', 'night-green', 'custom'];
 const customThemeKey = 'mp_custom_theme';
@@ -27,10 +29,17 @@ document.documentElement.dataset.theme = initialTheme;
 
 export const useUiStore = defineStore('ui', () => {
     const isLiteMode = ref(false);
+    const player = usePlayerStore();
+    const effectiveLiteMode = computed(() => player.mediaMode === 'MUSIC' && isLiteMode.value);
     const volume = ref(readSavedVolume(localStorage.getItem(STORAGE_KEYS.VOLUME)));
     const audioVolume = computed(() => volumeToGain(volume.value));
     const autoLiteMode = ref(localStorage.getItem('mp_auto_lite_mode') !== 'false'); // 默认 true
     const lyricPreviewLines = ref([0, 1, 2].includes(savedLyricPreviewLines) ? savedLyricPreviewLines : 0);
+    const videoQualityPreference = ref(readVideoQuality());
+    const setVideoQualityPreference = qualityId => {
+        videoQualityPreference.value = normalizeVideoQuality(qualityId === 'auto' ? { version: 1, mode: 'auto' } : { version: 1, mode: 'manual', qualityId });
+        saveVideoQuality(videoQualityPreference.value);
+    };
     const visualizationEnabled = ref(localStorage.getItem(STORAGE_KEYS.VISUALIZATION) === 'true');
     const authorName = ref('ThorNex X Aelsiu');
     const backWords = ref('MUSIC PARTY');
@@ -86,6 +95,7 @@ export const useUiStore = defineStore('ui', () => {
     };
 
     const toggleLiteMode = () => {
+        if (player.mediaMode !== 'MUSIC') return;
         isLiteMode.value = !isLiteMode.value;
     };
 
@@ -126,12 +136,14 @@ export const useUiStore = defineStore('ui', () => {
 
     return {
         isLiteMode,
+        effectiveLiteMode,
         toggleLiteMode,
         volume,
         audioVolume,
         setVolume,
         lyricPreviewLines,
         setLyricPreviewLines,
+        videoQualityPreference, setVideoQualityPreference,
         visualizationEnabled,
         autoLiteMode,
         authorName,

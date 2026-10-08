@@ -4,7 +4,7 @@
   <ToastNotification ref="toastInstance" />
 
   <div class="h-screen w-screen overflow-hidden font-sans">
-    <AudioEngine v-if="userStore.isAuthPassed" />
+    <AudioEngine v-if="userStore.isAuthPassed && player.mediaMode === 'MUSIC'" />
     <!-- 1. 认证遮罩 -->
     <AuthOverlay :key="entryRoomId" :room-id="entryRoomId" @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed && !switchingRoom" />
 
@@ -29,7 +29,8 @@
     <!-- 3. 主界面 (当 hasStarted 为 true 时显示) -->
     <MainLayout v-if="hasStarted" @search="handleSearchClick" @settings="showSettings = true" @return="returnEntry">
       <!-- 中间插槽: 视觉控制台 -->
-      <CenterConsole />
+      <CenterConsole v-if="player.mediaMode === 'MUSIC'" />
+      <VideoConsole v-else />
 
       <!-- 底部插槽: 播放器 -->
       <!-- 注意：这里不使用 v-if，而是 v-show，或者因为在 MainLayout 里是 slot，
@@ -45,8 +46,8 @@
     <SearchModal v-if="userStore.isAuthPassed" :isOpen="showSearch" @close="showSearch = false" />
     <SettingsModal v-if="userStore.isAuthPassed" :isOpen="showSettings" @close="showSettings = false" />
     <NamePromptModal v-if="userStore.isAuthPassed" />
-    <ChatOverlay v-if="hasStarted && !uiStore.isLiteMode" />
-    <TutorialOverlay v-if="hasStarted && !uiStore.isLiteMode && !adminStore.showDashboard && !adminStore.showAuthModal" />
+    <ChatOverlay v-if="hasStarted && !uiStore.effectiveLiteMode" />
+    <TutorialOverlay v-if="hasStarted && player.mediaMode === 'MUSIC' && !uiStore.effectiveLiteMode && !adminStore.showDashboard && !adminStore.showAuthModal" />
     <AdminAuthModal v-if="userStore.isAuthPassed" />
     <AdminDashboard v-if="userStore.isAuthPassed" />
     <RoomCleanupDialog v-if="userStore.isAuthPassed" />
@@ -73,6 +74,7 @@ import { useToast } from './composables/useToast';
 // Components
 import MainLayout from './components/layout/MainLayout.vue';
 import CenterConsole from './components/CenterConsole.vue';
+import VideoConsole from './components/VideoConsole.vue';
 import PlayerControl from './components/PlayerControl.vue';
 import AudioEngine from './components/AudioEngine.vue';
 import AuthOverlay from './components/AuthOverlay.vue';
@@ -114,7 +116,7 @@ const returnEntry = (navigate = true) => {
   entryGeneration++;
   socketService.disconnect();
   player.connected = false;
-  player.syncState({ nowPlaying: null, queue: [], isPaused: true, onlineUsers: [] });
+  player.resetPlayback();
   player.localProgress = 0; player.isBuffering = false; player.isErrorState = false;
   chat.messages = []; chat.unreadCount = 0; chat.isOpen = false;
   chat.isLoadingMore = false; chat.hasMore = true;
@@ -191,7 +193,7 @@ const maybeShowPwaHint = () => {
 
 // 自动性能优化：切后台自动进入精简模式
 useEventListener(document, 'visibilitychange', () => {
-  if (document.visibilityState === 'hidden' && hasStarted.value && !player.isPaused && uiStore.autoLiteMode) {
+  if (document.visibilityState === 'hidden' && player.mediaMode === 'MUSIC' && hasStarted.value && !player.isPaused && uiStore.autoLiteMode) {
     uiStore.isLiteMode = true;
   }
 });

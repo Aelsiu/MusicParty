@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import lombok.extern.slf4j.Slf4j;
 
 @Service @Slf4j
+@org.springframework.context.annotation.DependsOn({"playbackExecutor", "roomPlaybackCoordinator"})
 public class RoomLifecycleService {
     private final RoomRepository repository;
     private final RoomAccessService access;
@@ -25,28 +26,34 @@ public class RoomLifecycleService {
     public void departed(String id) { if(access.count(id)==0) emptySince.putIfAbsent(id,System.currentTimeMillis()); }
     public void pairingChanged(String id) { messaging.convertAndSend("/topic/rooms/"+id+"/pairing",Map.of("open",repository.room(id).pairingOpen())); }
     public void shareChanged(String id) { messaging.convertAndSend("/topic/rooms/"+id+"/share",Map.of("enabled",repository.room(id).shareEnabled())); }
-    public void joined(String id) { emptySince.remove(id); try(var ignored=RoomContext.enter(id)) { context.getBean(QueuePersistenceService.class).ensureLoaded(); } }
+    public void joined(String id) { emptySince.remove(id); try(var ignored=RoomContext.enter(id)) { context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).start(); } }
     public void deleted(String id) {
         messaging.convertAndSend("/topic/rooms/"+id+"/lifecycle",Map.of("action","ROOM_DELETED"));
         for(String session:access.sessions(id)) sockets.close(session);
-        access.revokeRoom(id);emptySince.remove(id);scope.destroy(id);
+        access.revokeRoom(id);emptySince.remove(id);
+        if (scope.activeIds().contains(id)) try(var ignored=RoomContext.enter(id)) {
+            context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).close(true);
+        } catch (RuntimeException error) { log.error("Room deletion playback cleanup failed for {}",id,error); }
+        scope.destroy(id);
         RoomCacheCleanup.delete(id);
     }
     public void revokeInvalidManagers() { for(String id:scope.activeIds()) for(String s:access.sessions(id)) try { access.connection(s); } catch(RuntimeException e) { sockets.close(s); } }
-    @jakarta.annotation.PreDestroy public void shutdown() { for(String id:scope.activeIds()) {for(String session:access.sessions(id)) sockets.close(session);scope.destroy(id);} }
+    @jakarta.annotation.PreDestroy public void shutdown() { for(String id:scope.activeIds()) {for(String session:access.sessions(id)) sockets.close(session);
+        try(var ignored=RoomContext.enter(id)) { context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class).close(false); }
+        catch (RuntimeException error) { log.error("Room shutdown playback cleanup failed for {}",id,error); }
+        finally { scope.destroy(id); }} }
     @Scheduled(fixedDelay=1000) public void tick() {
         long now=System.currentTimeMillis(); tick++;
         repository.rotate(now); if(tick%60==0) access.cleanup();
         for(String id:scope.activeIds()) {
             if(!repository.exists(id)) {deleted(id);continue;}
             try(var ignored=RoomContext.enter(id)) {
-                MusicPlayerService player=context.getBean(MusicPlayerService.class);
+                var player=context.getBean(org.thornex.musicparty.playback.RoomPlaybackCoordinator.class);
                 Long empty=emptySince.get(id);
-                if(empty!=null && access.count(id)==0 && now-empty>=properties.getReconnectGraceSeconds()*1000) {
-                    player.pauseForEmptyRoom(); context.getBean(LiveStreamService.class).suspendForEmptyRoom(); emptySince.remove(id);
-                }
-                player.playerLoop();
-                if(tick%5==0) { player.broadcastSyncHeartbeat();context.getBean(LiveStreamService.class).transcodeWatchdog();messaging.convertAndSend(RoomContext.topic("/pairing"),Map.of("open",repository.room(id).pairingOpen(),"nextUpdateAt",repository.nextPairingUpdateAt(now))); }
+                boolean pauseEmpty=empty!=null && access.count(id)==0 && now-empty>=properties.getReconnectGraceSeconds()*1000;
+                if (pauseEmpty) emptySince.remove(id);
+                player.tick(tick%5==0,tick%30==0,tick%600==0,pauseEmpty);
+                if(tick%5==0) messaging.convertAndSend(RoomContext.topic("/pairing"),Map.of("open",repository.room(id).pairingOpen(),"nextUpdateAt",repository.nextPairingUpdateAt(now)));
                 if(tick%5==0) shareChanged(id);
                 if(tick%5==0) {
                     var users=context.getBean(UserService.class);
@@ -57,8 +64,6 @@ public class RoomLifecycleService {
                         messaging.convertAndSendToUser(session,"/queue/profile",Map.of("name",user.getName(),"bindings",Map.copyOf(user.getBindings())),headers.getMessageHeaders());
                     });
                 }
-                if(tick%30==0) context.getBean(QueuePersistenceService.class).saveNow();
-                if(tick%600==0) player.cleanupIdlePlayer();
                 if(tick%3600==0) { context.getBean(UserService.class).cleanupExpiredUsers();context.getBean(StreamTokenService.class).cleanup(); }
             } catch(Exception e) { log.error("Room background task failed for {}",id,e); }
         }

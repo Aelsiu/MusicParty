@@ -7,19 +7,19 @@
       leave-active-class="transition duration-200 ease-in"
       leave-from-class="translate-y-0 opacity-100 scale-100"
       leave-to-class="translate-y-2 opacity-0 scale-95"
-      class="fixed top-10 left-1/2 -translate-x-1/2 z-[150] flex flex-col items-center gap-2 pointer-events-none"
+      class="fixed top-10 left-1/2 -translate-x-1/2 z-[150] flex flex-col items-center gap-2 pointer-events-none max-w-[calc(100vw-24px)]"
   >
     <div
         v-for="toast in toastStore.toasts"
         :key="toast.id"
-        class="bg-overlay/90 text-white px-6 py-3 shadow-xl backdrop-blur-sm flex items-center gap-3 min-w-[300px] border-l-4 pointer-events-auto cursor-pointer"
+        class="bg-overlay/90 text-white px-4 sm:px-6 py-3 shadow-xl backdrop-blur-sm flex items-center gap-3 w-max max-w-[calc(100vw-24px)] min-w-[min(300px,calc(100vw-24px))] border-l-4 pointer-events-auto cursor-pointer"
         :class="getTypeClass(toast.type)"
         @click="toastStore.remove(toast.id)"
     >
       <component :is="getIcon(toast.type)" class="w-5 h-5 flex-shrink-0" />
       <div class="flex-1 min-w-0">
         <div class="font-bold text-sm font-mono">{{ toast.title }}</div>
-        <div v-if="toast.message" class="text-xs text-medical-200 truncate max-w-[250px]">{{ toast.message }}</div>
+        <div v-if="toast.message" class="text-xs text-medical-200" :class="toast.multiline ? 'whitespace-normal break-words max-w-[420px]' : 'truncate max-w-[250px]'">{{ toast.message }}</div>
       </div>
     </div>
   </TransitionGroup>

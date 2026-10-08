@@ -14,7 +14,9 @@ public class RoomAccessService {
     public record Admission(String token,String roomId,long epoch,long expiresAt,boolean publicEntry,long accessVersion) {
         public Admission(String token,String roomId,long epoch,long expiresAt) { this(token,roomId,epoch,expiresAt,false,0); }
     }
-    public record Connection(String roomId,String managerToken,String userToken) {}
+    public record Connection(String roomId,String managerToken,String userToken,String watchIdentity) {
+        public Connection(String roomId,String managerToken,String userToken) { this(roomId,managerToken,userToken,null); }
+    }
     private final RoomRepository repository;
     private final MultiRoomProperties properties;
     private final SecureRandom random = new SecureRandom();
@@ -80,9 +82,12 @@ public class RoomAccessService {
         admission(token,roomId);
     }
     public void connect(String session,String roomId,String token,String managerToken) {
+        connect(session,roomId,token,managerToken,null);
+    }
+    public void connect(String session,String roomId,String token,String managerToken,String watchIdentity) {
         repository.room(roomId);
         if (managerToken!=null && !managerToken.isBlank()) own(managerToken,roomId); else admission(token,roomId);
-        connections.put(session,new Connection(roomId,managerToken,token==null?"":token));
+        connections.put(session,new Connection(roomId,managerToken,token==null?"":token,watchIdentity));
     }
     public Connection connection(String session) {
         Connection c=connections.get(session);
@@ -94,7 +99,7 @@ public class RoomAccessService {
         Manager manager=own(managerToken,roomId);
         connections.compute(session,(id,c)->{
             if(c==null || !c.roomId().equals(roomId) || token==null || token.isBlank() || !equal(c.userToken(),token)) throw denied("房间连接已改变，请重新验证");
-            return new Connection(c.roomId(),managerToken,c.userToken());
+            return new Connection(c.roomId(),managerToken,c.userToken(),c.watchIdentity());
         });
         return manager;
     }

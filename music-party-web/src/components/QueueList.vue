@@ -4,8 +4,23 @@
       <h3 class="text-sm font-bold text-medical-900">播放队列 <span class="text-accent text-xs">[{{ queue.length }}]</span></h3>
     </div>
 
+    <div v-if="player.mediaMode === 'VIDEO' && player.videoFeatures.history" class="flex border-b border-medical-200">
+      <button @click="tab = 'queue'" :aria-pressed="tab === 'queue'" class="flex-1 py-3 text-xs" :class="tab === 'queue' ? 'text-accent font-bold' : ''">待播</button>
+      <button @click="tab = 'history'" :aria-pressed="tab === 'history'" class="flex-1 py-3 text-xs" :class="tab === 'history' ? 'text-accent font-bold' : ''">历史</button>
+    </div>
+    <div v-if="tab === 'history'" class="flex-1 overflow-y-auto p-3 space-y-3">
+      <p class="text-xs text-medical-500">自然播放结束的记录；重新点播仅加入待播队列。</p>
+      <p v-if="history.error.value" role="alert" class="text-xs text-red-500">{{ history.error.value }} <button @click="history.load(1)">重试</button></p>
+      <div v-for="item in history.items.value" :key="item.canonicalId" class="flex items-center gap-2 border border-medical-100 p-2">
+        <CoverImage :src="item.coverUrl" class="w-10 h-10 shrink-0" :scanline="false" />
+        <div class="min-w-0 flex-1"><p class="truncate text-sm font-bold">{{ item.title }}</p><p class="text-xs text-medical-500">P{{ item.page }} · {{ item.ownerName }} · {{ Math.ceil(item.durationMs / 60000) }}分钟</p></div>
+        <button @click="player.enqueue('bilibili-video', item.canonicalId)" :disabled="!player.synchronized" class="text-xs text-accent p-2 disabled:opacity-40">重新点播</button>
+      </div>
+      <p v-if="!history.loading.value && !history.items.value.length" class="text-xs text-medical-400">暂无播放历史</p>
+      <button v-if="history.items.value.length < history.total.value" @click="history.load(history.page.value + 1)" :disabled="history.loading.value" class="w-full p-3 text-xs text-accent">{{ history.loading.value ? '加载中…' : '加载下一页' }}</button>
+    </div>
     <!-- Conditional Rendering: Show empty message -->
-    <div v-if="queue.length === 0" class="flex-1 text-center py-10 text-xs font-mono text-medical-400">
+    <div v-else-if="queue.length === 0" class="flex-1 text-center py-10 text-xs font-mono text-medical-400">
       QUEUE EMPTY / WAITING FOR INPUT
     </div>
 
@@ -44,7 +59,7 @@
                   {{ userStore.resolveName(group.token, group.name) }}
                 </div>
                 <div class="text-[10px] text-medical-400 font-mono">
-                  {{ group.items.length }} SONGS
+                  {{ group.items.length }} {{ player.mediaMode === 'VIDEO' ? '条视频' : 'SONGS' }}
                 </div>
               </div>
             </div>
@@ -78,14 +93,20 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import { useVirtualList } from '@vueuse/core';
+import { roomSession } from '../services/roomSession';
 import { usePlayerStore } from '../stores/player';
 import { Shuffle, ChevronDown, ChevronRight, User } from 'lucide-vue-next';
 import { useUserStore } from '../stores/user';
 import QueueItem from './QueueItem.vue';
+import CoverImage from './CoverImage.vue';
+import { useVideoHistory } from '../composables/useVideoHistory';
 
 const player = usePlayerStore();
+const tab = ref('queue');
+const history = useVideoHistory(player, computed(() => tab.value === 'history'));
+watch(() => [player.modeEpoch, player.mediaMode, roomSession.roomId], () => { tab.value = 'queue'; expandedUsers.value = {}; });
 const queue = computed(() => player.queue);
 const userStore = useUserStore();
 

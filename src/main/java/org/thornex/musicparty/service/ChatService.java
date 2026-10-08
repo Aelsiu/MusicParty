@@ -24,6 +24,11 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ChatService {
 
+    @EventListener
+    public void onCommittedPlaybackNotice(org.thornex.musicparty.playback.CommittedPlaybackNotice notice) {
+        if (notice.event() instanceof SystemMessageEvent event) onSystemEvent(event);
+    }
+
     private final ConcurrentLinkedDeque<ChatMessage> history = new ConcurrentLinkedDeque<>();
     private final SimpMessagingTemplate messagingTemplate;
     private final UserService userService;
@@ -186,12 +191,6 @@ public class ChatService {
         // 忽略错误提示，只记录操作成功的事件（根据需求调整）
         // 这里我们记录所有 INFO, WARN, SUCCESS 级别的事件，忽略 ERROR (通常 ERROR 只弹 Toast)
         if (event.getLevel() == SystemMessageEvent.Level.ERROR) return;
-
-        // 如果是 RESET 事件，清空历史
-        if (event.getAction() == PlayerAction.RESET) {
-            clearHistory();
-            // 依然发送一条“系统已重置”的消息作为新历史的开始
-        }
 
         String userName = "SYSTEM";
         if (StringUtils.hasText(event.getUserName())) {
