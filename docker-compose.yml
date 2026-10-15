@@ -1,0 +1,35 @@
+services:
+  # 1. 网易云音乐 API 服务
+  netease-api:
+    image: moefurina/ncm-api:latest
+    container_name: music-party-netease
+    restart: always
+    environment:
+      - PORT=3000
+      - HTTPS=true
+    networks:
+      - music-net
+
+  # 2. Music Party 主应用
+  music-party:
+    build: .
+    image: mirthparty-custom:local
+    container_name: music-party-app
+    restart: always
+    ports:
+      - "8848:8080" 
+    depends_on:
+      - netease-api
+    networks:
+      - music-net
+    volumes:
+      # 服务端最高许可配置与普通许可清单，房间配置保存到 SQLite
+      - ./config:/app/config
+      # 挂载音频缓存目录，防止重启后 B 站歌曲重新下载
+      - ./music_party/cached_media:/app/cached_media
+      # 多房间 SQLite 数据、配对码冷却记录和共享用户资料
+      - ./music_party/data:/app/data
+
+networks:
+  music-net:
+    driver: bridge

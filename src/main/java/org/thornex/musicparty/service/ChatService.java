@@ -1,0 +1,243 @@
+package org.thornex.musicparty.service;
+
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.event.EventListener;
+import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
+import org.thornex.musicparty.dto.ChatMessage;
+import org.thornex.musicparty.dto.User;
+import org.thornex.musicparty.enums.MessageType;
+import org.thornex.musicparty.enums.PlayerAction;
+import org.thornex.musicparty.event.SystemMessageEvent;
+import org.thornex.musicparty.config.AppProperties;
+import org.thornex.musicparty.service.command.ChatCommand;
+import org.thornex.musicparty.util.MessageFormatter;
+
+import java.util.*;
+import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.function.Function;
+import java.util.stream.Collectors;
+
+@Service
+@org.thornex.musicparty.room.RoomScoped
+@Slf4j
+public class ChatService {
+
+    @EventListener
+    public void onCommittedPlaybackNotice(org.thornex.musicparty.playback.CommittedPlaybackNotice notice) {
+        if (notice.event() instanceof SystemMessageEvent event) onSystemEvent(event);
+    }
+
+    private final ConcurrentLinkedDeque<ChatMessage> history = new ConcurrentLinkedDeque<>();
+    private final SimpMessagingTemplate messagingTemplate;
+    private final UserService userService;
+    private final AppProperties appProperties;
+    
+    private final Map<String, ChatCommand> commandMap;
+    private final Map<String, Long> lastMessageTime = new java.util.concurrent.ConcurrentHashMap<>();
+
+    public ChatService(SimpMessagingTemplate messagingTemplate, UserService userService, AppProperties appProperties, List<ChatCommand> commands) {
+        this.messagingTemplate = messagingTemplate;
+        this.userService = userService;
+        this.appProperties = appProperties;
+        this.commandMap = commands.stream().collect(Collectors.toMap(ChatCommand::getCommand, Function.identity()));
+    }
+
+    /**
+     * 检查是否允许发送消息（频率限制）
+     */
+    public boolean canUserSendMessage(String userToken) {
+        long now = System.currentTimeMillis();
+        long last = lastMessageTime.getOrDefault(userToken, 0L);
+        long minInterval = appProperties.getChat().getMinIntervalMs();
+
+        if (now - last < minInterval) {
+            return false;
+        }
+
+        lastMessageTime.put(userToken, now);
+        return true;
+    }
+
+    /**
+     * 检查消息长度
+     */
+    public boolean isMessageLengthValid(String content) {
+        return content != null && content.length() <= appProperties.getChat().getMaxMessageLength();
+    }
+
+    /**
+     * 处理传入的消息
+     * @return true 如果消息被处理（不广播），false 如果应该继续广播
+     */
+    public boolean processIncomingMessage(String sessionId, String content) {
+        if (content.startsWith("//")) {
+            log.info("Processing command from session {}: {}", sessionId, content);
+            String fullCmd = content.substring(2).trim();
+            String[] parts = fullCmd.split("\\s+", 2);
+            String cmdKey = parts[0].toLowerCase();
+            String args = parts.length > 1 ? parts[1] : "";
+
+            ChatCommand handler = commandMap.get(cmdKey);
+            if (handler != null) {
+                log.info("Executing command handler: {}", cmdKey);
+                userService.getUser(sessionId).ifPresentOrElse(
+                    user -> {
+                        // A shared profile can have several live tabs, private replies belong to the sender.
+                        User sender = new User(user.getToken(), sessionId, user.getName());
+                        sender.setGuest(user.isGuest());
+                        sender.setLastActiveTime(user.getLastActiveTime());
+                        sender.getBindings().putAll(user.getBindings());
+                        handler.execute(args, sender);
+                    },
+                    () -> log.warn("User not found for session {}", sessionId)
+                );
+                return true; // 拦截消息
+            } else {
+                log.warn("Unknown command: {}", cmdKey);
+            }
+        }
+        return false; // 普通消息，继续处理
+    }
+
+    public void addMessage(ChatMessage message) {
+        synchronized (history) {
+            history.addLast(message);
+            trimHistoryToLimit();
+        }
+    }
+
+    public void trimHistoryToLimit() {
+        synchronized (history) {
+            int limit = Math.max(0, appProperties.getChat().getMaxHistorySize());
+            int excess = history.size() - limit;
+            for (int i = 0; i < excess; i++) history.pollFirst();
+        }
+    }
+// ... existing code ...
+    /**
+     * 分页获取历史记录 (从最新往旧推)
+     * @param offset 跳过最近的多少条
+     * @param limit 取多少条
+     */
+    public List<ChatMessage> getHistory(int offset, int limit) {
+        trimHistoryToLimit();
+        // 我们将其转为 List 进行倒序切片处理
+        List<ChatMessage> snapshot = new ArrayList<>(history);
+        Collections.reverse(snapshot);
+
+        if (offset >= snapshot.size()) {
+            return Collections.emptyList();
+        }
+
+        int end = Math.min(offset + limit, snapshot.size());
+        List<ChatMessage> page = snapshot.subList(offset, end);
+
+        Collections.reverse(page);
+        return page;
+    }
+
+    /**
+     * 获取全部聊天记录用于持久化
+     */
+    public List<ChatMessage> getHistoryFull() {
+        trimHistoryToLimit();
+        return new ArrayList<>(history);
+    }
+
+    /**
+     * 恢复聊天记录
+     */
+    public void restore(List<ChatMessage> loadedHistory) {
+        synchronized (history) {
+            history.clear();
+            if (loadedHistory != null) {
+                history.addAll(loadedHistory);
+            }
+            trimHistoryToLimit();
+        }
+    }
+
+
+    public void clearHistory() {
+        synchronized (history) { history.clear(); }
+    }
+
+    public void clearHistoryAndNotify() {
+        clearHistory();
+        broadcastSystemMessage("聊天记录已由管理员清空");
+    }
+
+    private void broadcastSystemMessage(String content) {
+        ChatMessage sysMsg = new ChatMessage(
+                UUID.randomUUID().toString(),
+                "SYSTEM",
+                "SYSTEM",
+                content,
+                System.currentTimeMillis(),
+                MessageType.SYSTEM
+        );
+        addMessage(sysMsg);
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/chat"), sysMsg);
+    }
+
+    /**
+     * 监听系统事件，自动生成系统消息
+     * 这里实现了将“操作日志”写入“系统聊天Tab”的需求
+     */
+    @EventListener
+    public void onSystemEvent(SystemMessageEvent event) {
+        // 忽略错误提示，只记录操作成功的事件（根据需求调整）
+        // 这里我们记录所有 INFO, WARN, SUCCESS 级别的事件，忽略 ERROR (通常 ERROR 只弹 Toast)
+        if (event.getLevel() == SystemMessageEvent.Level.ERROR) return;
+
+        String userName = "SYSTEM";
+        if (StringUtils.hasText(event.getUserName())) {
+            // 优先用发布者携带的名字快照：点歌人离线超 1h 会被 UserService 清理，
+            // 现场按 token 查会查不到而显示 Unknown
+            userName = event.getUserName();
+        } else if (!"SYSTEM".equals(event.getUserId())) {
+            // 私人FM/DJ 是虚拟用户（令牌 __FM__），用户表查不到 → 按当前模式显示友好名称
+            if (MusicQueueManager.FM_MARKER_USER_TOKEN.equals(event.getUserId())) {
+                boolean djMode = "DJ".equals(appProperties.getPrivateDj().getMode());
+                userName = djMode ? "私人DJ" : "私人FM";
+            } else {
+                userName = userService.getUserByToken(event.getUserId())
+                        .map(User::getName)
+                        .orElse("Unknown");
+            }
+        }
+
+        String content = MessageFormatter.format(event, userName);
+        MessageType type;
+
+        if (event.getAction() == PlayerAction.LIKE) {
+            type = MessageType.LIKE;
+        } else if (event.getAction() == PlayerAction.PLAY_START) {
+            type = MessageType.PLAY_START;
+        } else {
+            type = MessageType.SYSTEM;
+        }
+
+        // 系统级通知（userId="SYSTEM"）使用 SYSTEM 作为发送者；用户触发的通知保留真实身份
+        boolean isSystemActor = "SYSTEM".equals(event.getUserId());
+        String msgUserId = isSystemActor ? "SYSTEM" : event.getUserId();
+        String msgUserName = isSystemActor ? "SYSTEM" : userName;
+
+        ChatMessage sysMsg = new ChatMessage(
+                UUID.randomUUID().toString(),
+                msgUserId,
+                msgUserName,
+                content,
+                System.currentTimeMillis(),
+                type
+        );
+
+        // 1. 存入历史
+        addMessage(sysMsg);
+
+        // 2. 广播到聊天频道
+        messagingTemplate.convertAndSend(org.thornex.musicparty.room.RoomContext.topic("/chat"), sysMsg);
+    }
+}

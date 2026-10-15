@@ -1,0 +1,11 @@
+{
+  "manifest_version": 3,
+  "name": "MirthParty B站播放辅助 G0 诊断",
+  "version": "0.0.1",
+  "minimum_chrome_version": "106",
+  "description": "G0 未通过的诊断包；不注册媒体规则，不提供播放辅助。",
+  "permissions": ["declarativeNetRequestWithHostAccess", "declarativeNetRequestFeedback"],
+  "host_permissions": ["http://101.132.17.83/*", "https://*.bilivideo.com/*", "https://*.mcdn.bilivideo.cn/*"],
+  "background": {"service_worker": "worker.js", "type": "module"},
+  "action": {"default_popup": "popup.html"}
+}

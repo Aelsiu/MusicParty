@@ -1,0 +1,445 @@
+<template>
+  <Transition
+      enter-active-class="transition duration-500 ease-out"
+      enter-from-class="opacity-0 translate-y-4"
+      enter-to-class="opacity-100 translate-y-0"
+      leave-active-class="transition duration-300 ease-in"
+      leave-from-class="opacity-100 translate-y-0"
+      leave-to-class="opacity-0 translate-y-4"
+  >
+    <div v-if="adminStore.showDashboard" class="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-overlay/40 backdrop-blur-md">
+      <div data-guide-scope="admin" class="w-full max-w-5xl h-[90vh] bg-medical-50 shadow-2xl border border-medical-200 flex flex-col chamfer-br overflow-hidden">
+
+        <!-- Header -->
+        <div class="p-4 md:p-6 bg-surface border-b border-medical-200 flex justify-between items-center flex-shrink-0">
+          <div>
+            <h2 class="text-2xl font-black font-mono text-medical-900 flex items-center gap-3">
+              <Settings class="w-6 h-6 text-accent animate-spin-slow" /> 管理终端
+            </h2>
+            <p class="text-[10px] font-mono text-medical-400 mt-1 uppercase tracking-[0.2em]">> 系统控制接口 / SYSTEM_CONTROL_INTERFACE</p>
+          </div>
+          <div :inert="guideStore.admin" class="flex items-center gap-4">
+            <HelpIconButton aria-label="管理终端帮助" title="管理终端帮助" @click="$emit('guide')" />
+            <button @click="adminStore.showDashboard = false" aria-label="关闭管理终端" class="p-2 bg-medical-100 hover:bg-medical-200 text-medical-900 transition-colors">
+              <X class="w-6 h-6" />
+            </button>
+          </div>
+        </div>
+
+        <!-- Content Area -->
+        <div data-guide-scroll="admin" class="flex-1 overflow-y-auto p-4 md:p-6 space-y-6 custom-scroll bg-medical-50/50">
+
+          <div :inert="guideStore.admin" class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+            <!-- Left Column: Playback (7 cols) -->
+            <div class="lg:col-span-7 space-y-6">
+
+              <!-- Section: Playback Mastery -->
+              <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
+                <div class="p-3 bg-strong text-white flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <PlayCircle class="w-4 h-4 text-accent" />
+                    <span class="text-xs font-bold uppercase tracking-widest font-mono">播放核心 / Playback_Core</span>
+                  </div>
+                  <span class="text-[9px] font-mono opacity-60">IDLE_STATE_MONITOR</span>
+                </div>
+                <div class="p-4 space-y-4">
+                  <p data-guide="admin-scope" class="text-xs text-accent">当前模式：{{ playerStore.mediaMode === 'VIDEO' ? '视频模式' : '音频模式' }}。播放控制、锁和队列清理作用于当前模式。</p>
+                  <!-- Control Grid -->
+                  <div class="grid grid-cols-3 gap-3">
+                    <button data-guide="admin-pause" @click="execPlayerAction('PAUSE')" class="flex flex-col items-center justify-center p-4 bg-medical-50 border border-medical-200 hover:border-accent hover:text-accent transition-all group">
+                      <Pause v-if="!playerStore.intentPaused" class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
+                      <Play v-else class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
+                      <span class="text-[10px] font-bold font-mono">{{ playerStore.intentPaused ? '恢复' : '暂停' }}</span>
+                    </button>
+                    <button data-guide="admin-skip" @click="execPlayerAction('SKIP')" class="flex flex-col items-center justify-center p-4 bg-medical-50 border border-medical-200 hover:border-accent hover:text-accent transition-all group">
+                      <SkipForward class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
+                      <span class="text-[10px] font-bold font-mono">切歌</span>
+                    </button>
+                    <button data-guide="admin-play-mode" @click="execPlayerAction('SHUFFLE')" class="flex flex-col items-center justify-center p-4 bg-medical-50 border border-medical-200 hover:border-accent hover:text-accent transition-all group">
+                      <ListOrdered v-if="playerStore.playMode === 'SEQUENTIAL'" class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
+                      <Shuffle v-else-if="playerStore.playMode === 'SHUFFLE'" class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
+                      <Repeat1 v-else class="w-6 h-6 mb-2 group-hover:scale-110 transition-transform" />
+                      <span class="text-[10px] font-bold font-mono">{{ playerStore.playMode === 'SEQUENTIAL' ? '顺序' : playerStore.playMode === 'SHUFFLE' ? '随机' : '单曲循环' }}</span>
+                    </button>
+                  </div>
+
+                  <!-- Permission Locks -->
+                  <div data-guide="admin-locks" class="grid grid-cols-3 gap-2">
+                    <button v-for="lock in locks" :key="lock.key" @click="toggleLock(lock.key, !lock.value)" class="flex items-center justify-center gap-2 py-2 px-1 border transition-all text-[9px] font-bold font-mono" :class="lock.value ? 'bg-red-50 border-red-200 text-red-500' : 'bg-surface border-medical-200 text-medical-400 hover:border-accent hover:text-accent'">
+                      <Lock v-if="lock.value" class="w-3 h-3" />
+                      <Unlock v-else class="w-3 h-3" />
+                      {{ lock.cnLabel }}
+                    </button>
+                  </div>
+
+                  <!-- Playback Core Settings (Shuffle, Vote Skip & Live Stream) -->
+                  <div class="space-y-3 p-3 bg-medical-50 border border-medical-100 rounded-sm">
+                    <!-- Shuffle Controls -->
+                    <div v-if="playerStore.isShuffle" class="grid grid-cols-2 gap-3 pb-3 border-b border-medical-100">
+                      <div data-guide="admin-fair-shuffle" class="flex items-center justify-between">
+                        <div class="flex flex-col">
+                          <span class="text-[10px] font-bold text-medical-800">{{ playerStore.isFairShuffle ? '公平模式' : '全部随机' }}</span>
+                          <span class="text-[8px] text-medical-400 font-mono uppercase">算法类型</span>
+                        </div>
+                        <RoundSwitch :model-value="playerStore.isFairShuffle" @update:model-value="execPlayerAction('TOGGLE_FAIR_SHUFFLE')" label="公平随机模式" />
+                      </div>
+                      <div data-guide="admin-offline-shuffle" class="flex items-center justify-between border-l border-medical-100 pl-3">
+                        <div class="flex flex-col">
+                          <span class="text-[10px] font-bold text-medical-800">{{ playerStore.allowOfflineShuffle ? '含离线' : '在线优先' }}</span>
+                          <span class="text-[8px] text-medical-400 font-mono uppercase">曲库范围</span>
+                        </div>
+                        <RoundSwitch :model-value="playerStore.allowOfflineShuffle" @update:model-value="execPlayerAction('TOGGLE_ALLOW_OFFLINE')" label="随机播放包含离线成员（无在线候选时回退全体）" />
+                      </div>
+                    </div>
+
+                    <!-- Vote Skip Controls (Always Visible) -->
+                    <div data-guide="admin-vote" class="space-y-3">
+                      <div class="flex items-center justify-between">
+                        <div class="flex flex-col">
+                          <span class="text-[10px] font-bold text-medical-800">投票切歌模式</span>
+                          <span class="text-[8px] text-medical-400 font-mono uppercase">VOTE_SKIP_MODE</span>
+                        </div>
+                        <RoundSwitch :model-value="playerStore.config.voteSkipEnabled" @update:model-value="enabled => updateInstantConfig({ voteSkipEnabled: enabled })" label="投票切歌模式" />
+                      </div>
+                      <div v-if="playerStore.config.voteSkipEnabled" class="grid grid-cols-2 gap-3 pt-1 border-t border-medical-100">
+                        <div class="space-y-1">
+                          <label class="block text-[8px] font-bold text-medical-400 uppercase">比例 (0.1-1.0)</label>
+                          <input
+                            :value="playerStore.config.voteSkipThreshold"
+                            @change="e => updateInstantConfig({ voteSkipThreshold: parseFloat(e.target.value) })"
+                            type="number" step="0.1" min="0.1" max="1.0"
+                            class="w-full bg-surface border border-medical-200 px-2 py-1 text-[10px] outline-none focus:border-accent"
+                          />
+                        </div>
+                        <div class="space-y-1">
+                          <label class="block text-[8px] font-bold text-medical-400 uppercase">等待时间 (秒)</label>
+                          <input
+                            :value="playerStore.config.voteSkipWaitTime"
+                            @change="e => updateInstantConfig({ voteSkipWaitTime: parseInt(e.target.value) })"
+                            type="number" min="0"
+                            class="w-full bg-surface border border-medical-200 px-2 py-1 text-[10px] outline-none focus:border-accent"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div data-guide="admin-xifan" class="flex items-center justify-between pt-3 border-t border-medical-100"><span class="text-xs">XIFAN 视频源</span><RoundSwitch :model-value="playerStore.config.xifanEnabled!==false" @update:model-value="enabled=>updateInstantConfig({xifanEnabled:enabled})" label="XIFAN 视频源" /></div>
+                    <!-- Live Stream Controls -->
+                    <div data-guide="admin-stream" class="flex items-center justify-between pt-3 border-t border-medical-100">
+                      <div class="flex flex-col">
+                        <span class="text-[10px] font-bold text-medical-800">直播推流</span>
+                        <span class="text-[8px] text-medical-400 font-mono uppercase">LIVE_STREAM_MODE</span>
+                      </div>
+                      <RoundSwitch :model-value="playerStore.streamActive" @update:model-value="toggleStream" :disabled="playerStore.mediaMode === 'VIDEO'" label="直播推流" />
+                    </div>
+                  </div>
+
+                  <div data-guide="admin-quality">
+                    <label for="admin-netease-quality" class="block text-[10px] font-bold text-medical-500 mb-2">解析音质上限</label>
+                    <select id="admin-netease-quality" :value="playerStore.config.neteaseQuality" @change="e => updateInstantConfig({ neteaseQuality: e.target.value })" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs text-medical-900">
+                      <option v-for="option in qualities" :key="option.value" :value="option.value">{{ option.label }}</option>
+                    </select>
+                  </div>
+                  <div data-guide="admin-seek">
+                    <label for="admin-seek-policy" class="block text-[10px] font-bold text-medical-500 mb-2">进度条跳转权限</label>
+                    <select id="admin-seek-policy" :value="playerStore.config.seekPolicy || 'DISABLED'" @change="e => updateInstantConfig({ seekPolicy: e.target.value })" class="w-full bg-medical-50 border border-medical-200 px-2 py-2 text-xs">
+                      <option value="DISABLED">禁止跳转</option><option value="OWNER_AND_ENQUEUER">仅管理和点歌者</option><option value="ALL">全部允许</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section: Private Radio -->
+              <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
+                <div class="p-3 bg-strong text-white flex items-center gap-2">
+                  <Radio class="w-4 h-4" />
+                  <span class="text-xs font-bold uppercase tracking-widest font-mono">私人电台 / Private_Radio</span>
+                </div>
+                <div class="p-4 space-y-4">
+                  <!-- 模式开关（两个开关都是"点选开启、再点关闭"；全关即整体关闭，无需独立"关闭"按钮） -->
+                  <p v-if="playerStore.mediaMode === 'VIDEO'" class="text-xs text-medical-500">视频模式保留私人 FM / DJ 配置并暂停执行，仅允许关闭。</p>
+                  <div data-guide="admin-radio-mode" class="space-y-1">
+                    <span class="text-[9px] font-bold text-medical-400 font-mono uppercase">模式 · 开关</span>
+                    <div class="grid grid-cols-2 gap-1 p-1 bg-medical-50 border border-medical-100">
+                      <button @click="setPrivateDjMode(privateDj.mode === 'FM' ? 'OFF' : 'FM')"
+                              :disabled="playerStore.mediaMode === 'VIDEO' && privateDj.mode !== 'FM'"
+                              class="py-1.5 text-[10px] font-bold transition-colors"
+                              :class="privateDj.mode === 'FM' ? 'bg-accent text-white' : 'text-medical-500 hover:bg-medical-200'">私人FM</button>
+                      <button @click="setPrivateDjMode(privateDj.mode === 'DJ' ? 'OFF' : 'DJ')"
+                              :disabled="playerStore.mediaMode === 'VIDEO' && privateDj.mode !== 'DJ'"
+                              class="py-1.5 text-[10px] font-bold transition-colors"
+                              :class="privateDj.mode === 'DJ' ? 'bg-accent text-white' : 'text-medical-500 hover:bg-medical-200'">私人DJ</button>
+                    </div>
+                    <p class="info-tip text-[8px] text-medical-400">点选即开启，再点已选中的模式即关闭，私人DJ模式=先播语音再播歌，加入队列功能固定为私人FM</p>
+                  </div>
+
+                  <!-- 三个功能开关 -->
+                  <div class="space-y-2">
+                    <div v-for="sw in privateDjSwitches" :key="sw.field" :data-guide="sw.guide" class="flex items-center justify-between p-2 bg-medical-50 border border-medical-100">
+                      <div class="flex flex-col">
+                        <span class="text-[10px] font-bold text-medical-800">{{ sw.label }}</span>
+                        <span class="info-tip text-[8px] text-medical-400 font-mono uppercase">{{ sw.hint }}</span>
+                      </div>
+                      <RoundSwitch :model-value="privateDj[sw.field]" @update:model-value="togglePrivateDjSwitch(sw.field)"
+                                   :disabled="privateDj.mode === 'OFF' || playerStore.mediaMode === 'VIDEO'" :label="sw.label" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            <!-- Right Column: Pairing & Danger Zone (5 cols) -->
+            <div class="lg:col-span-5 space-y-6">
+
+              <!-- Section: Room Pairing -->
+              <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
+                <div class="p-3 bg-strong text-white flex items-center gap-2">
+                  <Globe class="w-4 h-4" />
+                  <span class="text-xs font-bold uppercase tracking-widest font-mono">配对密钥 / Pairing Key</span>
+                </div>
+                <div class="p-4 space-y-4">
+                  <RoomPairingCard />
+                </div>
+              </div>
+
+              <!-- Section: Credentials -->
+              <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
+                <div class="p-3 bg-strong text-white flex items-center gap-2">
+                  <Database class="w-4 h-4" />
+                  <span class="text-xs font-bold uppercase tracking-widest font-mono">平台凭据 / Credentials</span>
+                </div>
+                <div class="p-4 space-y-4">
+                   <div v-for="plat in platforms" :key="plat.id" :data-cookie-platform="plat.id" :data-guide="`admin-platform-${plat.id}`" class="space-y-2 border-b border-medical-50 pb-3 last:border-0 last:pb-0">
+                    <div class="flex justify-between items-center">
+                      <span class="text-[10px] font-bold text-medical-600 font-mono">{{ plat.name }} // {{ plat.tokenName }}</span>
+                      <RoundSwitch :model-value="playerStore.config[`${plat.id}Enabled`]" @update:model-value="togglePlatform(plat.id)" :label="`${plat.name}平台`" />
+                    </div>
+                    <NeteaseQrLogin v-if="plat.id==='netease'" @saved="cookieStatus.refresh(true)" />
+                    <BilibiliQrLogin v-else @saved="cookieStatus.refresh(true)" />
+                    <p v-if="cookieStatusTips[cookieStatus.statuses.value[plat.id]]" class="text-[11px] text-medical-500" role="status">{{ cookieStatusTips[cookieStatus.statuses.value[plat.id]] }}</p>
+                  </div>
+                  <p v-if="cookieStatus.loading.value" class="text-[11px] text-medical-500" role="status">正在确认平台Cookie状态</p>
+                  <div v-if="cookieStatus.error.value" class="text-[11px] text-medical-500">
+                    <p role="alert">{{ cookieStatus.error.value }}</p>
+                    <button type="button" @click="cookieStatus.refresh(true)" class="text-accent mt-2">重试</button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Section: Data Cleanup -->
+              <div class="bg-surface border border-medical-200 shadow-sm overflow-hidden chamfer-br">
+                <div class="p-3 bg-strong text-white flex items-center gap-2">
+                  <Trash2 class="w-4 h-4" />
+                  <span class="text-xs font-bold uppercase tracking-widest font-mono">数据清理 / Data_Cleanup</span>
+                </div>
+                <div class="p-4 space-y-2">
+                  <button v-for="target in cleanupTargets" :key="target.id" :data-guide="`admin-cleanup-${target.id.toLowerCase()}`" @click="requestCleanup(target)"
+                          class="w-full flex items-center gap-3 p-3 bg-medical-50 border border-medical-200 text-left transition-colors group hover:border-accent focus-visible:border-accent focus-visible:outline-none">
+                    <span class="p-2 bg-surface text-medical-400 group-hover:text-accent group-focus-visible:text-accent transition-colors">
+                      <component :is="target.icon" class="w-4 h-4" />
+                    </span>
+                    <span class="flex-1 min-w-0 flex flex-col gap-1">
+                      <span class="text-[10px] font-bold text-medical-800">{{ target.label }}</span>
+                      <span class="text-[8px] text-medical-400 font-mono tracking-wider">{{ target.code }}</span>
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Danger Zone -->
+              <div class="p-4 bg-red-50 border border-red-100 chamfer-br flex flex-col gap-3">
+                <h4 class="text-red-600 text-[10px] font-black flex items-center gap-2 uppercase tracking-tighter">
+                  <AlertTriangle class="w-4 h-4" /> 危险区域 / DANGER_ZONE.SH
+                </h4>
+                <button data-guide="admin-reset" @click="handleReset" class="w-full py-2 bg-red-600 text-white font-bold text-[10px] hover:bg-red-700 transition-all uppercase tracking-widest shadow-sm">
+                  重置本房间
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Footer -->
+        <div :inert="guideStore.admin" class="p-3 bg-medical-100 border-t border-medical-200 flex justify-between items-center text-[9px] font-mono text-medical-400">
+          <span class="flex items-center gap-1"><ShieldCheck class="w-3 h-3 text-green-500" /> ACCESS VERIFIED</span>
+          <span>{{ roomSession.root ? 'ROOT' : roomSession.licenseId }} / {{ roomSession.roomId }}</span>
+        </div>
+      </div>
+    </div>
+  </Transition>
+</template>
+
+<script setup>
+import RoundSwitch from './RoundSwitch.vue';
+import HelpIconButton from './HelpIconButton.vue';
+import { computed } from 'vue';
+import { useAdminStore } from '../stores/admin';
+import { useGuideStore } from '../stores/guide';
+import { usePlayerStore } from '../stores/player';
+import { adminApi } from '../api/admin';
+import { useToast } from '../composables/useToast';
+import RoomPairingCard from './RoomPairingCard.vue';
+import NeteaseQrLogin from './NeteaseQrLogin.vue';
+import BilibiliQrLogin from './BilibiliQrLogin.vue';
+import { useCleanupStore } from '../stores/cleanup';
+import { roomSession } from '../services/roomSession';
+import { useRoomCookieStatus, cookieStatusTips } from '../composables/useRoomCookieStatus';
+import {
+  Settings, X, Pause, Play, SkipForward, ListOrdered, Repeat1, Shuffle,
+  Lock, Unlock, ShieldAlert, AlertTriangle,
+  PlayCircle, Database, Globe, ShieldCheck, Radio,
+  Trash2, ListMusic, UserMinus, MessageSquare
+} from 'lucide-vue-next';
+
+const adminStore = useAdminStore();
+const guideStore = useGuideStore();
+defineEmits(['guide']);
+const cookieStatus = useRoomCookieStatus({ active: () => adminStore.showDashboard });
+const playerStore = usePlayerStore();
+const { success, error, warning } = useToast();
+const qualities = [
+  { value: 'standard', label: '标准' },
+  { value: 'higher', label: '较高' },
+  { value: 'exhigh', label: '极高' },
+  { value: 'lossless', label: '无损' },
+  { value: 'hires', label: '高解析度' },
+  { value: 'jyeffect', label: '高清臻音' }
+];
+
+const updateInstantConfig = async (update) => {
+  try {
+    const data = await adminApi.updateConfig(adminStore.adminPassword, update);
+    success(data.message);
+  } catch (e) {
+    error(e.response?.data?.message || '配置同步失败');
+  }
+};
+
+const locks = computed(() => [
+  { key: 'PAUSE', cnLabel: '锁定暂停', value: playerStore.isPauseLocked },
+  { key: 'SKIP', cnLabel: '锁定切歌', value: playerStore.isSkipLocked },
+  { key: 'SHUFFLE', cnLabel: '锁定模式', value: playerStore.isPlayModeLocked },
+]);
+
+const platforms = [
+  { id: 'netease', name: '网易云音乐', tokenName: 'COOKIE' },
+  { id: 'bilibili', name: '哔哩哔哩', tokenName: 'COOKIE' }
+];
+
+const cleanupTargets = [
+  { id: 'QUEUE', label: '清理播放队列', code: 'PLAYBACK_QUEUE', icon: ListMusic, message: '确定要清空本房间的播放队列吗？' },
+  { id: 'OFFLINE', label: '清理不在线成员歌曲', code: 'OFFLINE_MEMBER_SONGS', icon: UserMinus, message: '确定要清理本房间中不在线成员的点播歌曲吗？' },
+  { id: 'CHAT', label: '清理聊天记录', code: 'CHAT_HISTORY', icon: MessageSquare, message: '确定要清空本房间的聊天记录吗？' }
+];
+const cleanup = useCleanupStore();
+const cleanupBusy = computed(() => cleanup.busy);
+
+// 私人电台/私人DJ 状态（来自 config.privateDj，服务端广播；mode 即开关：OFF=关闭/FM=私人FM/DJ=私人DJ）
+const privateDj = computed(() => playerStore.config.privateDj || {
+  mode: 'OFF',
+  fillBlankEnabled: false, joinQueueEnabled: false, custodyEnabled: false
+});
+
+const privateDjSwitches = [
+  { field: 'fillBlankEnabled', guide: 'admin-radio-fill', label: '填充空白', hint: '队列无有效歌曲时播FM/DJ' },
+  { field: 'joinQueueEnabled', guide: 'admin-radio-queue', label: '加入队列', hint: '仅随机模式生效·固定私人FM' },
+  { field: 'custodyEnabled', guide: 'admin-radio-custody', label: '播放托管', hint: '无视队列·仅播FM/DJ' },
+];
+
+const setPrivateDjMode = async (mode) => {
+  if (playerStore.mediaMode === 'VIDEO' && mode !== 'OFF') { error('视频模式下只能关闭私人 FM / DJ'); return; }
+  // 切到 FM/DJ 视为开启，需已配置网易云 Cookie（后端同样校验，这里先给友好提示）
+  if (mode !== 'OFF' && !playerStore.config.neteaseCookieConfigured) {
+    error('需先配置网易云 Cookie');
+    return;
+  }
+  try {
+    const data = await adminApi.updatePrivateDj(adminStore.adminPassword, { mode });
+    success(data.message);
+  } catch (e) {
+    error('模式切换失败');
+  }
+};
+
+const togglePrivateDjSwitch = async (field) => {
+  if (playerStore.mediaMode === 'VIDEO') return;
+  const update = { [field]: !privateDj.value[field] };
+  try {
+    const data = await adminApi.updatePrivateDj(adminStore.adminPassword, update);
+    success(data.message);
+  } catch (e) {
+    error('功能开关更新失败');
+  }
+};
+
+const execPlayerAction = async (action) => {
+  try {
+    const data = await adminApi.playerAction(adminStore.adminPassword, action);
+    success(data.message);
+  } catch (e) {
+    error('指令执行失败');
+  }
+};
+
+const toggleLock = async (type, locked) => {
+  try {
+    const data = await adminApi.setLock(adminStore.adminPassword, type, locked);
+    success(data.message);
+  } catch (e) {
+    error('锁定同步失败');
+  }
+};
+
+const toggleStream = async () => {
+  if (playerStore.mediaMode === 'VIDEO') { error('视频模式不支持音乐直播推流'); return; }
+  try {
+    const data = await adminApi.setStream(adminStore.adminPassword, !playerStore.streamActive);
+    success(data.message);
+  } catch (e) {
+    error('直播流控制失败');
+  }
+};
+
+const requestCleanup = (target) => {
+  cleanup.request(target.id, 'dashboard');
+};
+
+const togglePlatform = async (platformId) => {
+  const current = playerStore.config[`${platformId}Enabled`];
+  const update = { [`${platformId}Enabled`]: !current };
+  try {
+    const data = await adminApi.updateConfig(adminStore.adminPassword, update);
+    success(data.message);
+  } catch (e) {
+    error('平台状态切换失败');
+  }
+};
+
+const handleReset = async () => {
+  const context = playerStore.playbackContext();
+  if (!context || !confirm(`这将清空当前${playerStore.mediaMode === 'VIDEO' ? '视频' : '音乐'}模式的队列和历史，并停止播放。另一模式现场保留。确认重置？`)) return;
+  try {
+    const data = await adminApi.resetSystem(adminStore.adminPassword, context);
+    warning(data.message);
+  } catch (e) {
+    error('房间重置失败');
+  }
+};
+</script>
+
+<style scoped>
+.animate-spin-slow {
+  animation: spin 8s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.custom-scroll::-webkit-scrollbar { width: 4px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb { @apply bg-medical-200 rounded-full; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { @apply bg-medical-300; }
+</style>

@@ -1,0 +1,285 @@
+package com.thornex.musicparty
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.content.Intent
+import android.content.SharedPreferences
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.Typeface
+import android.net.Uri
+import android.os.Build
+import android.os.Bundle
+import android.os.SystemClock
+import android.view.Gravity
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebChromeClient
+import android.content.pm.ActivityInfo
+import android.widget.Button
+import android.widget.EditText
+import android.widget.FrameLayout
+import android.widget.LinearLayout
+import android.widget.TextView
+import androidx.activity.addCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
+
+/**
+ * MusicParty 安卓壳。
+ *  - 起始页：输入服务器地址（域名或 IP），连接后进入主页。
+ *  - 主页：WebView 加载站点。返回键从主页回到起始页（可换服务器）。
+ *  - WebView 配置：无手势自动播放；退后台/锁屏不暂停（音频持续）。
+ *  - 前台服务 MediaPlaybackService 保活进程。
+ */
+@SuppressLint("SetJavaScriptEnabled")
+class MainActivity : AppCompatActivity() {
+
+    private lateinit var prefs: SharedPreferences
+    private lateinit var startPage: LinearLayout
+    private lateinit var urlInput: EditText
+    private lateinit var webView: WebView
+    private val backgroundStateLock = Any()
+    private var backgroundTransitionId = 0L
+    private var backgroundTransitionAt = 0L
+    private var inBackground = false
+
+    /** A lifecycle correlation signal only; it does not identify why media paused. */
+    fun backgroundTransitionSnapshot(): String = synchronized(backgroundStateLock) {
+        org.json.JSONObject()
+            .put("bridgeGeneration", MediaSessionManager.bridgeGeneration())
+            .put("transitionId", backgroundTransitionId)
+            .put("background", inBackground)
+            .put("ageMs", if (inBackground) (SystemClock.elapsedRealtime() - backgroundTransitionAt).coerceAtLeast(0L) else 0L)
+            .toString()
+    }
+    private var fullscreenView: View? = null
+    private var fullscreenCallback: WebChromeClient.CustomViewCallback? = null
+    private var previousOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+    private var previousSystemUi = 0
+    private fun hideFullscreen() {
+        val view = fullscreenView ?: return
+        (view.parent as? ViewGroup)?.removeView(view)
+        fullscreenView = null
+        requestedOrientation = previousOrientation
+        window.decorView.systemUiVisibility = previousSystemUi
+        fullscreenCallback?.onCustomViewHidden(); fullscreenCallback = null
+    }
+    private val serviceIntent by lazy { Intent(this, MediaPlaybackService::class.java) }
+
+    private val requestNotifPerm =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        prefs = getSharedPreferences("musicparty", Context.MODE_PRIVATE)
+
+        val root = FrameLayout(this)
+
+        // 起始页（默认可见）
+        startPage = buildStartPage()
+        root.addView(startPage, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+
+        // WebView（先隐藏，连接后显示）
+        webView = WebView(this)
+        webView.visibility = View.GONE
+        root.addView(webView, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+
+        setContentView(root)
+
+        // Android 13+ 通知权限（前台服务通知要显示）
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(this, android.Manifest.permission.POST_NOTIFICATIONS)
+                != PackageManager.PERMISSION_GRANTED
+        ) {
+            requestNotifPerm.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        // WebView 配置
+        val ws = webView.settings
+        ws.javaScriptEnabled = true
+        ws.domStorageEnabled = true
+        ws.mediaPlaybackRequiresUserGesture = false
+        ws.userAgentString = ws.userAgentString + " MusicPartyAndroid/1.0"
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
+                if (view == null || fullscreenView != null) { callback?.onCustomViewHidden(); return }
+                previousOrientation = requestedOrientation
+                previousSystemUi = window.decorView.systemUiVisibility
+                fullscreenView = view; fullscreenCallback = callback
+                root.addView(view, ViewGroup.LayoutParams(MATCH_PARENT, MATCH_PARENT))
+                requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_FULLSCREEN or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+            }
+            override fun onHideCustomView() { hideFullscreen() }
+        }
+        webView.webViewClient = object : WebViewClient() {
+            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                hideFullscreen(); MediaSessionManager.resetWebContext()
+                super.onPageStarted(view, url, favicon)
+            }
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                val site = getServerUrl()
+                if (url != null && site != null && !url.startsWith(site)) {
+                    runCatching {
+                        startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+                    }
+                    return true
+                }
+                return false
+            }
+        }
+
+        // 通知栏媒体控制：JS 桥（Web → 原生 推送状态） + 控制回调（原生 → Web）
+        MediaSessionManager.init(this)
+        MediaSessionManager.onControl = { action ->
+            runOnUiThread { controlWeb(action) }
+        }
+        webView.addJavascriptInterface(object {
+            @android.webkit.JavascriptInterface
+            fun updateMedia(json: String) { MediaSessionManager.update(json) }
+            @android.webkit.JavascriptInterface
+            fun getBridgeVersion(): Int = 2
+            @android.webkit.JavascriptInterface
+            fun getBridgeGeneration(): Long = MediaSessionManager.bridgeGeneration()
+            @android.webkit.JavascriptInterface
+            fun getBackgroundTransition(): String = backgroundTransitionSnapshot()
+            @android.webkit.JavascriptInterface
+            fun exitVideoFullscreen() { runOnUiThread { hideFullscreen() } }
+        }, "AndroidBridge")
+
+        // 前台服务保活（进程不被节流/杀）
+        ContextCompat.startForegroundService(this, serviceIntent)
+
+        // 已有保存地址 → 直接进主页；否则停在起始页让用户输入
+        getServerUrl()?.takeIf { it.isNotBlank() }?.let { connect(it) }
+
+        // 返回键：主页 → 起始页；起始页 → 退出
+        onBackPressedDispatcher.addCallback(this) {
+            if (fullscreenView != null) { hideFullscreen(); return@addCallback }
+            if (webView.visibility == View.VISIBLE) {
+                webView.evaluateJavascript("window.musicPartyBack ? window.musicPartyBack() : false") { handled ->
+                    if (handled != "true") {
+                        webView.evaluateJavascript("window.musicPartyLeave && window.musicPartyLeave()", null)
+                        webView.loadUrl("about:blank")
+                        urlInput.setText(getServerUrl().orEmpty())
+                        webView.visibility = View.GONE
+                        startPage.visibility = View.VISIBLE
+                    }
+                }
+            } else {
+                finish()
+            }
+        }
+    }
+
+    private fun buildStartPage(): LinearLayout {
+        val page = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(Color.parseColor("#111827"))
+            gravity = Gravity.CENTER
+            setPadding(dp(32), 0, dp(32), 0)
+        }
+
+        page.addView(TextView(this).apply {
+            text = "MirthParty"
+            setTextColor(Color.WHITE)
+            textSize = 28f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+        })
+
+        page.addView(TextView(this).apply {
+            text = "服务器地址"
+            setTextColor(Color.parseColor("#9CA3AF"))
+            textSize = 14f
+            gravity = Gravity.CENTER
+        }, lpWrap(top = dp(8), bottom = dp(16)))
+
+        urlInput = EditText(this).apply {
+            hint = "https://你的域名 或 http://192.168.x.x:8848"
+            setTextColor(Color.WHITE)
+            setHintTextColor(Color.parseColor("#6B7280"))
+            setSingleLine(true)
+        }
+        page.addView(urlInput, LinearLayout.LayoutParams(MATCH_PARENT, dp(48)))
+
+        page.addView(Button(this).apply {
+            text = "连接"
+            setOnClickListener { connect(urlInput.text.toString().trim()) }
+        }, lpWrap(top = dp(20)))
+
+        return page
+    }
+
+    private fun lpWrap(top: Int = 0, bottom: Int = 0): LinearLayout.LayoutParams =
+        LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
+            this.topMargin = top
+            this.bottomMargin = bottom
+        }
+
+    private fun connect(raw: String) {
+        if (raw.isBlank()) return
+        val url = if (raw.startsWith("http")) raw else "http://$raw"
+        prefs.edit().putString("server_url", url).apply()
+        startPage.visibility = View.GONE
+        webView.visibility = View.VISIBLE
+        webView.evaluateJavascript("window.musicPartyLeave && window.musicPartyLeave()") {
+            MediaSessionManager.update("{\"title\":\"MirthParty\",\"paused\":true}")
+            webView.loadUrl(url)
+        }
+    }
+
+    private fun getServerUrl(): String? = prefs.getString("server_url", null)
+
+    /** 通知栏按钮 → 触发 Web 端播放器动作（经 Vue 应用注册的 window.MusicPartyControl） */
+    private fun controlWeb(action: String) {
+        if (action.startsWith("{")) {
+            val envelope = runCatching { org.json.JSONObject(action) }.getOrNull() ?: return
+            val argument = org.json.JSONObject.quote(action)
+            val mode = envelope.optString("mediaMode")
+            if (mode == "VIDEO" && envelope.optString("action") == "play") webView.evaluateJavascript("window.MusicPartyVideoControl && window.MusicPartyVideoControl($argument)", null)
+            else if (mode == "MUSIC") webView.evaluateJavascript("window.MusicPartyControl && window.MusicPartyControl.handle && window.MusicPartyControl.handle($argument)", null)
+            return
+        }
+        val js = when (action) {
+            "play", "pause" -> "window.MusicPartyControl && window.MusicPartyControl.togglePause()"
+            "next" -> "window.MusicPartyControl && window.MusicPartyControl.next()"
+            else -> ""
+        }
+        if (js.isNotEmpty()) webView.evaluateJavascript(js, null)
+    }
+
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+
+    // 关键：退到后台/锁屏时不暂停 WebView（音频/网络持续）
+    override fun onPause() {
+        synchronized(backgroundStateLock) {
+            backgroundTransitionId++
+            backgroundTransitionAt = SystemClock.elapsedRealtime()
+            inBackground = true
+        }
+        super.onPause() /* 故意不调 webView.onPause() */
+    }
+    override fun onResume() {
+        synchronized(backgroundStateLock) { inBackground = false }
+        super.onResume()
+    }
+    override fun onStop() { super.onStop() /* 故意不调 webView.onPause() */ }
+
+    override fun onDestroy() {
+        hideFullscreen()
+        webView.stopLoading()
+        webView.loadUrl("about:blank")
+        webView.destroy()
+        stopService(serviceIntent)
+        MediaSessionManager.onControl = null
+        MediaSessionManager.destroy()
+        super.onDestroy()
+    }
+}

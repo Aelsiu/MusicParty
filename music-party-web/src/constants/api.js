@@ -1,0 +1,52 @@
+// WebSocket 目的地
+export const WS_DEST = {
+    // 发送指令 (Publish)
+    CHAT_SEND: '/app/chat',
+    CHAT_HISTORY_FETCH: '/app/chat/history/fetch',
+    PLAYER_NEXT: '/app/control/next',
+    PLAYER_PAUSE: '/app/control/toggle-pause',
+    PLAYER_SHUFFLE: '/app/control/toggle-shuffle',
+    PLAYER_LIKE: '/app/control/like',
+    PLAYER_SEEK: '/app/control/seek',
+    MEDIA_MODE: '/app/control/media-mode',
+    VIDEO_RECOVER: '/app/video/control/recover',
+    VIDEO_IMPORT: '/app/video/import/favorites',
+    VIDEO_PARTS_IMPORT: '/app/video/import/parts',
+    VIDEO_EPISODES_IMPORT: '/app/video/import/episodes',
+    VIDEO_IMPORT_STATUS: '/app/video/import/status',
+    VIDEO_INTERACTION_RESYNC: '/app/video/interaction/resync',
+    VIDEO_IMPORT_RESULTS: '/user/queue/video/import',
+    VIDEO_INTERACTION: '/user/queue/video/interaction',
+    VIDEO_REFRESH: '/app/video/source/refresh',
+    VIDEO_WATCH_STATUS: '/app/video/watch/status',
+    VIDEO_RATE: '/app/video/control/rate',
+    VIDEO_PAGE: '/app/video/control/page',
+    CLOCK: '/app/player/clock',
+    ENQUEUE: '/app/enqueue',
+    ENQUEUE_PLAYLIST: '/app/enqueue/playlist',
+    QUEUE_TOP: '/app/queue/top',
+    QUEUE_CANCEL_TOP: '/app/queue/cancel-top',
+    QUEUE_COMMAND_RESULT: '/user/queue/playback/command-result',
+    QUEUE_REMOVE: '/app/queue/remove',
+    USER_BIND: '/app/user/bind',
+    USER_RENAME: '/app/user/rename',
+    RESYNC: '/app/player/resync',
+
+    // 订阅频道 (Subscribe)
+    TOPIC_EVENTS: '/topic/player/events',
+    TOPIC_STATE: '/topic/player/state',
+    TOPIC_QUEUE: '/topic/player/queue',
+    TOPIC_USERS: '/topic/users/online',
+    TOPIC_CHAT: '/topic/chat',
+
+    // 个人频道
+    USER_ME: '/app/user/me',
+    USER_ME_UPDATE: '/user/queue/me',
+    APP_CHAT_HISTORY: '/app/chat/history',
+    USER_STATE: '/user/queue/player/state',
+    APP_STATE: '/app/topic/player/state',
+    USER_CLOCK: '/user/queue/player/clock',
+    USER_CHAT_HISTORY: '/user/queue/chat/history',
+    USER_EVENTS: '/user/queue/events',
+    USER_PRIVATE_CHAT: '/user/queue/chat/private'
+};

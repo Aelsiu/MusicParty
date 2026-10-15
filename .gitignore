@@ -1,0 +1,131 @@
+HELP.md
+target/
+.mvn/wrapper/maven-wrapper.jar
+!**/src/main/**/target/
+!**/src/test/**/target/
+
+### STS ###
+.apt_generated
+.classpath
+.factorypath
+.project
+.settings
+.springBeans
+.sts4-cache
+
+### IntelliJ IDEA ###
+.idea
+*.iws
+*.iml
+*.ipr
+
+### NetBeans ###
+/nbproject/private/
+/nbbuild/
+/dist/
+/nbdist/
+/.nb-gradle/
+build/
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+### VS Code ###
+.vscode/
+/1.py
+/cookie.txt
+/GEMINI.md
+/.gemini/.env
+/scripts/publish-image.ps1
+/data/queue-data.json
+/config/application.properties
+/config/licenses.json
+/data/multi-rooms.sqlite*
+/music_party/
+/music-party-web/node_modules/
+/music-party-web/dist/
+/src/main/resources/static/
+/music-party-web/.npm-cache/
+/launcher/bin/
+/launcher/frontend/node_modules/
+/launcher/frontend/dist/
+/launcher/frontend/package.json.md5
+/launcher/frontend/src/wailsjs/
+/external-api-source/
+/android/.gradle/
+/android/local.properties
+*.jks
+*.keystore
+
+### 运行时产物 ###
+# B站音频本地缓存
+/cached_media/
+# 运行日志
+/log.log
+# cloudflared 隧道二进制
+/cloudflared-windows-amd64.exe
+# 工具生成目录
+/.snow/
+# git worktree 工作区
+/.worktrees/
+/docs/architecture/
+/.video-party-trial/
+/music-party-web/.frontend-tmp/
+/*-tests.log
+/backend-check.log
+/baseline-*.log
+
+# BEGIN MirthParty remote publication policy
+AGENTS.md
+CLAUDE.md
+.cbmignore
+/.agent-knowledge/
+/.codex/
+/.claude/
+/.mcp.json
+/scripts/*
+!/scripts/deploy-docker.sh
+!/scripts/update-docker.sh
+!/scripts/apply-update.sh
+/docs/agent-knowledge/
+/docs/issue*/
+/docs/*[Pp][Rr][Dd]*
+/docs/*[Ss][Pp][Ee][Cc]*
+/docs/*issue*
+/docs/*validation*
+/docs/*evidence*
+/docs/prototypes/
+/docs/images/
+/.github/workflows/
+/build-*.ps1
+/mvnw
+/mvnw.cmd
+**/build.mjs
+**/buildMetadata.mjs
+**/test/
+**/tests/
+**/__tests__/
+**/fixtures/
+**/__fixtures__/
+**/androidTest/
+**/prototypes/
+*.test.*
+*.spec.*
+*Test.java
+*Tests.java
+*Test.kt
+*Tests.kt
+*_test.go
+/music-party-web/scripts/
+/music-party-web/*-integration.html
+/music-party-web/*-prototype.html
+.env
+.env.*
+!.env.example
+!.env.template
+*.pem
+*.key
+*.p12
+*.pfx
+*.sqlite*
+/er.name freedom
+# END MirthParty remote publication policy

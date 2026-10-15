@@ -1,0 +1,44 @@
+import client from './client';
+import { roomSession } from '../services/roomSession';
+const biliQrContext = () => Object.freeze({ roomId: roomSession.roomId, roomToken: roomSession.roomToken, managerToken: roomSession.managerToken, generation: roomSession.generation });
+const biliQrConfig = context => ({ skipManagementAuth: true, timeout: 35000, headers: {
+    'X-Room-ID': context.roomId || '', 'X-Room-Token': context.roomToken || '', Authorization: `Bearer ${context.managerToken || ''}`
+} });
+export const roomsApi = {
+    login: key => client.post('/api/rooms/management/session', { key }),
+    session: () => client.get('/api/rooms/management/session'),
+    list: () => client.get('/api/rooms'),
+    join: code => client.post('/api/rooms/join', { code }),
+    access: id => client.get(`/api/rooms/${id}/access`, { skipManagementAuth: true }),
+    joinRoom: (id, code) => client.post(`/api/rooms/${id}/join`, { code }),
+    publicAdmission: id => client.post(`/api/rooms/${id}/public-admission`, {}, { skipManagementAuth: true }),
+    resume: (id, token) => client.get(`/api/rooms/${id}/admission`, { headers: { 'X-Room-Token': token } }),
+    manage: id => client.get(`/api/rooms/${id}/manage`),
+    manageAs: (id, token) => client.get(`/api/rooms/${id}/manage`, { skipManagementAuth: true, headers: { Authorization: `Bearer ${token}` } }),
+    setPublic: (id, publicRoom) => client.patch(`/api/rooms/${id}/access`, { publicRoom }),
+    rename: (id, name, managerToken = roomSession.managerToken) => client.patch(`/api/rooms/${id}/name`, { name }, { skipManagementAuth: true, headers: { Authorization: `Bearer ${managerToken}` } }),
+    pairing: id => client.get(`/api/rooms/${id}/pairing`, { skipManagementAuth: !roomSession.ownerAccess }),
+    setPairingOpen: (id, open) => client.patch(`/api/rooms/${id}/pairing`, { open }),
+    share: id => client.get(`/api/rooms/${id}/share`, { skipManagementAuth: !roomSession.ownerAccess }),
+    invite: id => client.get(`/api/rooms/${id}/invite`, { skipManagementAuth: !roomSession.ownerAccess }),
+    setShareEnabled: (id, enabled) => client.patch(`/api/rooms/${id}/share`, { enabled }),
+    connected: id => client.post(`/api/rooms/${id}/connected`),
+    create: (name, requestId) => client.post('/api/rooms', { name, requestId }),
+    delete: id => client.delete(`/api/rooms/${id}`),
+    licenses: () => client.get('/api/rooms/licenses'),
+    addLicense: (key, note = '') => client.post('/api/rooms/licenses', { key, note }),
+    updateLicense: (id, key) => client.put(`/api/rooms/licenses/${id}`, { key }),
+    updateLicenseNote: (id, note) => client.patch(`/api/rooms/licenses/${id}/note`, { note }),
+    deleteLicense: id => client.delete(`/api/rooms/licenses/${id}`),
+    getSystemConfig: () => client.get('/api/rooms/system-config'),
+    updateSystemConfig: config => client.post('/api/rooms/system-config', config),
+    cookieStatus: (context = biliQrContext(), { signal } = {}) => client.get('/api/admin/cookie-status', { ...biliQrConfig(context), signal }),
+    qrContext: biliQrContext,
+    qrCreate: (context = biliQrContext()) => client.post('/api/admin/netease-login', {}, biliQrConfig(context)),
+    qrCheck: (task, context = biliQrContext()) => client.get(`/api/admin/netease-login/${task}`, biliQrConfig(context)),
+    qrCancel: (task, context = biliQrContext()) => client.delete(`/api/admin/netease-login/${task}`, biliQrConfig(context)),
+    biliQrContext,
+    biliQrCreate: (context = biliQrContext()) => client.post('/api/admin/bilibili-login', {}, biliQrConfig(context)),
+    biliQrCheck: (task, context = biliQrContext()) => client.get(`/api/admin/bilibili-login/${task}`, biliQrConfig(context)),
+    biliQrCancel: (task, context = biliQrContext()) => client.delete(`/api/admin/bilibili-login/${task}`, biliQrConfig(context))
+};

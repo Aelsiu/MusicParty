@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MirthParty 内嵌解析器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main id="panel" class="mp-parser-panel" aria-busy="true">
+    <header class="mp-parser-header">
+      <span class="mp-parser-mark" aria-hidden="true"><img src="icons/icon-192.png" width="36" height="36" alt=""></span>
+      <div><h1>MirthParty 内嵌解析器</h1><p id="version" class="mp-parser-version"></p></div>
+    </header>
+    <div class="mp-parser-field-labels">
+      <label for="address">MirthParty 网站地址</label><span aria-hidden="true">启用</span>
+    </div>
+    <div class="mp-parser-inline-controls">
+      <div class="mp-parser-address-wrap">
+        <input id="address" class="mp-parser-address" type="url" placeholder="https://你的站点地址" maxlength="2048" spellcheck="false" autocomplete="off" aria-describedby="error" disabled>
+        <button id="current-address" class="mp-parser-current" type="button" aria-label="获取当前页面地址" title="获取当前页面地址" disabled><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 6M4 12l2 6a7 7 0 0 0 12-1"/></svg></button>
+      </div>
+      <label class="mp-parser-switch">
+        <input id="toggle" type="checkbox" role="switch" aria-label="启用解析器" disabled>
+        <span class="mp-parser-track" aria-hidden="true"></span>
+      </label>
+    </div>
+    <p id="error" class="mp-parser-error" role="alert" hidden></p>
+    <div class="mp-parser-status" role="status" aria-live="polite">
+      <span class="mp-parser-dot" aria-hidden="true"></span><p id="state">正在核对解析器状态…</p>
+    </div>
+    <p class="mp-parser-tip">本解析器只作为辅助工具服务于MirthParty平台</p>
+  </main>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

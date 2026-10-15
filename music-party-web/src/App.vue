@@ -1,0 +1,235 @@
+<!-- src/App.vue -->
+<template>
+  <!-- 全局 Toast 挂载点 -->
+  <ToastNotification ref="toastInstance" :inert="guide.active" />
+
+  <div class="isolate h-screen w-screen overflow-hidden font-sans" data-guide-business :inert="guide.active && !guide.admin">
+    <AudioEngine v-if="userStore.isAuthPassed && player.mediaMode === 'MUSIC'" />
+    <!-- 1. 认证遮罩 -->
+    <AuthOverlay :key="entryRoomId" :room-id="entryRoomId" @unlocked="userStore.isAuthPassed = true" v-if="!userStore.isAuthPassed && !switchingRoom" />
+
+    <!-- 2. 启动页 (Start Screen) -->
+    <!-- 注意：点击 Connect 后，我们先不销毁它，直到 socket 连接成功，或者直接切换布局 -->
+    <div v-if="userStore.isAuthPassed && !hasStarted" class="absolute inset-0 z-[100] bg-medical-50 flex flex-col items-center justify-center space-y-8">
+      <div class="text-4xl font-black tracking-tighter text-medical-900">MirthParty</div>
+      <div class="text-lg font-bold text-accent -mt-6">{{ userStore.roomName }}</div>
+      <div class="font-mono text-xs text-medical-400 tracking-widest">ROOM ID / {{ userStore.roomId }}</div>
+      <div class="font-mono text-xs text-medical-400 tracking-widest">{{ connecting ? 'CONNECTING...' : 'SYSTEM READY' }}</div>
+      <div class="flex flex-col items-center gap-1">
+      <button
+          :disabled="connecting" @click="startGame"
+          class="px-12 py-4 bg-strong text-white font-bold text-xl hover:bg-accent transition-colors chamfer-br"
+      >
+        CONNECT
+      </button>
+      <button @click="returnEntry" class="font-mono text-xs text-accent tracking-widest p-2 min-h-11">RETURN</button>
+      </div>
+    </div>
+
+    <!-- 3. 主界面 (当 hasStarted 为 true 时显示) -->
+    <MainLayout v-if="hasStarted" :inert="guide.active" @search="handleSearchClick" @help="openHelp" @settings="showSettings = true" @return="returnEntry" @presentation-change="videoExpanded = $event">
+      <!-- 中间插槽: 视觉控制台 -->
+      <CenterConsole v-if="player.mediaMode === 'MUSIC'" />
+      <VideoConsole v-else />
+
+      <!-- 底部插槽: 播放器 -->
+      <!-- 注意：这里不使用 v-if，而是 v-show，或者因为在 MainLayout 里是 slot，
+           只有 MainLayout 渲染了，它才会渲染。
+           关键是 useAudio 里的逻辑已经修好了，会自动处理播放。
+      -->
+      <template #player>
+        <PlayerControl />
+      </template>
+    </MainLayout>
+
+    <!-- 4. 全局弹窗 -->
+    <SearchModal v-if="userStore.isAuthPassed" ref="searchModal" :isOpen="showSearch" @close="showSearch = false" />
+
+    <SettingsModal v-if="userStore.isAuthPassed" :isOpen="showSettings" @close="showSettings = false" />
+    <NamePromptModal v-if="userStore.isAuthPassed" />
+    <AdminAuthModal v-if="userStore.isAuthPassed" />
+    <AdminDashboard v-if="userStore.isAuthPassed" @guide="guideController.openAdmin" />
+    <RoomCleanupDialog v-if="userStore.isAuthPassed" />
+    <RoomManager :open="showRoomManager" :selecting="switchingRoom" :current-room-id="userStore.isAuthPassed ? roomSession.roomId : ''" @close="showRoomManager = false" @select="switchManagedRoom" />
+  </div>
+
+  <GuideOverlay v-if="guide.active" :scene="guide.scene" :points="guideController.points.value" @close="guideController.close()" @start="guideController.startMain" @unavailable="guideController.close(false)" />
+</template>
+
+<script setup>
+import { socketService } from './services/socket';
+import { useChatStore } from './stores/chat';
+import { roomSession, selectRoom } from './services/roomSession';
+import { roomsApi } from './api/rooms';
+import { enterManagedRoom } from './services/roomNavigation';
+import { roomIdFromPath } from './services/roomRoute';
+import { handleModalBack, registerBackHandler } from './services/backNavigation';
+import { ref, nextTick, onMounted, onBeforeUnmount, watch } from 'vue';
+import { useEventListener } from '@vueuse/core';
+import { usePlayerStore } from './stores/player';
+import { useUserStore } from './stores/user';
+import { useUiStore } from './stores/ui';
+import { useAdminStore } from './stores/admin';
+import { useGuideStore } from './stores/guide';
+import { useGuideController } from './composables/useGuideController';
+import { useToast } from './composables/useToast';
+
+// Components
+import MainLayout from './components/layout/MainLayout.vue';
+import CenterConsole from './components/CenterConsole.vue';
+import VideoConsole from './components/VideoConsole.vue';
+import PlayerControl from './components/PlayerControl.vue';
+import AudioEngine from './components/AudioEngine.vue';
+import AuthOverlay from './components/AuthOverlay.vue';
+import SearchModal from './components/SearchModal.vue';
+import GuideOverlay from './components/GuideOverlay.vue';
+import SettingsModal from './components/SettingsModal.vue';
+import NamePromptModal from './components/NamePromptModal.vue';
+import ToastNotification from './components/ToastNotification.vue';
+import AdminAuthModal from './components/AdminAuthModal.vue';
+import AdminDashboard from './components/AdminDashboard.vue';
+import RoomCleanupDialog from './components/RoomCleanupDialog.vue';
+import RoomManager from './components/RoomManager.vue';
+
+const player = usePlayerStore();
+const videoExpanded = ref(false);
+const userStore = useUserStore();
+const uiStore = useUiStore();
+const adminStore = useAdminStore();
+const guide = useGuideStore();
+const hasStarted = ref(false);
+const connecting = ref(false);
+const chat = useChatStore();
+const showSearch = ref(false);
+const searchModal=ref(null);
+const openHelp = () => { guideController.openMain(); };
+useEventListener(window, 'musicparty:show-help', openHelp);
+const showSettings = ref(false);
+const unregisterOverlayBack=registerBackHandler(120,()=>{
+  if(userStore.showNameModal){userStore.showNameModal=false;userStore.setPostNameAction(null);return true;}
+  if(showSearch.value){if(searchModal.value?.backSelection?.())return true;showSearch.value=false;return true;}
+  if(showSettings.value){showSettings.value=false;return true;}
+  return false;
+});
+onBeforeUnmount(unregisterOverlayBack);
+const showRoomManager = ref(false);
+const switchingRoom = ref(false);
+const entryRoomId = ref(roomIdFromPath(window.location.pathname));
+let entryGeneration = 0;
+const toastInstance = ref(null);
+const { register, info, error } = useToast();
+const guideController = useGuideController({ guide, player, user: userStore, admin: adminStore, room: roomSession,
+  mainEnabled: () => hasStarted.value && userStore.isAuthPassed && !uiStore.effectiveLiteMode && !videoExpanded.value && !adminStore.showDashboard,
+  adminEnabled: () => hasStarted.value && userStore.isAuthPassed && adminStore.showDashboard && adminStore.isVerified && roomSession.ownerAccess && Boolean(roomSession.managerToken),
+  blocked: () => showSearch.value || showSettings.value || userStore.showNameModal || adminStore.showAuthModal || showRoomManager.value || switchingRoom.value
+});
+
+const startGame = () => {
+  if (connecting.value) return;
+  connecting.value = true;
+  player.connect();
+  maybeShowPwaHint();
+};
+
+const returnEntry = (navigate = true) => {
+  entryGeneration++;
+  socketService.disconnect();
+  player.connected = false;
+  player.resetPlayback();
+  player.localProgress = 0; player.isBuffering = false; player.isErrorState = false;
+  chat.messages = []; chat.unreadCount = 0; chat.isOpen = false;
+  chat.isLoadingMore = false; chat.hasMore = true;
+  hasStarted.value = false; connecting.value = false; showSearch.value = false; showSettings.value = false;
+  showRoomManager.value = false;
+  guideController.close(false);
+  adminStore.showDashboard = false; adminStore.showAuthModal = false; adminStore.isVerified = false;
+  userStore.resetAuthentication(navigate !== false);
+  window.AndroidBridge?.updateMedia?.(JSON.stringify({ title: 'MirthParty', artist: '', paused: true, position: 0, duration: 0, roomId: '' }));
+};
+useEventListener(window, 'musicparty:return-entry', returnEntry);
+useEventListener(window, 'musicparty:route', () => { entryRoomId.value = roomIdFromPath(window.location.pathname); });
+useEventListener(window, 'popstate', async () => {
+  returnEntry(false);
+  // Unmount the old room before admission for the address selected by browser navigation.
+  switchingRoom.value = true;
+  entryRoomId.value = roomIdFromPath(window.location.pathname);
+  await nextTick();
+  switchingRoom.value = false;
+});
+useEventListener(window, 'musicparty:connected', () => { connecting.value = false; hasStarted.value = true; });
+useEventListener(window, 'musicparty:show-rooms', () => {
+  if (!userStore.isAuthPassed) return;
+  if (!roomSession.managerToken) { error('请先使用 //admin 验证许可密钥'); return; }
+  showRoomManager.value = true;
+});
+const switchManagedRoom = async room => {
+  if (switchingRoom.value) return;
+  switchingRoom.value = true;
+  let generation = entryGeneration;
+  try {
+    const result = await enterManagedRoom(room, {
+      currentRoomId: () => roomSession.roomId,
+      isActive: () => userStore.isAuthPassed && showRoomManager.value,
+      manage: roomsApi.manage,
+      leave: () => { returnEntry(false); generation = entryGeneration; },
+      settle: nextTick,
+      canEnter: () => generation === entryGeneration,
+      enter: current => {
+        selectRoom(current, '', true);
+        userStore.roomName = current.name;
+        userStore.justReturned = false;
+        userStore.isAuthPassed = true;
+      }
+    });
+    if (result === 'current') info('已在该房间中');
+  } catch (e) {
+    error(e.response?.data?.message || '无法进入房间，请重试');
+  } finally {
+    switchingRoom.value = false;
+  }
+};
+window.musicPartyBack = () => {
+  if (guide.active) { guideController.close(); return true; }
+  if (userStore.showNameModal) { userStore.showNameModal = false; userStore.setPostNameAction(null); return true; }
+  if (handleModalBack()) return true;
+  if (adminStore.showAuthModal) { adminStore.showAuthModal = false; return true; }
+  if (adminStore.showDashboard) { adminStore.showDashboard = false; return true; }
+  if (showSearch.value) { showSearch.value = false; return true; }
+  if (showSettings.value) { showSettings.value = false; return true; }
+  if (chat.isOpen) { chat.isOpen = false; return true; }
+  if (userStore.isAuthPassed) { returnEntry(); return true; }
+  return false;
+};
+window.musicPartyLeave = returnEntry;
+
+const maybeShowPwaHint = () => {
+  try {
+    if (localStorage.getItem('mp_pwa_hint_shown')) return;
+    if (window.matchMedia('(display-mode: standalone)').matches) return; // 已安装 PWA
+    if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent)) return;  // 仅移动端
+    localStorage.setItem('mp_pwa_hint_shown', '1');
+    info('ⓘ 想稳定后台播放？点浏览器菜单 → 添加到主屏幕');
+  } catch (e) { /* localStorage 不可用时忽略 */ }
+};
+
+// 自动性能优化：切后台自动进入精简模式
+useEventListener(document, 'visibilitychange', () => {
+  if (document.visibilityState === 'hidden' && player.mediaMode === 'MUSIC' && hasStarted.value && !player.isPaused && uiStore.autoLiteMode) {
+    uiStore.isLiteMode = true;
+  }
+});
+
+const handleSearchClick = () => {
+  // 简单的搜索逻辑代理
+  if (userStore.isGuest) {
+    userStore.setPostNameAction(() => { showSearch.value = true; });
+    userStore.showNameModal = true;
+  } else {
+    showSearch.value = true;
+  }
+};
+
+onMounted(() => {
+  if (toastInstance.value) register(toastInstance.value);
+});
+</script>

@@ -1,0 +1,42 @@
+:root{color-scheme:light dark;--mp-panel:#fff;--mp-text:#22252b;--mp-secondary:#626873;--mp-line:#e5e7eb;--mp-field:#f9fafb;--mp-accent:#c85817;--mp-toggle:#ed7b36;--mp-track:#d7dbe1;--mp-active:#258356;--mp-error:#bf3838;--mp-mark:#fff0e4}
+*{box-sizing:border-box}
+/* Action popups size themselves from this document, so do not cap it with vw. */
+html{width:380px;min-width:380px;background:var(--mp-panel)}
+body{width:380px;min-width:380px;margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;color:var(--mp-text)}
+.mp-parser-panel{width:100%;padding:22px;background:var(--mp-panel)}
+.mp-parser-header{display:flex;align-items:center;gap:12px;margin-bottom:23px}
+.mp-parser-header>div{min-width:0}
+.mp-parser-mark{display:grid;place-items:center;flex:0 0 36px;height:36px;border-radius:9px;background:var(--mp-mark)}
+.mp-parser-mark img{display:block;width:36px;height:36px}
+h1{margin:0;font-size:16px;font-weight:500;line-height:1.4}
+.mp-parser-version{margin:4px 0 0;color:var(--mp-secondary);font-size:12px;overflow-wrap:anywhere}
+.mp-parser-field-labels{display:flex;justify-content:space-between;gap:14px;color:var(--mp-secondary);font-size:12px;margin-bottom:7px}
+.mp-parser-field-labels span{flex:0 0 44px;text-align:center}
+.mp-parser-inline-controls{display:flex;align-items:center;gap:14px}
+.mp-parser-address-wrap{position:relative;flex:1;min-width:0}
+.mp-parser-address-wrap input{padding-right:42px}
+.mp-parser-current{position:absolute;right:2px;top:2px;width:38px;height:38px;display:grid;place-items:center;border:0;background:transparent;color:var(--mp-secondary);border-radius:6px;cursor:pointer}
+.mp-parser-current:disabled{opacity:.45;cursor:default}
+.mp-parser-current:focus-visible{outline:2px solid var(--mp-accent)}
+.mp-parser-tip{margin:8px 0 0;color:var(--mp-secondary);font-size:11px;overflow-wrap:anywhere}
+.mp-parser-address{display:block;width:100%;min-width:0;min-height:42px;padding:10px 12px;border:1px solid var(--mp-line);border-radius:8px;background:var(--mp-field);color:var(--mp-text);font:inherit}
+.mp-parser-address:disabled{color:var(--mp-secondary);opacity:1}
+.mp-parser-address[aria-invalid="true"]{border-color:var(--mp-error)}
+.mp-parser-address:focus-visible{outline:2px solid var(--mp-accent);outline-offset:2px}
+.mp-parser-switch{position:relative;display:inline-flex;align-items:center;flex:0 0 44px;width:44px;min-height:44px}
+.mp-parser-switch input{position:absolute;z-index:1;inset:0;width:44px;height:44px;margin:0;opacity:0;cursor:pointer}
+.mp-parser-switch input:disabled{cursor:wait}
+.mp-parser-track{display:block;width:44px;height:25px;border-radius:20px;background:var(--mp-track);transition:background 140ms}
+.mp-parser-track:after{content:"";display:block;width:19px;height:19px;border-radius:50%;margin:3px;background:#fff;box-shadow:0 1px 3px #00000020;transition:transform 140ms}
+.mp-parser-switch input:checked+.mp-parser-track{background:var(--mp-toggle)}
+.mp-parser-switch input:checked+.mp-parser-track:after{transform:translateX(19px)}
+.mp-parser-switch input:focus-visible+.mp-parser-track{outline:2px solid var(--mp-accent);outline-offset:3px}
+.mp-parser-status{display:flex;align-items:flex-start;gap:8px;border-top:1px solid var(--mp-line);margin-top:20px;padding-top:14px;color:var(--mp-secondary);font-size:12px}
+.mp-parser-status p{margin:0;overflow-wrap:anywhere}
+.mp-parser-status a{color:var(--mp-accent);text-underline-offset:3px}
+.mp-parser-dot{flex:0 0 6px;width:6px;height:6px;margin-top:6px;border-radius:50%;background:var(--mp-secondary)}
+.mp-parser-panel[data-enabled="true"] .mp-parser-dot{background:var(--mp-active)}
+.mp-parser-error{margin:8px 0 0;color:var(--mp-error);font-size:12px;overflow-wrap:anywhere}
+.mp-parser-error[hidden]{display:none}
+@media(prefers-color-scheme:dark){:root{--mp-panel:#1f2023;--mp-text:#f3f4f6;--mp-secondary:#adb3be;--mp-line:#3c414a;--mp-field:#282b31;--mp-accent:#ffa564;--mp-track:#525862;--mp-active:#6ad9a0;--mp-error:#ffaaa7;--mp-mark:#3d3028}}
+@media(prefers-reduced-motion:reduce){.mp-parser-track,.mp-parser-track:after{transition:none}}
