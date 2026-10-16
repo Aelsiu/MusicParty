@@ -42,7 +42,7 @@
     <div class="video-overlay-dock" :class="{shown:controls.visible.value}" :inert="!controls.visible.value" :aria-hidden="!controls.visible.value">
       <VideoControlBar @height="controlHeight=$event" :recovering="recovering" :embedded-eligible="embeddedEligible||!!embeddedMedia" :embedded-active="!!embeddedMedia" :can-switch-player="canSwitchPlayer" @player="toggleEmbedded" :danmaku-capable="!isXifan" :danmaku-enabled="danmaku.enabled.value"
                        :danmaku-retryable="danmaku.retryable.value" :danmaku-retry-enabled="danmaku.retryEnabled.value" :danmaku-retry-remaining="Math.ceil(danmaku.retryRemainingMs.value/1000)" @danmaku-retry="danmaku.retry" :rate="player.playbackRate" :mobile="mobile" :pip-supported="pipSupported && !embeddedMedia" :pip-active="pipActive"
-                       :page-mode="pageMode" :request-pending="requestPending" :menu="menu" :can-manage="canManage"
+                       :page-mode="pageMode" :request-pending="requestPending" :menu="menu" :can-manage="canManage" :liked="liked" :can-like="canLike" @like="likeVideo"
                        :can-switch-page="canManage&&!player.isSkipLocked" :pages="pages" :current-page="player.nowPlaying?.videoDescriptor?.page"
                        :room-status="roomStatus" :retry-remaining="retryRemaining" :can-refresh="canRefresh"
                        :quality-label="player.actualVideoQuality" :quality-options="qualityOptions" :quality-preference="ui.videoQualityPreference" :quality-enabled="qualityEnabled"
@@ -63,6 +63,7 @@ import { usePlayerStore } from '../stores/player';
 import { useUiStore } from '../stores/ui';
 import { useUserStore } from '../stores/user';
 import { useGuideStore } from '../stores/guide.js';
+import { useLikedSongs, isVideoLike } from '../composables/useLikedSongs';
 import { useVideo } from '../composables/useVideo';
 import { useDanmaku } from '../composables/useDanmaku';
 import { useVideoSurfaceGesture, isVideoInteraction } from '../composables/useVideoSurfaceGesture';
@@ -75,6 +76,14 @@ import VideoControlBar from './VideoControlBar.vue';
 const props=defineProps({pages:{type:Array,default:()=>[]},retryRemaining:{type:Number,default:0},waitRemaining:{type:Number,default:0},roomStatus:{type:String,default:''}});
 const player=usePlayerStore(),ui=useUiStore(),user=useUserStore(),videoRef=ref(null),surface=ref(null),expandedDock=ref(null),menu=ref('');
 const guide=useGuideStore();
+const {isLiked,addLikedSong}=useLikedSongs();
+const liked=computed(()=>{const music=player.nowPlaying?.music;return !!music&&isLiked(music.platform,music.id);});
+const canLike=computed(()=>player.synchronized&&player.mediaMode==='VIDEO'&&!!player.nowPlaying?.playbackId&&isVideoLike(player.nowPlaying?.music)&&!guide.active);
+function likeVideo(){
+    if(!canLike.value)return;
+    const music=player.nowPlaying.music;
+    if(player.sendLike())addLikedSong(music);
+}
 const mobile=!!window.AndroidBridge||/Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 const isXifan=computed(()=>player.nowPlaying?.videoDescriptor?.provider==='xifan');
 const embeddedEligible=computed(()=>!isXifan.value&&isEmbeddedPlayerEligible({mobile,origin:window.location?.origin,userAgent:navigator.userAgent}));

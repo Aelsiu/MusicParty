@@ -38,8 +38,8 @@ public class UserService {
     @org.springframework.beans.factory.annotation.Autowired(required=false)
     private org.thornex.musicparty.room.RoomRepository profiles;
     private final com.fasterxml.jackson.databind.ObjectMapper profileMapper = new com.fasterxml.jackson.databind.ObjectMapper();
-    private void saveProfile(User user) { if (profiles != null) try { profiles.saveProfile(user.getToken(), profileMapper.writeValueAsString(java.util.Map.of("name", user.getName(), "bindings", user.getBindings()))); } catch (java.io.IOException e) { throw new IllegalStateException(e); } }
-    private void loadProfile(User user) { if (profiles != null) { String value = profiles.profile(user.getToken()); if (value != null) try { var data = profileMapper.readTree(value); user.setName(data.path("name").asText(user.getName())); user.setGuest(false); user.getBindings().clear(); data.path("bindings").fields().forEachRemaining(e -> user.getBindings().put(e.getKey(), e.getValue().asText())); } catch (java.io.IOException e) { throw new IllegalStateException(e); } } }
+    private void saveProfile(User user) { if (profiles != null) try { profiles.saveProfile(user.getToken(), profileMapper.writeValueAsString(java.util.Map.of("name", user.getName()))); } catch (java.io.IOException e) { throw new IllegalStateException(e); } }
+    private void loadProfile(User user) { if (profiles != null) { String value = profiles.profile(user.getToken()); if (value != null) try { var data = profileMapper.readTree(value); user.setName(data.path("name").asText(user.getName())); user.setGuest(false); } catch (java.io.IOException e) { throw new IllegalStateException(e); } } }
     @jakarta.annotation.PreDestroy public void stop() { scheduler.shutdownNow(); }
 
     public UserService(ApplicationEventPublisher eventPublisher) {
@@ -200,14 +200,6 @@ public class UserService {
 
     private boolean isNameTaken(String name) {
         return usersByToken.values().stream().anyMatch(u -> u.getName().equalsIgnoreCase(name));
-    }
-
-    public boolean bindAccount(String sessionId, String platform, String accountId) {
-        return getUserBySession(sessionId).map(user -> {
-            user.getBindings().put(platform, accountId);
-            saveProfile(user);
-            return true;
-        }).orElse(false);
     }
 
     public List<UserSummary> getOnlineUserSummaries() {

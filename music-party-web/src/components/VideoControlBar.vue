@@ -1,10 +1,10 @@
 <script setup>
 import { shortVideoQuality } from '../utils/videoQualityLabel.js';
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from 'vue';
-import { MonitorPlay, RefreshCw, PictureInPicture2, Expand, Maximize, Minimize, Loader2, ChevronDown } from 'lucide-vue-next';
+import { MonitorPlay, RefreshCw, PictureInPicture2, ThumbsUp, Expand, Maximize, Minimize, Loader2, ChevronDown } from 'lucide-vue-next';
 const props=defineProps({recovering:Boolean,embeddedEligible:Boolean,embeddedActive:Boolean,canSwitchPlayer:Boolean,danmakuCapable:{type:Boolean,default:true},danmakuEnabled:Boolean,rate:Number,mobile:Boolean,pipSupported:Boolean,pipActive:Boolean,pageMode:String,requestPending:Boolean,menu:String,canManage:Boolean,canSwitchPage:Boolean,pages:{type:Array,default:()=>[]},currentPage:Number,roomStatus:String,retryRemaining:Number,canRefresh:Boolean,danmakuRetryable:Boolean,danmakuRetryEnabled:Boolean,danmakuRetryRemaining:Number,
-  qualityLabel:{type:String,default:''},qualityOptions:{type:Array,default:()=>[]},qualityPreference:{type:Object,default:()=>({mode:'auto'})},qualityEnabled:Boolean});
-const emit=defineEmits(['player','danmaku','menu','rate','quality','pip','web','fullscreen','refresh','danmaku-retry','height']);
+  liked:Boolean,canLike:Boolean,qualityLabel:{type:String,default:''},qualityOptions:{type:Array,default:()=>[]},qualityPreference:{type:Object,default:()=>({mode:'auto'})},qualityEnabled:Boolean});
+const emit=defineEmits(['player','like','danmaku','menu','rate','quality','pip','web','fullscreen','refresh','danmaku-retry','height']);
 const rates=[0.5,0.75,1,1.25,1.5,1.75,2];
 const controlBar=ref(null),menuLeft=ref(null);
 let resizeObserver;
@@ -32,6 +32,7 @@ onBeforeUnmount(()=>resizeObserver?.disconnect());
         <button type="button" aria-label="弹幕操作" :aria-expanded="menu==='danmaku'" aria-controls="video-danmaku-menu" @click="emit('menu',menu==='danmaku'?'':'danmaku')"><ChevronDown class="w-3 h-3" /></button>
         <section v-if="menu==='danmaku'" id="video-danmaku-menu" class="control-menu" :style="{left:menuLeft}"><button type="button" :disabled="!danmakuRetryEnabled" @click="emit('danmaku-retry')" class="rate-choice">{{danmakuRetryRemaining?`${danmakuRetryRemaining} 秒后可重试`:'重试弹幕'}}</button></section>
       </div>
+      <button type="button" class="like-button" :disabled="!canLike" :aria-pressed="liked" aria-label="点赞并收藏" title="点赞并收藏" :class="{selected:liked}" @click="emit('like')"><ThumbsUp class="w-4 h-4" :fill="liked?'currentColor':'none'" aria-hidden="true"/></button>
       <button v-if="!mobile" data-guide="video-view" type="button" :disabled="!pipSupported||requestPending" :aria-pressed="pipActive" :aria-label="pipActive?'退出画中画':'进入画中画'" :title="pipSupported?'原生画中画':'当前播放器不支持画中画'" @click="emit('pip')"><PictureInPicture2 class="w-4 h-4" aria-hidden="true"/></button>
       <div class="menu-anchor">
         <button data-guide="video-preferences" type="button" aria-label="房间倍速" :title="`当前倍速 X${rate}`" :aria-expanded="menu==='speed'" aria-controls="video-speed-menu" @click="emit('menu',menu==='speed'?'':'speed')" class="text-button">倍速</button>

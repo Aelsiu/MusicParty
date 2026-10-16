@@ -99,7 +99,7 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef,
 
     // 绑定用户并刷新
     const bindUser = (user) => {
-        playerStore.bindAccount(platformRef.value, user.id, user.name, user.avatarUrl);
+        if (playerStore.bindAccount(platformRef.value, user.id, user.name, user.avatarUrl) === false) return;
         userSearchResults.value = [];
         hasSearchedUser.value = false;
         searchUserKeyword.value = '';
@@ -202,13 +202,29 @@ export function usePlaylistLogic(platformRef, songsRef, listModeRef, loadingRef,
         }
     }, 200);
 
-    // 设置窗口中的绑定/解绑也同步刷新搜索页。
+    const hydrateBoundProfile = async () => {
+        if (playerStore.mediaMode === 'VIDEO') return;
+        const platform = platformRef.value, id = bindings.value[platform];
+        const nameField = platform === 'netease' ? 'neteaseUsername' : 'bilibiliUsername';
+        const avatarField = platform === 'netease' ? 'neteaseAvatar' : 'bilibiliAvatar';
+        const name = userStore[nameField], isCurrent = capture();
+        if (!id || !name || userStore[avatarField]) return;
+        try {
+            const users = await musicApi.searchUser(platform, name);
+            if (!isCurrent() || platformRef.value !== platform || bindings.value[platform] !== id || userStore[nameField] !== name || userStore[avatarField]) return;
+            const match = users.find(user => String(user.id) === String(id));
+            if (match) userStore.updateBinding(platform, match.id, match.name, match.avatarUrl);
+        } catch { /* 资料补全失败保留本机绑定，歌单读取独立进行。 */ }
+    };
+
+    // 搜索页本地绑定变化（含其他标签页）刷新歌单。
     watch(() => [platformRef.value, bindings.value[platformRef.value], playerStore.modeEpoch, playerStore.clientGeneration], () => {
         lifecycle++; playlistRequest++; playlists.value = []; userSearchResults.value = []; hasSearchedUser.value = false;
         isSearchingUser.value = false; isPlaylistsLoading.value = false; isLoadingMore.value = false; loadingRef.value = false;
         currentPlaylistId.value = null;
         if (listModeRef.value === 'playlist') songsRef.value = [];
         fetchPlaylists();
+        hydrateBoundProfile();
     }, { immediate: true });
 
     return {

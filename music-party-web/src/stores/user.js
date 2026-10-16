@@ -1,7 +1,8 @@
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed, onScopeDispose } from 'vue';
 import { roomSession, clearRoom } from '../services/roomSession.js';
 import { STORAGE_KEYS } from '../constants/keys.js';
+import { BINDING_PROFILES, BINDING_STORAGE_KEYS, readLocalBindings, saveLocalBindings } from '../utils/localBindings.js';
 
 const generateToken = () => {
     const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -39,11 +40,26 @@ export const useUserStore = defineStore('user', () => {
         sessionId: ''
     });
 
-    const bindings = ref(JSON.parse(localStorage.getItem(STORAGE_KEYS.BINDINGS) || '{}'));
-    const neteaseUsername = ref(localStorage.getItem(STORAGE_KEYS.NETEASE_USERNAME) || '');
-    const neteaseAvatar = ref(localStorage.getItem(STORAGE_KEYS.NETEASE_AVATAR) || '');
-    const bilibiliUsername = ref(localStorage.getItem(STORAGE_KEYS.BILIBILI_USERNAME) || '');
-    const bilibiliAvatar = ref(localStorage.getItem(STORAGE_KEYS.BILIBILI_AVATAR) || '');
+    const localBindings = readLocalBindings();
+    const bindings = ref(localBindings.bindings);
+    const neteaseUsername = ref(localBindings.neteaseUsername);
+    const neteaseAvatar = ref(localBindings.neteaseAvatar);
+    const bilibiliUsername = ref(localBindings.bilibiliUsername);
+    const bilibiliAvatar = ref(localBindings.bilibiliAvatar);
+    const bindingFields = { neteaseUsername, neteaseAvatar, bilibiliUsername, bilibiliAvatar };
+    const applyBindings = value => {
+        // 同账号的头像/昵称补全不能制造一次新的绑定变更，避免重复刷新歌单。
+        for (const platform of Object.keys(bindings.value)) if (!Object.hasOwn(value.bindings, platform)) delete bindings.value[platform];
+        for (const [platform, id] of Object.entries(value.bindings)) bindings.value[platform] = id;
+        for (const [field, target] of Object.entries(bindingFields)) target.value = value[field];
+    };
+    const browser = globalThis.window;
+    const storageChanged = event => {
+        if (event.storageArea && event.storageArea !== globalThis.localStorage) return;
+        if (event.key === null || BINDING_STORAGE_KEYS.has(event.key)) applyBindings(readLocalBindings());
+    };
+    browser?.addEventListener?.('storage', storageChanged);
+    onScopeDispose(() => browser?.removeEventListener?.('storage', storageChanged));
     // 全局状态：控制改名弹窗显示
     const showNameModal = ref(false);
 
@@ -119,32 +135,19 @@ export const useUserStore = defineStore('user', () => {
     };
 
     const updateBinding = (platform, accountId, displayName = '', avatarUrl = '') => {
-        const sameAccount = bindings.value[platform] === accountId;
-        bindings.value[platform] = accountId;
-        localStorage.setItem(STORAGE_KEYS.BINDINGS, JSON.stringify(bindings.value));
-        const profile = platform === 'netease'
-            ? { name: neteaseUsername, avatar: neteaseAvatar, nameKey: STORAGE_KEYS.NETEASE_USERNAME, avatarKey: STORAGE_KEYS.NETEASE_AVATAR }
-            : platform === 'bilibili'
-                ? { name: bilibiliUsername, avatar: bilibiliAvatar, nameKey: STORAGE_KEYS.BILIBILI_USERNAME, avatarKey: STORAGE_KEYS.BILIBILI_AVATAR }
-                : null;
-        if (!profile) return;
-        profile.name.value = accountId ? (displayName || (sameAccount && profile.name.value) || accountId) : '';
-        profile.avatar.value = accountId ? (avatarUrl || (sameAccount && profile.avatar.value) || '') : '';
-        if (profile.name.value) localStorage.setItem(profile.nameKey, profile.name.value);
-        else localStorage.removeItem(profile.nameKey);
-        if (profile.avatar.value) localStorage.setItem(profile.avatarKey, profile.avatar.value);
-        else localStorage.removeItem(profile.avatarKey);
-    };
-
-    const clearBindings = () => {
-        bindings.value = {};
-        neteaseUsername.value = '';
-        neteaseAvatar.value = '';
-        bilibiliUsername.value = '';
-        bilibiliAvatar.value = '';
-        for (const key of [STORAGE_KEYS.BINDINGS, STORAGE_KEYS.NETEASE_USERNAME, STORAGE_KEYS.NETEASE_AVATAR, STORAGE_KEYS.BILIBILI_USERNAME, STORAGE_KEYS.BILIBILI_AVATAR]) {
-            localStorage.removeItem(key);
-        }
+        const profile = BINDING_PROFILES[platform];
+        if (!Object.hasOwn(BINDING_PROFILES, platform) || !['string', 'number'].includes(typeof accountId)) return false;
+        const id = String(accountId).trim();
+        // 合并其他标签页刚写入的平台，避免事件尚未到达时覆盖它。
+        const next = readLocalBindings();
+        const sameAccount = next.bindings[platform] === id;
+        if (id) next.bindings[platform] = id;
+        else delete next.bindings[platform];
+        next[profile.name] = id ? String(displayName || (sameAccount && next[profile.name]) || id) : '';
+        next[profile.avatar] = id ? String(avatarUrl || (sameAccount && next[profile.avatar]) || '') : '';
+        if (!saveLocalBindings(next)) return false;
+        applyBindings(next);
+        return true;
     };
 
     // 废弃: 不再直接修改本地状态，改为等待 initUser 的后端回调
@@ -177,7 +180,6 @@ export const useUserStore = defineStore('user', () => {
         if (previousName && name === previousName) {
             userToken.value = localStorage.getItem(STORAGE_KEYS.TOKEN) || userToken.value;
         }
-        if (!previousName || name !== previousName) clearBindings();
         if ((previousName && name !== previousName) || (!previousName && name !== currentUser.value.name)) {
             // 入房时换 ID 创建新身份，等服务器确认后再保存，避免在 CONNECT 前刷新丢失旧身份。
             userToken.value = generateToken();
@@ -188,10 +190,7 @@ export const useUserStore = defineStore('user', () => {
     };
     const syncProfile = (profile) => {
         if (profile.name) { currentUser.value.name = profile.name; if (!isGuest.value) localStorage.setItem(STORAGE_KEYS.USERNAME, profile.name); }
-        if (profile.bindings) for (const platform of ['netease', 'bilibili']) {
-            const accountId = profile.bindings[platform] || '';
-            if ((bindings.value[platform] || '') !== accountId) updateBinding(platform, accountId);
-        }
+        // 兼容旧服务端的资料消息，但绑定只以本机记录为准。
     };
 
     return {

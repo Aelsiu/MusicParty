@@ -28,7 +28,6 @@ export const WS_DEST = {
     QUEUE_CANCEL_TOP: '/app/queue/cancel-top',
     QUEUE_COMMAND_RESULT: '/user/queue/playback/command-result',
     QUEUE_REMOVE: '/app/queue/remove',
-    USER_BIND: '/app/user/bind',
     USER_RENAME: '/app/user/rename',
     RESYNC: '/app/player/resync',
 

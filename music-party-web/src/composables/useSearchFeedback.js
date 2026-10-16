@@ -7,18 +7,20 @@ export function setSearchEventHandler(handler) { eventHandler=handler; return ()
 export function routeSearchEvent(event, userToken) { return eventHandler?.(event,userToken)===true; }
 
 /** A send acknowledgement is not an enqueue result. Observe a new queue row or playback instance. */
-export function observeEnqueue(player, id, context, timeoutMs = 10000) {
-    const target=String(id),existing=new Set(player.queue.map(row=>row.queueId).filter(Boolean));
-    const beforeCount=player.queue.filter(row=>String(row.music.id)===target).length;
+export function observeEnqueue(player, id, context, timeoutMs = 10000, platform = null) {
+    const target=String(id),matches=music=>String(music?.id)===target && (!platform || music?.platform===platform);
+    const existing=new Set(player.queue.map(row=>row.queueId).filter(Boolean));
+    const beforeCount=player.queue.filter(row=>matches(row.music)).length;
     const beforePlayback=player.nowPlaying?.playbackId,beforeId=String(player.nowPlaying?.music?.id||'');
+    const beforePlatform=player.nowPlaying?.music?.platform;
     let stop,timer,resolve,settled=false;
     const promise=new Promise(complete=>resolve=complete);
     const finish=value=>{if(settled)return;settled=true;clearTimeout(timer);stop?.();resolve(value);};
     const check=()=>{
         if(!player.isContextCurrent(context)){finish(false);return;}
-        const added=player.queue.some(row=>String(row.music.id)===target&&row.queueId&&!existing.has(row.queueId))
-            ||player.queue.filter(row=>String(row.music.id)===target).length>beforeCount;
-        const started=String(player.nowPlaying?.music?.id||'')===target&&(beforeId!==target||player.nowPlaying?.playbackId!==beforePlayback);
+        const added=player.queue.some(row=>matches(row.music)&&row.queueId&&!existing.has(row.queueId))
+            ||player.queue.filter(row=>matches(row.music)).length>beforeCount;
+        const started=matches(player.nowPlaying?.music)&&(beforeId!==target||platform&&beforePlatform!==platform||player.nowPlaying?.playbackId!==beforePlayback);
         if(added||started)finish(true);
     };
     stop=watch(()=>[player.queue,player.nowPlaying,player.clientGeneration,player.modeEpoch,player.synchronized],check,{flush:'sync'});

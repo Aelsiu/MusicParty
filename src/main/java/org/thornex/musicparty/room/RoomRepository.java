@@ -48,6 +48,7 @@ public class RoomRepository {
             s.execute("CREATE TABLE IF NOT EXISTS system_config(id INTEGER PRIMARY KEY CHECK(id=1),payload TEXT NOT NULL)");
             s.execute("CREATE TABLE IF NOT EXISTS pairing_clock(id INTEGER PRIMARY KEY CHECK(id=1),interval_minutes INTEGER NOT NULL,start_ms INTEGER NOT NULL,base_epoch INTEGER NOT NULL)");
         }
+        purgeProfileBindings();
         addColumnIfMissing("rooms","pairing_open","INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing("rooms","share_enabled","INTEGER NOT NULL DEFAULT 0");
         addColumnIfMissing("rooms","public_room","INTEGER NOT NULL DEFAULT 0");
@@ -235,7 +236,33 @@ public class RoomRepository {
         try { Files.writeString(temp,mapper.writerWithDefaultPrettyPrinter().writeValueAsString(list)); try { Files.move(temp,file,StandardCopyOption.ATOMIC_MOVE,StandardCopyOption.REPLACE_EXISTING); } catch (AtomicMoveNotSupportedException e) { Files.move(temp,file,StandardCopyOption.REPLACE_EXISTING); } } finally { Files.deleteIfExists(temp); }
     }
     public synchronized String profile(String token) { try (PreparedStatement s=db.prepareStatement("SELECT payload FROM profiles WHERE token=?")) { s.setString(1,token); try (ResultSet r=s.executeQuery()) { return r.next()?r.getString(1):null; } } catch(SQLException e) { throw storage(e); } }
-    public synchronized void saveProfile(String token,String payload) { update("INSERT INTO profiles(token,payload) VALUES(?,?) ON CONFLICT(token) DO UPDATE SET payload=excluded.payload",token,payload); }
+    /** Removes legacy server bindings on every startup, including restored older databases. */
+    private void purgeProfileBindings() {
+        transaction(() -> {
+            try (PreparedStatement write = db.prepareStatement("UPDATE profiles SET payload=? WHERE token=?")) {
+                try (Statement read = db.createStatement(); ResultSet rows = read.executeQuery("SELECT token,payload FROM profiles")) {
+                    while (rows.next()) {
+                        String previous = rows.getString("payload"), next = withoutBindings(previous);
+                        if (previous.equals(next)) continue;
+                        write.setString(1,next); write.setString(2,rows.getString("token")); write.addBatch();
+                    }
+                }
+                write.executeBatch();
+            } catch (SQLException error) { throw storage(error); }
+        });
+    }
+    private String withoutBindings(String payload) {
+        try {
+            var data = mapper.readTree(payload);
+            if (data instanceof com.fasterxml.jackson.databind.node.ObjectNode object && object.has("bindings")) {
+                object.remove("bindings");
+                return mapper.writeValueAsString(object);
+            }
+            return payload;
+        } catch (java.io.IOException error) { throw storage(error); }
+    }
+    // Enforce the boundary here as well: older serializers must never write bindings back.
+    public synchronized void saveProfile(String token,String payload) { update("INSERT INTO profiles(token,payload) VALUES(?,?) ON CONFLICT(token) DO UPDATE SET payload=excluded.payload",token,withoutBindings(payload)); }
     public synchronized void saveAdmission(RoomAccessService.Admission value) { update("INSERT INTO admissions(token,room_id,epoch,expires_at,public_entry,access_version) VALUES(?,?,?,?,?,?)",value.token(),value.roomId(),value.epoch(),value.expiresAt(),value.publicEntry()?1:0,value.accessVersion()); }
     public synchronized RoomAccessService.Admission admission(String token) {
         try (PreparedStatement s=db.prepareStatement("SELECT * FROM admissions WHERE token=?")) {

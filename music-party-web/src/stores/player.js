@@ -413,8 +413,9 @@ export const usePlayerStore = defineStore('player', () => {
     const removeSong = (queueId) => requireAuth() && sendMedia(WS_DEST.QUEUE_REMOVE, { queueId });
 
     const bindAccount = (platform, accountId, displayName = '', avatarUrl = '') => {
-        socketService.send(WS_DEST.USER_BIND, { platform, accountId });
-        userStore.updateBinding(platform, accountId, displayName, avatarUrl);
+        const saved = userStore.updateBinding(platform, accountId, displayName, avatarUrl);
+        if (!saved) useToast().error('无法保存本机绑定，请检查浏览器存储权限');
+        return saved;
     };
 
     const renameUser = (newName) => {
@@ -425,7 +426,10 @@ export const usePlayerStore = defineStore('player', () => {
     const sendLike = () => {
         // 上报当前本地播放位置（音频实际听到的位置），服务器用它作为打点，
         // 避免服务器时钟从歌曲开始计时、音频需缓冲后才起播导致打点超前于听感位置
-        if (mediaMode.value === 'MUSIC' && requireAuth()) sendMedia(WS_DEST.PLAYER_LIKE, { position: Math.round(localProgress.value) });
+        if (!requireAuth()) return false;
+        if (mediaMode.value === 'VIDEO' && !nowPlaying.value?.playbackId) return false;
+        return sendMedia(WS_DEST.PLAYER_LIKE, { position: Math.round(localProgress.value),
+            ...(mediaMode.value === 'VIDEO' ? { playbackId: nowPlaying.value.playbackId } : {}) });
     };
 
     const sendChatMessage = (content) => {

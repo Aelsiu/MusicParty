@@ -88,7 +88,6 @@ public class ChatService {
                         User sender = new User(user.getToken(), sessionId, user.getName());
                         sender.setGuest(user.isGuest());
                         sender.setLastActiveTime(user.getLastActiveTime());
-                        sender.getBindings().putAll(user.getBindings());
                         handler.execute(args, sender);
                     },
                     () -> log.warn("User not found for session {}", sessionId)

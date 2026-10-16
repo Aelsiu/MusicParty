@@ -2,9 +2,6 @@ package org.thornex.musicparty.dto;
 
 import lombok.Data;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 @Data
 public class User {
     private final String token; // 🟢 真正的唯一标识 (UUID)
@@ -12,7 +9,6 @@ public class User {
     private String name;
     private boolean isGuest;
     private long lastActiveTime;
-    private final Map<String, String> bindings = new ConcurrentHashMap<>();
 
     public User(String token, String sessionId, String name) {
         this.token = token;

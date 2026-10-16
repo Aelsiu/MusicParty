@@ -31,12 +31,11 @@
           </button>
           <!-- 本地点赞列表标签（仅本地缓存，不上报服务器） -->
           <button
-              v-if="playerStore.mediaMode === 'MUSIC'"
-              @click="mode = 'likesong'"
-              class="px-4 md:px-6 py-1.5 text-sm font-bold transition-all"
+              @click="selectLikes"
+              class="inline-flex items-center gap-1.5 px-4 md:px-6 py-1.5 text-sm font-bold transition-all"
               :class="mode === 'likesong' ? 'bg-accent text-white' : 'bg-medical-200 text-medical-500 hover:bg-medical-300'"
           >
-            LIKESONG
+            <ThumbsUp class="w-4 h-4 shrink-0" aria-hidden="true" /><span>LIKE</span>
           </button>
         </div>
 
@@ -46,7 +45,7 @@
               v-model="keyword"
               aria-label="搜索关键词或视频链接"
               @keyup.enter="handleSearchAction"
-              :placeholder="playerStore.mediaMode==='VIDEO' && platform==='xifan' ? '搜索番剧，或粘贴 XIFAN 官网作品/播放链接' : playerStore.mediaMode === 'VIDEO' ? '搜索视频，或粘贴 BV/AV号、视频链接、短链接、收藏夹链接和分享文字' : mode === 'likesong' ? '搜索点赞的歌曲...' : '在曲库中搜索...'"
+              :placeholder="mode==='likesong' ? (playerStore.mediaMode==='VIDEO'?'搜索点赞的视频...':'搜索点赞的歌曲...') : playerStore.mediaMode==='VIDEO' && platform==='xifan' ? '搜索番剧，或粘贴 XIFAN 官网作品/播放链接' : playerStore.mediaMode === 'VIDEO' ? '搜索视频，或粘贴 BV/AV号、视频链接、短链接、收藏夹链接和分享文字' : '在曲库中搜索...'"
               class="placeholder-mono flex-1 min-w-0 border px-3 py-2 outline-none transition-colors duration-300 font-sans bg-medical-100 border-medical-200 focus:border-accent"
           />
           <button
@@ -62,18 +61,34 @@
         <span v-if="feedback.state.value" class="search-feedback-text font-sans" :class="{'search-feedback-failed':feedback.state.value.success===false}"><Search/><span class="search-feedback-label" :class="{'is-pending':feedback.state.value.pending}"><span v-for="(char,index) in Array.from(feedback.state.value.text)" :key="index" class="search-feedback-char" :style="{'--char-index':index}">{{char}}</span></span><button v-if="feedback.state.value.details" type="button" class="search-feedback-help" aria-label="查看详细响应" :aria-expanded="feedback.detailsOpen.value" aria-controls="search-feedback-details" @click="feedback.detailsOpen.value=!feedback.detailsOpen.value"><CircleHelp aria-hidden="true"/></button></span>
         <div v-if="feedback.state.value&&feedback.detailsOpen.value" id="search-feedback-details" class="search-feedback-details" role="status">{{feedback.state.value.details}}</div>
       </div>
-      <VideoSearchPanel v-if="playerStore.mediaMode==='VIDEO'" ref="videoSearch" :platform="platform" :keyword="keyword" :songs="songs" :do-search="doSearch"/>
+      <VideoSearchPanel v-if="playerStore.mediaMode==='VIDEO'&&mode==='search'" ref="videoSearch" :platform="platform" :keyword="keyword" :songs="songs" :do-search="doSearch"/>
       <div v-else class="flex-1 overflow-hidden flex flex-col md:flex-row relative">
 
         <!-- LikeSong：本地点赞歌曲列表（仅本地缓存，不上报服务器） -->
         <div v-if="mode === 'likesong'" class="flex-1 bg-medical-50 flex-col min-h-0 flex">
-          <div class="flex items-center justify-between p-3 bg-surface border-b border-medical-200 flex-shrink-0">
-            <span class="font-bold text-sm text-medical-800 font-mono">LIKESONG</span>
-            <span class="text-[10px] font-mono text-medical-400">{{ likedSongs.length }} LIKED</span>
+          <div class="liked-navbar flex items-center justify-between p-3 bg-surface border-b border-medical-200 flex-shrink-0">
+            <span class="font-bold text-sm text-medical-800 font-mono">{{ likedLabel }}</span>
+            <div class="liked-tools">
+              <span class="text-[10px] font-mono text-medical-400">{{ likedMedia.length }} LIKED</span>
+              <label class="liked-checkbox-target">
+                <input type="checkbox" aria-label="全选当前收藏" :checked="allLikedSelected" :indeterminate="someLikedSelected" :disabled="!filteredLikedSongs.length" @change="toggleAllLiked($event.target.checked)" class="liked-checkbox cursor-pointer disabled:cursor-not-allowed" />
+              </label>
+              <div class="liked-batch-actions">
+                <button type="button" @click="addSelectedLikes" :disabled="likedBatchPending || !queueableSelectedLikes.length" aria-label="勾选收藏入队" class="liked-add bg-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+                  <ListPlus aria-hidden="true" /><span>ADD SEL</span>
+                </button>
+                <button type="button" @click="deleteSelectedLikes" :disabled="!selectedVisibleLikes.length" aria-label="删除勾选收藏" class="liked-delete bg-strong text-white hover:bg-accent disabled:opacity-40 disabled:cursor-not-allowed">
+                  <Trash2 aria-hidden="true" /><span>DEL SEL</span>
+                </button>
+              </div>
+            </div>
           </div>
           <div class="flex-1 overflow-y-auto overscroll-contain p-2 md:p-4">
             <div class="space-y-1">
               <div v-for="song in filteredLikedSongs" :key="song.platform + ':' + song.id" class="flex items-center p-3 bg-surface border border-transparent transition-all group hover:border-medical-300 hover:shadow-sm">
+                <label class="liked-checkbox-target liked-row-checkbox">
+                  <input type="checkbox" :aria-label="`选择收藏 ${song.name}`" :checked="selectedLikedKeys.has(likedSongKey(song))" @change="toggleLiked(song, $event.target.checked)" class="liked-checkbox cursor-pointer" />
+                </label>
                 <div class="flex-1 w-0 flex items-center gap-3">
                   <div class="w-8 h-8 bg-medical-200 flex-shrink-0 relative overflow-hidden"><CoverImage :src="song.coverUrl" class="w-full h-full" :scanline="false" /></div>
                   <div class="min-w-0 flex-1">
@@ -83,18 +98,19 @@
                 </div>
                 <button
                     @click="addLikedClick(song)"
-                    :disabled="isInQueue(song.id) || pendingIds.has(song.id)"
+                    :aria-label="`点播 ${song.name}`"
+                    :disabled="isInQueue(song.id, song.platform) || isPending(song, song.platform)"
                     class="ml-2 p-2 flex-shrink-0 transition-all duration-300"
                     :class="[
-                        isInQueue(song.id) ? 'text-green-500 cursor-default' :
-                        pendingIds.has(song.id) ? 'text-accent cursor-wait' :
+                        isInQueue(song.id, song.platform) ? 'text-green-500 cursor-default' :
+                        isPending(song, song.platform) ? 'text-accent cursor-wait' :
                         'text-medical-300 hover:text-accent'
                     ]"
                 >
                   <!-- 状态 1: 正在添加 -->
-                  <Loader2 v-if="pendingIds.has(song.id)" class="w-5 h-5 animate-spin" />
+                  <Loader2 v-if="isPending(song, song.platform)" class="w-5 h-5 animate-spin" />
                   <!-- 状态 2: 已经在队列中 -->
-                  <Check v-else-if="isInQueue(song.id)" class="w-5 h-5" />
+                  <Check v-else-if="isInQueue(song.id, song.platform)" class="w-5 h-5" />
                   <!-- 状态 3: 普通添加按钮 -->
                   <PlusCircle v-else class="w-5 h-5"/>
                 </button>
@@ -106,6 +122,7 @@
                   <ExternalLink class="w-5 h-5" />
                 </button>
               </div>
+              <p v-if="!filteredLikedSongs.length" class="p-6 text-center text-sm text-medical-500">{{ keyword.trim() ? '没有匹配的收藏' : playerStore.mediaMode==='VIDEO' ? '还没有收藏的视频' : '还没有收藏的歌曲' }}</p>
             </div>
           </div>
         </div>
@@ -119,15 +136,15 @@
             <div v-if="!bindings[platform]" class="p-4 border border-dashed border-medical-300 bg-medical-50">
               <div class="info-tip text-xs text-medical-500 mb-2 text-center font-sans">绑定用户以获取用户歌单</div>
               <div class="flex gap-1">
-                <input v-model="searchUserKeyword" @keyup.enter="searchUser" placeholder="搜索用户名" class="flex-1 min-w-0 bg-surface border border-medical-200 p-1 text-sm outline-none focus:border-accent font-sans" />
-                <button @click="searchUser" class="bg-accent hover:bg-accent-hover p-1 transition-colors"><Search class="w-4 h-4 text-white"/></button>
+                <input v-model="searchUserKeyword" @keyup.enter="searchUser" placeholder="搜索用户名" aria-label="搜索平台用户名" class="flex-1 min-w-0 bg-surface border border-medical-200 p-1 text-sm outline-none focus:border-accent font-sans" />
+                <button @click="searchUser" aria-label="搜索平台用户" :disabled="isSearchingUser" class="bg-accent hover:bg-accent-hover p-1 transition-colors disabled:opacity-40"><Search class="w-4 h-4 text-white"/></button>
               </div>
               <!-- 搜索结果列表 -->
               <div v-if="userSearchResults.length > 0" class="mt-2 max-h-40 overflow-y-auto space-y-1 border-t border-medical-200 pt-2">
-                <div v-for="user in userSearchResults" :key="user.id" @click="bindUser(user)" class="flex items-center gap-2 p-1 hover:bg-accent/10 cursor-pointer group">
+                <button type="button" v-for="user in userSearchResults" :key="user.id" @click="bindUser(user)" :aria-label="`绑定 ${user.name}`" class="flex w-full text-left items-center gap-2 p-1 hover:bg-accent/10 group">
                   <img :src="user.avatarUrl" class="w-6 h-6 rounded-full bg-medical-200"/>
                   <OverflowText as="span" class="text-xs font-bold  flex-1" :text="String(user.name)" />
-                </div>
+                </button>
               </div>
               <div v-if="isSearchingUser" class="text-center py-2"><Loader2 class="w-4 h-4 animate-spin mx-auto text-accent"/></div>
 
@@ -139,7 +156,7 @@
                 <OverflowText as="span" class="text-[10px] font-mono text-medical-400 " :text="String((platform === 'netease' ? userStore.neteaseUsername : userStore.bilibiliUsername) || `ID: ${bindings[platform]}`)" />
                 <div class="flex items-center gap-2 shrink-0">
                   <button @click="fetchPlaylists" :disabled="isPlaylistsLoading" aria-label="刷新用户歌单" class="p-1 text-medical-400 hover:text-accent disabled:opacity-40"><RefreshCw class="w-3 h-3" :class="{ 'animate-spin': isPlaylistsLoading }" /></button>
-                  <button @click="playerStore.bindAccount(platform, '')" class="text-[10px] text-red-400 hover:underline">UNLINK</button>
+                  <button @click="playerStore.bindAccount(platform, '')" aria-label="解绑当前平台用户" class="text-[10px] text-red-400 hover:underline">UNLINK</button>
                 </div>
               </div>
 
@@ -196,7 +213,7 @@
             <div class="space-y-1">
 
               <div v-for="song in displayedSongs" :key="song.id" class="flex items-center p-3 border border-transparent transition-all group" :class="isUnplayable(song) ? 'opacity-50 grayscale bg-medical-50 cursor-not-allowed' : 'bg-surface hover:border-medical-300 hover:shadow-sm'">
-                <input v-if="listMode === 'playlist'" type="checkbox" :aria-label="`选中歌曲 ${song.name}`" :checked="selectedSongIds.has(song.id)" :disabled="isUnplayable(song) || isInQueue(song.id) || pendingIds.has(song.id)" @change="toggleSelectedSong(song.id, $event.target.checked)" class="playlist-song-checkbox mr-3 h-4 w-4 flex-shrink-0 cursor-pointer disabled:cursor-not-allowed" />
+                <input v-if="listMode === 'playlist'" type="checkbox" :aria-label="`选中歌曲 ${song.name}`" :checked="selectedSongIds.has(song.id)" :disabled="isUnplayable(song) || isInQueue(song.id, enqueuePlatform) || isPending(song, enqueuePlatform)" @change="toggleSelectedSong(song.id, $event.target.checked)" class="playlist-song-checkbox mr-3 h-4 w-4 flex-shrink-0 cursor-pointer disabled:cursor-not-allowed" />
                 <div class="flex-1 w-0 flex items-center gap-3">
                   <div class="w-8 h-8 bg-medical-200 flex-shrink-0 relative overflow-hidden"><CoverImage :src="song.coverUrl" class="w-full h-full" :scanline="false" /></div>
                   <div class="min-w-0 flex-1">
@@ -211,17 +228,17 @@
                     @click="handleAddClick(song)"
                     class="ml-2 p-2 flex-shrink-0 transition-all duration-300"
                     :class="[
-                        isInQueue(song.id) ? 'text-green-500 cursor-default' :
-                        pendingIds.has(song.id) ? 'text-accent cursor-wait' :
+                        isInQueue(song.id, enqueuePlatform) ? 'text-green-500 cursor-default' :
+                        isPending(song, enqueuePlatform) ? 'text-accent cursor-wait' :
                         'text-medical-300 hover:text-accent'
                     ]"
-                    :disabled="pendingIds.has(song.id) || isInQueue(song.id)"
+                    :disabled="isPending(song, enqueuePlatform) || isInQueue(song.id, enqueuePlatform)"
                 >
                   <!-- 状态 1: 正在添加 -->
-                  <Loader2 v-if="pendingIds.has(song.id)" class="w-5 h-5 animate-spin" />
+                  <Loader2 v-if="isPending(song, enqueuePlatform)" class="w-5 h-5 animate-spin" />
 
                   <!-- 状态 2: 已经在队列中 -->
-                  <Check v-else-if="isInQueue(song.id)" class="w-5 h-5" />
+                  <Check v-else-if="isInQueue(song.id, enqueuePlatform)" class="w-5 h-5" />
 
                   <!-- 状态 3: 普通添加按钮 -->
                   <PlusCircle v-else class="w-5 h-5"/>
@@ -250,10 +267,11 @@ import { usePlayerStore } from '../stores/player';
 import { useUserStore } from '../stores/user';
 import { useSearchLogic } from '../composables/useSearchLogic';
 import { usePlaylistLogic } from '../composables/usePlaylistLogic';
-import { useLikedSongs } from '../composables/useLikedSongs';
+import { useLikedSongs, isVideoLike, likedSongKey } from '../composables/useLikedSongs';
+import { useToast } from '../composables/useToast';
 import { matchesPlaylistSong } from '../utils/playlistFilter';
 import { videoSourcePage } from '../utils/playbackProtocol';
-import { X, Search, CircleHelp, PlusCircle, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink, RefreshCw } from 'lucide-vue-next';
+import { X, Search, CircleHelp, PlusCircle, Loader2, ArrowLeft, ChevronRight, Check, ExternalLink, RefreshCw, ListPlus, Trash2, ThumbsUp } from 'lucide-vue-next';
 import CoverImage from './CoverImage.vue';
 import PlaylistImportIcon from './PlaylistImportIcon.vue';
 
@@ -296,24 +314,77 @@ const {
   platform, keyword, songs, loading, listMode, doSearch, invalidateSearch
 } = useSearchLogic(emit,feedback);
 const handleSearchAction=async()=>{
-  if(playerStore.mediaMode==='VIDEO'){await videoSearch.value?.search();return;}
   if(mode.value==='likesong'){const ticket=feedback.begin('search');feedback.finish(ticket,true);return;}
+  if(playerStore.mediaMode==='VIDEO'){await videoSearch.value?.search();return;}
   await doSearch();mobileView.value='songs';
 };
 
 // LikeSong 标签：'search' = 平台搜索 / 歌单，'likesong' = 本地点赞列表
 const mode = ref('search');
-const { likedSongs } = useLikedSongs();
+const { likedSongs, removeLikedSongs } = useLikedSongs();
+const likedLabel=computed(()=>playerStore.mediaMode==='VIDEO'?'LIKEVIDEO':'LIKESONG');
+const likedMedia=computed(()=>likedSongs.value.filter(song=>isVideoLike(song)===(playerStore.mediaMode==='VIDEO')));
+function selectLikes(){invalidateSearch();feedback.clear();mode.value='likesong';}
 
 // LIKESONG 下搜索：按关键词过滤本地点赞记录（匹配歌名或歌手，不区分大小写）
 const filteredLikedSongs = computed(() => {
   const kw = keyword.value.trim().toLowerCase();
-  if (!kw) return likedSongs.value;
-  return likedSongs.value.filter((s) =>
-    s.name.toLowerCase().includes(kw) ||
+  if (!kw) return likedMedia.value;
+  return likedMedia.value.filter((s) =>
+    String(s.name||'').toLowerCase().includes(kw) ||
     (s.artists || []).some((a) => String(a).toLowerCase().includes(kw))
   );
 });
+
+const selectedLikedKeys = ref(new Set());
+const likedBatchPending = ref(false);
+let likedBatchRun = 0, alive = true;
+const selectedVisibleLikes = computed(() => filteredLikedSongs.value.filter(song => selectedLikedKeys.value.has(likedSongKey(song))));
+const allLikedSelected = computed(() => filteredLikedSongs.value.length > 0 && selectedVisibleLikes.value.length === filteredLikedSongs.value.length);
+const someLikedSelected = computed(() => selectedVisibleLikes.value.length > 0 && !allLikedSelected.value);
+const queueableSelectedLikes = computed(() => selectedVisibleLikes.value.filter(song => !isInQueue(song.id, song.platform) && !isPending(song, song.platform)));
+function toggleLiked(song, checked) {
+  const next = new Set(selectedLikedKeys.value), key = likedSongKey(song);
+  if (checked) next.add(key); else next.delete(key);
+  selectedLikedKeys.value = next;
+}
+function toggleAllLiked(checked) {
+  const next = new Set(selectedLikedKeys.value);
+  for (const song of filteredLikedSongs.value) {
+    if (checked) next.add(likedSongKey(song)); else next.delete(likedSongKey(song));
+  }
+  selectedLikedKeys.value = next;
+}
+watch(() => likedSongs.value.map(likedSongKey), keys => {
+  const existing = new Set(keys);
+  selectedLikedKeys.value = new Set([...selectedLikedKeys.value].filter(key => existing.has(key)));
+});
+function deleteSelectedLikes() {
+  if (!selectedVisibleLikes.value.length) return;
+  if (!removeLikedSongs(selectedVisibleLikes.value)) useToast().error('收藏删除失败，请检查浏览器存储权限');
+}
+async function addSelectedLikes() {
+  if (likedBatchPending.value || !queueableSelectedLikes.value.length) return;
+  const snapshot = queueableSelectedLikes.value.slice(), context = playerStore.playbackContext();
+  if (!context) { feedback.fail('queue', '房间连接尚未就绪'); return; }
+  const run = ++likedBatchRun, ticket = feedback.begin('queue'), results = [];
+  likedBatchPending.value = true;
+  try {
+    // 逐项确认，保持列表顺序并在切房、断线或切模式后停止发送剩余项目。
+    for (const song of snapshot) {
+      if (!alive || run !== likedBatchRun || !playerStore.isContextCurrent(context)) break;
+      results.push(await queueOne(song, song.platform, true, ticket));
+    }
+    if (alive && run === likedBatchRun && playerStore.isContextCurrent(context)) {
+      const confirmed = results.filter(Boolean).length;
+      feedback.finish(ticket, confirmed === snapshot.length, confirmed === snapshot.length
+        ? `已入队 ${confirmed} 项`
+        : `已确认 ${confirmed}/${snapshot.length} 项入队，部分项目未确认，请核对播放队列`);
+    }
+  } finally {
+    if (run === likedBatchRun) likedBatchPending.value = false;
+  }
+}
 
 const selectPlatform=async p=>{
   if(!isPlatformEnabled(p)||mode.value==='search'&&platform.value===p)return;
@@ -375,7 +446,7 @@ const handleImportPlaylist = () => {
 };
 
 const importableSelectedSongs = computed(() => songs.value.filter(song =>
-  selectedSongIds.value.has(song.id) && !isUnplayable(song) && !isInQueue(song.id) && !pendingIds.value.has(song.id)
+  selectedSongIds.value.has(song.id) && !isUnplayable(song) && !isInQueue(song.id, enqueuePlatform.value) && !isPending(song, enqueuePlatform.value)
 ));
 const toggleSelectedSong = (id, checked) => {
   const next = new Set(selectedSongIds.value);
@@ -392,29 +463,38 @@ const handleImportSelected = async () => {
 };
 
 // 本地维护正在添加中的歌曲 ID 集合
-const pendingIds = ref(new Set());
+const pendingIds = ref(new Map());
 const pendingTimers=new Set();
 const enqueueObservers=new Set();
-onBeforeUnmount(()=>{pendingTimers.forEach(clearTimeout);pendingTimers.clear();enqueueObservers.forEach(outcome=>outcome.cancel());enqueueObservers.clear();});
+const enqueueKey = (song, sourcePlatform) => likedSongKey({id:song.id, platform:sourcePlatform});
+const isPending = (song, sourcePlatform) => pendingIds.value.has(enqueueKey(song, sourcePlatform));
+onBeforeUnmount(()=>{alive=false;likedBatchRun++;pendingTimers.forEach(clearTimeout);pendingTimers.clear();enqueueObservers.forEach(outcome=>outcome.cancel());enqueueObservers.clear();});
 async function queueOne(song,sourcePlatform,recorded=false,groupTicket=null){
-  if(pendingIds.value.has(song.id)||isInQueue(song.id))return false;
+  if (!alive || isPending(song, sourcePlatform)) return false;
+  if (isInQueue(song.id, sourcePlatform)) return groupTicket !== null;
   const context=playerStore.playbackContext();if(!context){feedback.fail('queue','房间连接尚未就绪');return false;}
-  const ticket=groupTicket??feedback.begin('queue');pendingIds.value.add(song.id);
-  const outcome=observeEnqueue(playerStore,song.id,context);
+  const ticket=groupTicket??feedback.begin('queue'), key=enqueueKey(song,sourcePlatform), owner=Symbol();
+  pendingIds.value.set(key,owner);
+  const outcome=observeEnqueue(playerStore,song.id,context,10000,sourcePlatform);
   enqueueObservers.add(outcome);
-  const sent=recorded?await playerStore.enqueueRecorded(song,message=>feedback.finish(ticket,false,message)):playerStore.enqueue(sourcePlatform,song.id,context);
-  if(!sent){outcome.cancel();enqueueObservers.delete(outcome);pendingIds.value.delete(song.id);if(groupTicket===null)feedback.finish(ticket,false,'请先设置昵称并确认房间连接');return false;}
-  outcome.check();const success=await outcome.promise;
-  enqueueObservers.delete(outcome);
-  pendingIds.value.delete(song.id);if(groupTicket===null)feedback.finish(ticket,success,success?'':'结果暂无法确认，请核对播放队列');return success;
+  try {
+    const sent=recorded?await playerStore.enqueueRecorded(song,message=>feedback.finish(ticket,false,message)):playerStore.enqueue(sourcePlatform,song.id,context);
+    if(!sent){if(groupTicket===null)feedback.finish(ticket,false,'请先设置昵称并确认房间连接');return false;}
+    outcome.check();const success=await outcome.promise;
+    if(groupTicket===null)feedback.finish(ticket,success,success?'':'结果暂无法确认，请核对播放队列');
+    return success;
+  } catch {
+    if(groupTicket===null)feedback.finish(ticket,false,'入队失败，请重试');
+    return false;
+  } finally {
+    outcome.cancel();enqueueObservers.delete(outcome);
+    if(pendingIds.value.get(key)===owner)pendingIds.value.delete(key);
+  }
 }
 
 // 检查歌曲是否已经在队列中
-const isInQueue = (songId) => {
-  if (playerStore.mediaMode === 'VIDEO' && !/:p\d+$/.test(songId)) return false;
-  const id = songId;
-  return playerStore.queue.some(item => item.music.id === id);
-};
+const isInQueue = (songId, sourcePlatform) => playerStore.queue.some(item =>
+  String(item.music.id) === String(songId) && (!sourcePlatform || item.music.platform === sourcePlatform));
 
 // 处理点击添加
 const handleAddClick=song=>queueOne(song,enqueuePlatform.value);
@@ -440,7 +520,8 @@ watch(() => props.isOpen, (val) => {
 watch([keyword,platform,()=>playerStore.clientGeneration,()=>playerStore.modeEpoch],feedback.clear,{flush:'sync'});
 watch(() => [playerStore.mediaMode, playerStore.modeEpoch, playerStore.clientGeneration], () => {
   feedback.clear();
-  mode.value = 'search'; pendingIds.value = new Set(); selectedSongIds.value = new Set();
+  likedBatchRun++; likedBatchPending.value=false;
+  mode.value = 'search'; pendingIds.value = new Map(); selectedSongIds.value = new Set();
   playlistFilterInput.value = ''; playlistFilterKeyword.value = ''; mobileView.value = playerStore.mediaMode === 'VIDEO' ? 'songs' : 'playlists';
 });
 </script>
@@ -459,4 +540,30 @@ watch(() => [playerStore.mediaMode, playerStore.modeEpoch, playerStore.clientGen
 .playlist-import-actions:has(.import-selected:hover, .import-selected:focus-visible) .import-all span { opacity: 0; }
 .playlist-import-actions:has(.import-selected:hover, .import-selected:focus-visible) .import-selected { width: 84px; }
 .playlist-import-actions:has(.import-selected:hover, .import-selected:focus-visible) .import-selected span { opacity: 1; }
+.liked-navbar { gap: 8px; flex-wrap: wrap; }
+.liked-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; white-space: nowrap; }
+.liked-checkbox-target { display: inline-flex; align-items: center; justify-content: center; width: 28px; min-height: 28px; flex-shrink: 0; }
+.liked-checkbox { width: 16px; height: 16px; margin: 0; accent-color: rgb(var(--accent)); }
+.liked-row-checkbox { margin-right: 12px; }
+.liked-batch-actions { display: flex; gap: 8px; width: 116px; }
+.liked-batch-actions button { display: flex; align-items: center; flex: none; gap: 4px; height: 24px; padding: 0 3px; overflow: hidden; white-space: nowrap; font-size: 11px; font-weight: 700; transition: width .2s, background-color .2s; }
+.liked-batch-actions button svg { width: 18px; height: 18px; flex-shrink: 0; }
+.liked-add { width: 84px; }
+.liked-delete { width: 24px; }
+.liked-delete span { opacity: 0; }
+.liked-batch-actions:has(.liked-delete:hover, .liked-delete:focus-visible) .liked-add { width: 24px; }
+.liked-batch-actions:has(.liked-delete:hover, .liked-delete:focus-visible) .liked-add span { opacity: 0; }
+.liked-batch-actions:has(.liked-delete:hover, .liked-delete:focus-visible) .liked-delete { width: 84px; }
+.liked-batch-actions:has(.liked-delete:hover, .liked-delete:focus-visible) .liked-delete span { opacity: 1; }
+@media (max-width: 420px) { .liked-navbar > span { flex-basis: 100%; } }
+@media (pointer: coarse) {
+  .liked-checkbox-target { width: 44px; min-height: 44px; }
+  .liked-row-checkbox { margin-right: 4px; }
+  .liked-tools { gap: 4px; }
+  .liked-batch-actions { width: 156px; }
+  .liked-batch-actions button { height: 44px; justify-content: center; }
+  .liked-batch-actions .liked-add, .liked-batch-actions .liked-delete { width: 74px; }
+  .liked-batch-actions .liked-add span, .liked-batch-actions .liked-delete span { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .liked-batch-actions button { transition: none; } }
 </style>

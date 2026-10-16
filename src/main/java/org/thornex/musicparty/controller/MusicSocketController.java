@@ -122,11 +122,6 @@ public class MusicSocketController {
         });
     }
 
-    @MessageMapping("/user/bind")
-    public void bindAccount(BindRequest request, @Header("simpSessionId") String sessionId) {
-        userService.bindAccount(sessionId, request.platform(), request.accountId());
-    }
-
     @SubscribeMapping("/topic/player/state")
     public PlayerState getInitialPlayerState() {
         return coordinator.read();
@@ -150,7 +145,7 @@ public class MusicSocketController {
 
     @SubscribeMapping("/user/profile")
     public java.util.Map<String,Object> getSharedProfile(@Header("simpSessionId") String sessionId) {
-        return coordinator.readMember(sessionId, () -> userService.getUser(sessionId).map(user -> java.util.Map.<String,Object>of("name",user.getName(),"bindings",java.util.Map.copyOf(user.getBindings()))).orElse(java.util.Map.of()));
+        return coordinator.readMember(sessionId, () -> userService.getUser(sessionId).map(user -> java.util.Map.<String,Object>of("name",user.getName())).orElse(java.util.Map.of()));
     }
 
     // 聊天消息处理

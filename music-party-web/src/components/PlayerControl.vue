@@ -229,7 +229,7 @@ onMounted(() => { document.addEventListener('pointerup', releaseDrag); document.
 onBeforeUnmount(() => { closeMobileVolume(); releaseDrag(); unregisterVolumeMenu?.(); document.removeEventListener('pointerup', releaseDrag); document.removeEventListener('pointercancel', releaseDrag); });
 
 const nowPlaying = computed(() => player.nowPlaying);
-const likeMarkers = computed(() => player.mediaMode === 'MUSIC' ? nowPlaying.value?.likeMarkers || [] : []);
+const likeMarkers = computed(() => nowPlaying.value?.likeMarkers || []);
 const clock = ref(Date.now());
 const seekClock = setInterval(() => { clock.value=Date.now(); },100);
 onBeforeUnmount(() => clearInterval(seekClock));

@@ -66,7 +66,7 @@ public class RoomLifecycleService {
                     for(String session:access.sessions(id)) users.getUser(session).ifPresent(user -> {
                         var headers=org.springframework.messaging.simp.SimpMessageHeaderAccessor.create(org.springframework.messaging.simp.SimpMessageType.MESSAGE);
                         headers.setSessionId(session);headers.setLeaveMutable(true);
-                        messaging.convertAndSendToUser(session,"/queue/profile",Map.of("name",user.getName(),"bindings",Map.copyOf(user.getBindings())),headers.getMessageHeaders());
+                        messaging.convertAndSendToUser(session,"/queue/profile",Map.of("name",user.getName()),headers.getMessageHeaders());
                     });
                 }
                 if(tick%3600==0) { context.getBean(UserService.class).cleanupExpiredUsers();context.getBean(StreamTokenService.class).cleanup(); }

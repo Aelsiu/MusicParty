@@ -64,6 +64,8 @@ public class VideoPlayerService {
     private final Map<String, VideoDescriptor> descriptors = new HashMap<>();
     private final Map<String, Admission> admissions = new LinkedHashMap<>();
     private final Set<String> votes = new HashSet<>();
+    private final Set<String> likedUserIds = new HashSet<>();
+    private final List<Long> likeMarkers = new ArrayList<>();
     private VideoDescriptor currentDescriptor;
     /** Mailbox-only metadata capture for read-only danmaku. */
     public VideoDescriptor danmakuDescriptor() { return currentDescriptor; }
@@ -160,6 +162,16 @@ public class VideoPlayerService {
         return user;
     }
     private String token(String session) { return "SYSTEM".equals(session) ? "SYSTEM" : member(session).getToken(); }
+    public void likeVideo(String session, Long clientPositionMs) {
+        mutate();
+        User user = member(session);
+        if (!active || currentDescriptor == null || playbackId == null || !likedUserIds.add(user.getToken())) return;
+        long progress = clientPositionMs == null ? position() : clientPositionMs;
+        likeMarkers.add(Math.max(0, Math.min(currentDescriptor.durationMs(), progress)));
+        notice(SystemMessageEvent.Level.SUCCESS, PlayerAction.LIKE, user.getToken(), VideoProviderRegistry.toMusic(currentDescriptor).name());
+        dirty();
+    }
+    private void clearLikes() { likedUserIds.clear(); likeMarkers.clear(); }
     private String trustedIdentity(String id) { if(id!=null && id.startsWith("xifan:ep"))return id;String alias=api.verifiedIdentity(id);return alias==null?id:alias; }
 
     public void enqueue(EnqueueRequest request, String session) {
@@ -444,6 +456,7 @@ public class VideoPlayerService {
             pending = null;
             position = 0;
             playbackId = UUID.randomUUID().toString();
+            clearLikes();
             waits.newPlayback(playbackId);
             sourceRevision = 0;
             seekAvailableAt = 0;
@@ -619,6 +632,7 @@ public class VideoPlayerService {
         currentItem = null;
         positionAnchor = 0;
         playbackId = null;
+        clearLikes();
         waits.newPlayback(null);
         sourceRevision = 0;
         sourceRetryAt = null;
@@ -657,6 +671,7 @@ public class VideoPlayerService {
             positionAnchor = 0;
             nanoAnchor = monotonicNanos.getAsLong();
             playbackId = UUID.randomUUID().toString();
+            clearLikes();
             waits.newPlayback(playbackId);
             seekAvailableAt = 0;
             votes.clear();
@@ -776,6 +791,7 @@ public class VideoPlayerService {
                 QueueItemStatus.READY, currentItem.priority());
         descriptors.put(next.canonicalId(), next);
         playbackId = UUID.randomUUID().toString();
+        clearLikes();
         sourceRevision = 0; positionAnchor = 0; nanoAnchor = monotonicNanos.getAsLong();
         seekAvailableAt = 0; votes.clear(); sourceRetryAt = null; sourceFailures = 0; nextRefreshAllowedAt = 0;
         retryableSourceFailure = false;
@@ -982,6 +998,7 @@ public class VideoPlayerService {
         descriptors.clear();
         currentDescriptor = null; currentSource = null; currentItem = null; pending = null;
         playbackId = null; sourceRevision = 0; positionAnchor = 0; paused = true; policyRecoveryRequired = false; sourceErrorCode = null; currentDurationAdmitted = false;
+        clearLikes();
         waits.newPlayback(null); playbackRate = 1;
         startup.cancel();
         playMode = PlayMode.SEQUENTIAL; sourceStatus = "EMPTY"; sourceRetryAt = null;
@@ -1099,7 +1116,7 @@ public class VideoPlayerService {
                 : "xifan".equals(currentDescriptor.provider()) ? new PlayableMusic(currentDescriptor.canonicalId(),currentDescriptor.title()+" · "+currentDescriptor.episodeTitle(),List.of("XIFAN"),currentDescriptor.durationMs(),"xifan-video",currentSource.url(),currentDescriptor.coverUrl(),false,currentSource.mp4().qualityLabel(),currentDescriptor.xifan().selection()) : BilibiliVideoApiService.toPlayableMusic(currentDescriptor, currentSource);
         NowPlayingInfo info = currentDescriptor == null || currentItem == null ? null : new NowPlayingInfo(
                 media, position(),
-                currentItem.enqueuedBy().token(), currentItem.enqueuedBy().name(), Set.of(), List.of(), playbackId,
+                currentItem.enqueuedBy().token(), currentItem.enqueuedBy().name(), Set.copyOf(likedUserIds), List.copyOf(likeMarkers), playbackId,
                 seekAvailableAt, serverTime, sourceRevision,
                 currentSource == null || currentSource.expiresAt() == null ? null : currentSource.expiresAt().toEpochMilli(), currentSource, currentDescriptor);
         var p = properties.getPlayer();

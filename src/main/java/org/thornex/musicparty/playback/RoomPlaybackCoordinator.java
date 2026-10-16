@@ -361,7 +361,8 @@ public class RoomPlaybackCoordinator {
                 if (sessionId != null) sendState(sessionId, snapshot());
                 result = reject("cancel-top".equals(operation) ? null : sessionId,"STALE_PLAYBACK_CONTEXT");
             } else {
-                if (Set.of("next","pause","seek","refresh","rate","page","PAUSE","SKIP").contains(operation)) {
+                if (Set.of("next","pause","seek","refresh","rate","page","PAUSE","SKIP").contains(operation)
+                        || mode == MediaMode.VIDEO && "like".equals(operation)) {
                     String current = currentState().nowPlaying() == null ? null : currentState().nowPlaying().playbackId();
                     if (!Objects.equals(current,text(body,"playbackId"))) throw new IllegalArgumentException("STALE_PLAYBACK_CONTEXT");
                 }
@@ -414,7 +415,8 @@ public class RoomPlaybackCoordinator {
             case "top" -> { if (mode == MediaMode.MUSIC) music.topSong(text(body,"queueId"),session); else video.topSong(text(body,"queueId"),session); }
             case "remove" -> { if (mode == MediaMode.MUSIC) music.removeSongFromQueue(text(body,"queueId"),session,manager); else video.removeSongFromQueue(text(body,"queueId"),session,manager); }
             case "like" -> {
-                requireMusic(); music.likeSong(session,body.hasNonNull("position") ? body.get("position").longValue() : null);
+                Long position = body.hasNonNull("position") ? body.get("position").longValue() : null;
+                if (mode == MediaMode.MUSIC) music.likeSong(session,position); else video.likeVideo(session,position);
             }
             case "refresh" -> {
                 if (mode != MediaMode.VIDEO) throw new IllegalArgumentException("FEATURE_NOT_AVAILABLE");
